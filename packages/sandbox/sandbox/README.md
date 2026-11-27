@@ -63,7 +63,7 @@ Enforcement is reported per call: `full` means the backend governs every promise
 
 ### Denied calls and escalation
 
-When a confined call is denied, the operation reports a denial marker naming the mode — `[sandbox: file access denied under <mode> mode]` — and, when the composition advertises escalation, an escalation hint. The model may retry the exact call once with `sandbox_permissions` (the narrowest wider mode that suffices) plus a `justification`; the approval service obtains consent for the operation. The request retains its audit reason and supplies English, Chinese, and Japanese presentation copy from `src/locales.ts`, with the model's justification unchanged. Missing translations follow the locale service's fallback chain, ultimately English; requesters own their translated presentation text. A wider mode requires approval and applies to that one call only. Repeating the call's effective mode succeeds without approval; narrower targets remain invalid. An escalation that yields no grant throws `SandboxEscalationError` before anything runs: `SANDBOX_ESCALATION_INVALID_ARGUMENT` for unpaired fields, a blank justification, or a target that is not strictly wider; `SANDBOX_ESCALATION_UNAVAILABLE` when the composition has no approval service, calling Agent, or approval channel; `SANDBOX_ESCALATION_REJECTED` when the user declines; and `SANDBOX_ESCALATION_CANCELLED` when the approval request ends without a decision. If the call itself was cancelled, the call's cancellation propagates instead.
+When a confined call is denied, the operation reports a denial marker naming the mode — `[sandbox: file access denied under <mode> mode]` — and, when the composition advertises escalation, an escalation hint. The model may retry the exact call once with `sandbox_permissions` (the narrowest wider mode that suffices) plus a `justification`; the approval service obtains consent for the operation. The request retains its audit reason and supplies English, Chinese, and Japanese presentation copy from `src/locales.ts`, with the model's justification unchanged. Missing translations follow the locale service's fallback chain, ultimately English; requesters own their translated presentation text. A wider mode requires approval and applies to that one call only. The sandbox never narrows a call: requesting the call's effective mode or a weaker mode is a no-op that runs at the effective mode without approval. An escalation that yields no grant throws `SandboxEscalationError` before anything runs: `SANDBOX_ESCALATION_INVALID_ARGUMENT` for unpaired fields, a blank justification, or a target or effective mode that is not a sandbox mode; `SANDBOX_ESCALATION_UNAVAILABLE` when the composition has no approval service, calling Agent, or approval channel; `SANDBOX_ESCALATION_REJECTED` when the user declines; and `SANDBOX_ESCALATION_CANCELLED` when the approval request ends without a decision. If the call itself was cancelled, the call's cancellation propagates instead.
 
 ### Fail-closed behavior
 
@@ -84,7 +84,7 @@ This section explains the design decisions behind the contract and points at the
 - **One execution world.** The filesystem, subprocess and sandbox providers operate on the same filesystem and kernel. Remote compositions replace all three providers; confinement resolves asynchronously in that world.
 - **Policy rides the call.** `SandboxPolicy` is carried per call, never fixed on the provider: two consumers may confine under different policies at the same instant, and an escalated retry is a new call with a wider policy. Defaulting and resolution are explicit consumer steps.
 - **Fail closed.** `confine()` resolves to enforcing argv or rejects with `SandboxUnavailableError`; silent unconfined passthrough is forbidden, and functional probes arbitrate multi-runner chains.
-- **One vocabulary for denial and escalation.** The marker and hint texts and the strictly-wider ladder live here so the bash and fs families cannot drift apart.
+- **One vocabulary for denial and escalation.** The marker and hint texts and the widening ladder live here so the bash and fs families cannot drift apart.
 
 ### Source map
 
@@ -96,7 +96,7 @@ This section explains the design decisions behind the contract and points at the
 
 ### Escalation choreography
 
-The ladder is a closed table — `read-only` may escalate to `workspace-write` or `danger-full-access`, `workspace-write` only to `danger-full-access` — checked at execution, never baked into a tool schema, whose enum stays the closed target vocabulary. [`approveEscalation`](src/escalation.ts) returns the current mode without approval when it is repeated, rejects narrower or unsupported targets, and requests approval for wider modes. Callers validate the `sandbox_permissions`/`justification` pairing first.
+The ladder is a closed table — `read-only` may escalate to `workspace-write` or `danger-full-access`, `workspace-write` only to `danger-full-access` — checked at execution, never baked into a tool schema, whose enum stays the closed target vocabulary. [`approveEscalation`](src/escalation.ts) returns the current mode without approval when the target is the current mode or weaker, rejects unknown modes, and requests approval for wider modes. Callers validate the `sandbox_permissions`/`justification` pairing first.
 
 ### Writable roots
 

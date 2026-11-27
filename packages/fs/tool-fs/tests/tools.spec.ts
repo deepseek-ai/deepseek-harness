@@ -1071,6 +1071,20 @@ describe('sandbox escalation API (write/edit)', () => {
     }])
   })
 
+  it('writes at the effective mode without approval when a weaker mode is requested', async () => {
+    const { ctx, fs } = await setupConfining()
+    const prompted = vi.fn()
+    ctx.on('approval/request', () => { prompted(); return Promise.resolve('allowed-once' as const) })
+    const result = await call(ctx, 'write', {
+      file_path: 'a.txt', content: 'x', sandbox_permissions: 'workspace-write', justification: 'use fewer permissions',
+    }, escalationAgent([{ type: 'sandbox/mode', data: { mode: 'danger-full-access' } }]))
+    expect(result.isError, JSON.stringify(result)).toBe(false)
+    expect(prompted).not.toHaveBeenCalled()
+    expect(fs.stamped).toEqual([{
+      mode: 'danger-full-access', workspaceRoot: '/session-project', sessionId: brandString<SessionId>('sess-fs-esc'),
+    }])
+  })
+
   it.each(['workspace-write', 'danger-full-access'] as const)('writes and edits under %s with absent or blank unused reasons', async (mode) => {
     const { ctx, fs } = await setupConfining({ approval: true })
     try {
