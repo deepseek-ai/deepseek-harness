@@ -1,0 +1,2 @@
+mode=DEBUG
+level=info

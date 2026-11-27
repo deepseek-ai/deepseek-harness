@@ -1,0 +1,9 @@
+version: 1
+scenario: fs-weaker-mode
+profile: headless
+composition: default
+recording: authored
+header:
+  class: default
+workspace:
+  final: true

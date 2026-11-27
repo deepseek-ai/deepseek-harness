@@ -1,7 +1,7 @@
 /**
  * The escalation vocabulary and choreography shared by every sandbox-enforcing
  * tool family (`@deepseek-ai/dsh-tool-bash`, `@deepseek-ai/dsh-tool-fs`): the
- * strictly-wider ladder, the argument-pairing validation, the model-facing
+ * widening ladder, the argument-pairing validation, the model-facing
  * denial/hint markers, and {@link approveEscalation} — the ordered fail-closed
  * sequence that resolves a `sandbox_permissions` request through a
  * user-approval channel BEFORE anything executes. One home keeps the two
@@ -24,7 +24,7 @@ import type { SandboxMode } from './index.ts'
 /**
  * Every {@link SandboxEscalationError} code:
  * - `SANDBOX_ESCALATION_INVALID_ARGUMENT` — the escalation fields are unpaired, the justification is blank, or the
- *   target is not strictly wider than the call's effective mode; the model corrects the request.
+ *   target or the call's effective mode is not a sandbox mode; the model corrects the request.
  * - `SANDBOX_ESCALATION_UNAVAILABLE` — the composition cannot ask for approval: no approval service, no calling Agent,
  *   or no approval channel.
  * - `SANDBOX_ESCALATION_REJECTED` — the user declined the escalation; the operation stays denied.
@@ -189,16 +189,17 @@ export interface EscalationRequest {
   requestedMode: string
   /** The model's one-sentence reason, shown verbatim to the user inside the audit reason. */
   justification: string
-  /** The call's effective mode (session override ?? composition default); repeating it needs no approval. */
+  /** The call's effective mode (session override ?? composition default); requesting it or a weaker mode needs no approval. */
   effectiveMode: SandboxMode
   /** The family's noun for the escalated action in user-facing texts (`command` for bash, `operation` for fs). */
   subject: string
 }
 
 /**
- * Resolve a sandbox permission request before execution. Repeating the call's
- * effective mode returns it without approval. A strictly wider mode requires
- * approval and applies only to this call. Narrower or unsupported targets,
+ * Resolve a sandbox permission request before execution. The sandbox never
+ * narrows a call: a target that is the call's effective mode or weaker is a
+ * no-op that returns the effective mode without approval. A strictly wider
+ * mode requires approval and applies only to this call. Unknown modes,
  * missing approval services or agents for widening, and non-grant outcomes
  * throw {@link SandboxEscalationError} before execution; a `cancelled`
  * outcome while `approval.signal` is aborted rethrows the signal's reason.
@@ -208,13 +209,13 @@ export interface EscalationRequest {
  */
 export async function approveEscalation<A, C>(request: EscalationRequest, approval: EscalationApproval<A, C>): Promise<SandboxMode> {
   const { requestedMode: mode, effectiveMode, justification, subject } = request
-  if (mode === effectiveMode) return effectiveMode
-  // Strict widening is an EXECUTION check against the call's effective mode —
+  if (mode === effectiveMode || (WIDER_MODES[mode] ?? []).includes(effectiveMode)) return effectiveMode
+  // Widening is an EXECUTION check against the call's effective mode —
   // deliberately not a schema constraint (the enum is the closed target
   // vocabulary; the effective mode is per-call truth).
   if (!(WIDER_MODES[effectiveMode] ?? []).includes(mode as SandboxMode)) {
     throw new SandboxEscalationError(
-      `sandbox escalation to "${mode}" is not strictly wider than this call's current "${effectiveMode}" mode`,
+      `unsupported sandbox escalation from "${effectiveMode}" to "${mode}"`,
       'SANDBOX_ESCALATION_INVALID_ARGUMENT',
     )
   }

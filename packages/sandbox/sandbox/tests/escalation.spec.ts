@@ -123,17 +123,29 @@ describe('approveEscalation', () => {
       .resolves.toBe(mode)
   })
 
-  it('a narrower or unsupported target fails closed without asking', async () => {
+  it.each([
+    ['read-only', 'workspace-write'],
+    ['read-only', 'danger-full-access'],
+    ['workspace-write', 'danger-full-access'],
+  ] as const)('a weaker %s target keeps the effective %s mode without asking', async (requestedMode, effectiveMode) => {
+    const seen: unknown[] = []
+    const request = req({ requestedMode, effectiveMode })
+    await expect(approveEscalation(request, ingredients({ approver: approver('rejected', r => seen.push(r)) })))
+      .resolves.toBe(effectiveMode)
+    await expect(approveEscalation(request, ingredients({ approver: undefined, agent: undefined })))
+      .resolves.toBe(effectiveMode)
+    expect(seen).toEqual([])
+  })
+
+  it('an unknown target or effective mode fails closed without asking', async () => {
     const seen: unknown[] = []
     const spy = ingredients({ approver: approver('allowed-once', r => seen.push(r)) })
-    await expect(approveEscalation(req({ requestedMode: 'read-only', effectiveMode: 'workspace-write' }), spy))
-      .rejects.toThrow(/not strictly wider than this call's current "workspace-write" mode/)
-    await expect(approveEscalation(req({ requestedMode: 'workspace-write', effectiveMode: 'danger-full-access' as never }), spy))
-      .rejects.toThrow(/not strictly wider/)
     await expect(approveEscalation(req({ requestedMode: 'unknown-mode' }), spy))
-      .rejects.toThrow(/not strictly wider/)
+      .rejects.toThrow('unsupported sandbox escalation from "read-only" to "unknown-mode"')
     await expect(approveEscalation(req({ requestedMode: 'unknown-mode' }), spy))
       .rejects.toEqual(escalationError('SANDBOX_ESCALATION_INVALID_ARGUMENT'))
+    await expect(approveEscalation(req({ requestedMode: 'read-only', effectiveMode: 'unknown-mode' as never }), spy))
+      .rejects.toThrow('unsupported sandbox escalation from "unknown-mode" to "read-only"')
     expect(seen).toEqual([])
   })
 
