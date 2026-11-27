@@ -35,12 +35,8 @@ internal static class Accessibility
         if (!showDiff && notifications != null) context.Ax(() => { notifications.Stop(); return true; });
         var rows = new List<string>();
         var elements = new Dictionary<string, ElementReference>(StringComparer.Ordinal);
-        var observations = new List<(WindowState Window, WindowGeometry Geometry)>();
-        var visited = new HashSet<string>(StringComparer.Ordinal);
         var cache = new CacheRequest { AutomationElementMode = AutomationElementMode.Full, TreeScope = TreeScope.Element };
         foreach (var property in Properties.Concat(PatternActions.Patterns.Select(pattern => pattern.Available))) cache.Add(property);
-        var truncated = false;
-        var count = 0;
         var bytes = 0;
         void Add(string row)
         {
@@ -48,29 +44,42 @@ internal static class Accessibility
             if (bytes > context.Config.MaxResponseBytes) throw new NativeFailure("NATIVE_RESPONSE_LIMIT", "Accessibility text exceeds the response limit; select a narrower window or reduce traversal limits");
             rows.Add(row);
         }
-        foreach (var window in targets)
-        {
-            if (count >= maximumElements) { truncated = true; break; }
-            var geometry = window.Geometry(app, context);
-            try
+        var geometry = target.Geometry(app, context);
+        var source = new AccessibilitySource<AutomationElement>(
+            element => WindowNotifications.Id(context.Ax(element.GetRuntimeId))
+                ?? throw new NativeFailure("STALE_SNAPSHOT", "An element has no RuntimeId; read fresh state"),
+            element => Read(element, target, geometry, context),
+            element => context.Ax(() => TreeWalker.ControlViewWalker.GetFirstChild(element, cache)),
+            element => context.Ax(() => TreeWalker.ControlViewWalker.GetNextSibling(element, cache)),
+            error => error is ElementNotAvailableException,
+            context.Check);
+        var traversal = new AccessibilityTraversal<AutomationElement>(source, maximumElements, maximumDepth, includeMenus, details, Add,
+            (runtimeId, element, row) =>
             {
-                var root = context.Ax(() => AutomationElement.FromHandle(window.Handle).GetUpdatedCache(cache));
-                if (showDiff)
-                {
-                    batch = context.Ax(() => notifications!.Begin(root,
-                        new(window, maximumElements, maximumDepth, includeMenus, details), previous?.Id, Properties));
-                    if (batch?.Notices is { } notices)
-                        foreach (var notice in notices)
-                            if (notice.Id is { } id) eventRows.TryAdd(id, null);
-                }
-                Walk(root, window, geometry, 0, 0);
+                elements.Add(runtimeId, new(element, target));
+                if (eventRows.ContainsKey(runtimeId)) eventRows[runtimeId] = row[2..];
+            });
+        try
+        {
+            var root = context.Ax(() => AutomationElement.FromHandle(target.Handle).GetUpdatedCache(cache));
+            if (showDiff)
+            {
+                batch = context.Ax(() => notifications!.Begin(root,
+                    new(target, maximumElements, maximumDepth, includeMenus, details), previous?.Id, Properties));
+                if (batch?.Notices is { } notices)
+                    foreach (var notice in notices)
+                        if (notice.Id is { } id) eventRows.TryAdd(id, null);
             }
-            catch (ElementNotAvailableException) { throw new NativeFailure("STALE_SNAPSHOT", "An accessibility element disappeared; read fresh state without repeating input"); }
-            var after = window.Geometry(app, context);
-            if (after.Pixels.Width != geometry.Pixels.Width || after.Pixels.Height != geometry.Pixels.Height || after.Dpi != geometry.Dpi)
-                throw new NativeFailure("WINDOW_CHANGED", "The window changed during AX observation; read fresh state");
-            observations.Add((window, after));
+            traversal.Walk(root);
         }
+        catch (ElementNotAvailableException) { throw new NativeFailure("STALE_SNAPSHOT", "The window's accessibility root disappeared; read fresh state without repeating input"); }
+        var after = target.Geometry(app, context);
+        if (after.Pixels.Width != geometry.Pixels.Width || after.Pixels.Height != geometry.Pixels.Height || after.Dpi != geometry.Dpi)
+            throw new NativeFailure("WINDOW_CHANGED", "The window changed during AX observation; read fresh state");
+        var truncated = traversal.Truncated;
+        var hasUnreadableElements = traversal.HasUnreadableElements;
+        // A partial tree is shown in full and never becomes the baseline of a later diff.
+        var complete = !truncated && !hasUnreadableElements;
         if (truncated) Add($"[truncated: maxElements={maximumElements}, maxDepth={maximumDepth}]");
         DesktopSession.RequireInteractive();
         var descriptions = Windows.DescribeAll(app, all, context);
@@ -79,54 +88,18 @@ internal static class Accessibility
         var snapshot = new Snapshot(Guid.NewGuid().ToString("N"), selected, targets, elements);
         var tree = string.Join('\n', rows);
         if (batch is { } changes)
-            tree = changes.Format(eventRows.GetValueOrDefault, id => previous!.Elements.ContainsKey(id), tree, truncated);
+            tree = changes.Format(eventRows.GetValueOrDefault, id => previous!.Elements.ContainsKey(id), tree, !complete);
         var result = new
         {
             appHandle = app.Handle, windowId = selected.ToString(CultureInfo.InvariantCulture),
             focusedWindowId = Windows.Focused(app, descriptions.Windows)?.Id.ToString(CultureInfo.InvariantCulture),
-            snapshotId = snapshot.Id, tree, windows = descriptions.Values, truncated,
+            snapshotId = snapshot.Id, tree, windows = descriptions.Values, truncated, hasUnreadableElements,
         };
         context.Check();
         app.Snapshots[selected] = snapshot;
-        if (showDiff && !truncated) notifications!.LastSnapshot = snapshot.Id;
-        foreach (var observation in observations) observation.Window.Observe(observation.Geometry);
+        if (showDiff && complete) notifications!.LastSnapshot = snapshot.Id;
+        target.Observe(after);
         return result;
-
-        void Walk(AutomationElement element, WindowState window, WindowGeometry geometry, int depth, int indent)
-        {
-            context.Check();
-            if (count >= maximumElements || depth >= maximumDepth) { truncated = true; return; }
-            count++;
-            var runtimeId = WindowNotifications.Id(context.Ax(element.GetRuntimeId))
-                ?? throw new NativeFailure("STALE_SNAPSHOT", "An element has no RuntimeId; read fresh state");
-            if (!visited.Add(runtimeId)) return;
-            var node = Read(element, window, geometry, context);
-            var retained = AccessibilityText.Retain(node);
-            if (retained)
-            {
-                elements.Add(runtimeId, new(element, window));
-                var row = AccessibilityText.Format(node, runtimeId, details);
-                Add(new string(' ', indent * 2) + row);
-                if (eventRows.ContainsKey(runtimeId)) eventRows[runtimeId] = row[2..];
-            }
-            if (!includeMenus && node.ControlType == nameof(ControlType.Menu))
-            {
-                Add(new string(' ', (indent + 1) * 2) + "[menu contents omitted; includeMenus:true]");
-                return;
-            }
-            var first = context.Ax(() => TreeWalker.ControlViewWalker.GetFirstChild(element, cache));
-            if (first is not null && depth + 1 >= maximumDepth) { truncated = true; return; }
-            for (var child = first; child is not null;
-                 child = context.Ax(() => TreeWalker.ControlViewWalker.GetNextSibling(child, cache)))
-            {
-                Walk(child, window, geometry, depth + 1, indent + (retained ? 1 : 0));
-                if (count >= maximumElements)
-                {
-                    if (context.Ax(() => TreeWalker.ControlViewWalker.GetNextSibling(child, cache)) is not null) truncated = true;
-                    break;
-                }
-            }
-        }
     }
 
     private static object Property(AutomationElement element, AutomationProperty property) => element.GetCachedPropertyValue(property, true);

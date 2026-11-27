@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.3-alpha.2/cua-windows-partial-observations/guide.md
+/:
+  en: a7c304da98df933b
+  zh: 50da815fd288a5b5
+/windows-accessibility-reads-can-return-partial-trees:
+  en: ac552d7e81a359e2
+  zh: 98b7a823795c7302
+/windows-accessibility-reads-can-return-partial-trees/change:
+  en: 1dabda123d3e710e
+  zh: 9229d430a115339a
+/windows-accessibility-reads-can-return-partial-trees/migration:
+  en: 9430cc0ac1fe5d33
+  zh: 323fe8b66a524141

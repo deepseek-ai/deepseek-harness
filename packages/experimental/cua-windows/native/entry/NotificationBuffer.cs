@@ -36,15 +36,15 @@ internal sealed class NotificationBuffer(int limit)
     }
 }
 
-// A missing notice array records overflow, including when the current tree is also truncated.
+// A missing notice array records overflow, including when the current tree is also incomplete.
 internal readonly record struct NotificationBatch(UiaNotice[]? Notices)
 {
     private const string TooLarge = "Diff too large. Showing the current tree instead.\n";
 
-    internal string Format(Func<string, string?> currentRow, Func<string, bool> wasVisible, string fullTree, bool truncated)
+    internal string Format(Func<string, string?> currentRow, Func<string, bool> wasVisible, string fullTree, bool incomplete)
     {
         if (Notices == null) return TooLarge + fullTree;
-        if (truncated) return fullTree;
+        if (incomplete) return fullTree;
         if (Notices.Length == 0) return "No UIA notifications received.";
         var lines = new HashSet<string>(StringComparer.Ordinal);
         long bytes = 0;

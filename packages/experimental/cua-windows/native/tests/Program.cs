@@ -59,6 +59,7 @@ foreach (var invalid in new[] { "0", "-1", "1.5", "2147483648", "null", "\"2\"" 
 
 NotificationChecks.Run(Check);
 await NotificationCleanupChecks.Run(Check);
+AccessibilityTraversalChecks.Run(Check);
 
 var request = NativeRequest.Parse(WireJson.Parse("""{"id":"one","method":"getState","params":{"appHandle":"app","maxElements":20,"maxDepth":5}}"""));
 Check(request.Method == "getState" && request.Id == "one", "Valid requests retain correlation and method");

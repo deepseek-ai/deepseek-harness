@@ -31,6 +31,15 @@ public static class AccessibilityText
 {
     private static string Quote(string value) => JsonSerializer.Serialize(value, WireJson.Options);
 
+    /// <summary>Marks one element that disappeared before its row could be read.</summary>
+    public const string UnreadableElement = "[One child could not be read.]";
+
+    /// <summary>Marks a child list whose remaining entries could not be enumerated.</summary>
+    public const string IncompleteChildList = "[Child list incomplete.]";
+
+    /// <summary>Returns the leading spaces for one tree level.</summary>
+    public static string Indent(int level) => new(' ', level * 2);
+
     public static bool Retain(AccessibilityNode node) => node.ControlType is not ("Group" or "Other")
         || node.Name.Length != 0 || !string.IsNullOrEmpty(node.HelpText) || !string.IsNullOrEmpty(node.AutomationId)
         || node.HasValue || node.Patterns.Length != 0
