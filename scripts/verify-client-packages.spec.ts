@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   collectClientPackageViolations,
+  collectModuleReferences,
   collectLocalSourceSpecifiers,
   collectRuntimeLocalSourceSpecifiers,
   collectRuntimeSourcePackageUses,
@@ -16,9 +17,11 @@ import {
   fixClientPackageManifests,
   readClientDeclarations,
   readStylesheetAssetReferences,
+  reusesClientTypes,
   type ClientDeclaration,
   type ClientPackage,
   type ClientPackageFacts,
+  type ModuleReference,
 } from './verify-client-packages.ts'
 
 const CORDIS = '@deepseek-ai/cordis'
@@ -78,6 +81,8 @@ function facts(
     preloadedExternals: options.preloadedExternals ?? [],
     parserPreloadIds: options.parserPreloadIds
       ?? (options.preloadedExternals ?? []).map(value => value.replace(/\/client$/, '')),
+    clientTypedRoots: options.clientTypedRoots ?? new Set(),
+    clientTypedRootReferences: options.clientTypedRootReferences ?? [],
     malformed: options.malformed ?? [],
   }
 }
@@ -640,5 +645,73 @@ describe('manifest declarations', () => {
     expect(fixed.dependencies).toEqual(subject.dependencies)
     expect(fixed.peerDependencies).toEqual(subject.peerDependencies)
     expect(fixed.devDependencies).toEqual(subject.devDependencies)
+  })
+})
+
+describe('client-typed package root spelling', () => {
+  const slots = declaration('ui-slots', { immediately: true })
+  const settings = declaration('ui-settings')
+  const roots = { declarations: [slots, settings], clientTypedRoots: new Set([slots.name]) }
+  const reference = (module: string, kind: ModuleReference['kind'] = 'import'): ModuleReference =>
+    ({ file: 'packages/client/ui-x/src/client/index.ts', line: 3, module, kind })
+
+  it('reads every module-specifier position and no other string', () => {
+    const source = [
+      "import { a } from 'x/import'",
+      "import type { B } from 'x/type-import'",
+      "export * from 'x/export'",
+      "import legacy = require('x/import-equals')",
+      "type Q = typeof import('x/type-query')",
+      "const lazy = () => import('x/dynamic')",
+      "const loaded = require('x/require')",
+      "vi.mock('x/mock', () => ({}))",
+      "declare module 'x/augmented' { interface M { k: 1 } }",
+      "declare global { namespace N { const s: 'x/not-a-reference' } }",
+      "// import { c } from 'x/comment'",
+      "const text = \"from 'x/string'\"",
+    ].join('\n')
+    expect(collectModuleReferences('fixture.ts', source).map(found => [found.line, found.module, found.kind])).toEqual([
+      [1, 'x/import', 'import'], [2, 'x/type-import', 'import'], [3, 'x/export', 'import'],
+      [4, 'x/import-equals', 'import'], [5, 'x/type-query', 'import'], [6, 'x/dynamic', 'import'],
+      [7, 'x/require', 'import'], [8, 'x/mock', 'import'], [9, 'x/augmented', 'augmentation'],
+    ])
+  })
+
+  it('selects a package whose root types are its ./client declarations', () => {
+    const client = { types: './lib/types/client/index.d.ts', default: './lib/client.js' }
+    expect(reusesClientTypes({ exports: { '.': { types: client.types, default: './lib/index.js' }, './client': client } }))
+      .toBe(true)
+    expect(reusesClientTypes({ exports: { '.': { types: './lib/types/index.d.ts', default: './lib/index.js' }, './client': client } }))
+      .toBe(false)
+    expect(reusesClientTypes({ exports: { '.': { types: client.types } } })).toBe(false)
+    expect(reusesClientTypes({})).toBe(false)
+  })
+
+  it('accepts /client references to a client-typed root and root references to other packages', () => {
+    expect(collectClientPackageViolations(facts([], {
+      ...roots,
+      clientTypedRootReferences: [
+        reference(slots.name + '/client'), reference(slots.name + '/client', 'augmentation'),
+        reference(settings.name), reference('react'),
+      ],
+    }))).toEqual([])
+  })
+
+  it('rejects package-root imports and augmentations of a client-typed root', () => {
+    const references = [reference(slots.name), reference(slots.name, 'augmentation')]
+    const found = collectClientPackageViolations(facts([], { ...roots, clientTypedRootReferences: references }))
+    expect(found).toHaveLength(2)
+    expect(found[0]).toBe(
+      'packages/client/ui-x/src/client/index.ts:3: declare module "@deepseek-ai/dsh-client-ui-slots" names the package root;'
+      + ' repository code names "@deepseek-ai/dsh-client-ui-slots/client" for values, types, and augmentations. The package'
+      + ' publishes its ./client declarations as the root types for code outside the repository, but in this repository'
+      + ' the package root resolves to the Host entry under src/, which carries neither the /client exports nor their'
+      + ' declarations.',
+    )
+    expect(found[1]).toMatch(/: module reference "@deepseek-ai\/dsh-client-ui-slots" names the package root;/u)
+    // Negative control: the same references pass when the package root carries its own declarations.
+    expect(collectClientPackageViolations(facts([], {
+      ...roots, clientTypedRoots: new Set(), clientTypedRootReferences: references,
+    }))).toEqual([])
   })
 })

@@ -1,7 +1,9 @@
 /**
- * Verify client package modes, the synchronous browser module-request graph, and package-asset publication.
+ * Verify client package modes, the synchronous browser module-request graph, package-asset publication, and the
+ * `/client` spelling of repository references to packages whose root reuses the `./client` declarations.
  */
 
+import { execFileSync } from 'node:child_process'
 import { globSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, posix, relative, resolve, sep } from 'node:path'
@@ -40,6 +42,10 @@ const CORDIS = '@deepseek-ai/cordis'
 /** Stylesheet requests the dynamic build preset compiles: CSS Modules, global sheets, and `?inline` text. */
 const STYLESHEET_REQUEST = /\.css(?:\?inline)?$/u
 const INLINE_STYLESHEET_QUERY = /\?inline$/u
+/** Repository TypeScript sources whose module references the `/client` spelling rule reads. */
+const TYPESCRIPT_SOURCE = /\.(?:[cm]?ts|tsx)$/u
+/** Vitest calls whose first argument is a module specifier. */
+const VITEST_MODULE_CALLS = new Set(['mock', 'doMock', 'unmock', 'doUnmock', 'importActual', 'importMock'])
 
 /** One source location whose reference makes the dynamic build preset emit a package asset. */
 export interface AssetReference {
@@ -73,6 +79,21 @@ export interface ClientDeclaration {
   readonly assetReferences: readonly AssetReference[]
 }
 
+/**
+ * One module specifier in repository TypeScript source: an import or export declaration, an `import()` expression
+ * or type, a `require` or Vitest module-mock call, or a `declare module` name.
+ */
+export interface ModuleReference {
+  /** Repository-relative, `/`-separated source path. */
+  readonly file: string
+  /** One-based line of the specifier. */
+  readonly line: number
+  /** The module specifier as written. */
+  readonly module: string
+  /** `augmentation` for a `declare module` name, `import` for every other reference. */
+  readonly kind: 'augmentation' | 'import'
+}
+
 /** One package directly under packages/client. */
 export interface ClientPackage extends ClientDeclaration {
   readonly staticLinked: boolean
@@ -90,6 +111,13 @@ export interface ClientPackageFacts {
   readonly platformModules: readonly string[]
   readonly preloadedExternals: readonly string[]
   readonly parserPreloadIds: readonly string[]
+  /** Workspace packages whose root `types` export is their `./client` declarations ({@link reusesClientTypes}). */
+  readonly clientTypedRoots: ReadonlySet<string>
+  /**
+   * References to the {@link clientTypedRoots} packages, or to their `/client` subpaths, in the repository's
+   * TypeScript sources outside `vendor/`.
+   */
+  readonly clientTypedRootReferences: readonly ModuleReference[]
   readonly malformed: readonly string[]
 }
 
@@ -207,6 +235,46 @@ export function readStylesheetAssetReferences(
   return { stylesheets, references: [...references(stylesheets), ...references([...dependencies].sort())] }
 }
 
+/**
+ * Collect the module specifiers one TypeScript source file references, at any nesting depth: import and export
+ * declarations, `import()` expressions and types, `require` and Vitest module-mock calls, and `declare module` names.
+ * String literals in other positions and comments are not references.
+ * @param file - Repository-relative, `/`-separated path; a `.tsx` name selects the TSX parser.
+ * @param source - Source text.
+ * @returns The references in source order.
+ */
+export function collectModuleReferences(file: string, source: string): ModuleReference[] {
+  const sourceFile = ts.createSourceFile(
+    file, source, ts.ScriptTarget.Latest, true, file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  )
+  const found: ModuleReference[] = []
+  const add = (literal: ts.Node | undefined, kind: ModuleReference['kind']): void => {
+    if (literal === undefined || !ts.isStringLiteralLike(literal)) return
+    found.push({ file, line: sourceFile.getLineAndCharacterOfPosition(literal.getStart()).line + 1, module: literal.text, kind })
+  }
+  const visit = (node: ts.Node): void => {
+    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
+      add(node.moduleSpecifier, 'import')
+    } else if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference)) {
+      add(node.moduleReference.expression, 'import')
+    } else if (ts.isModuleDeclaration(node) && ts.isStringLiteral(node.name)) {
+      add(node.name, 'augmentation')
+    } else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) {
+      add(node.argument.literal, 'import')
+    } else if (ts.isCallExpression(node)) {
+      const callee = node.expression
+      const vitestModuleCall = ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression)
+        && callee.expression.text === 'vi' && VITEST_MODULE_CALLS.has(callee.name.text)
+      if (callee.kind === ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(callee) && callee.text === 'require') || vitestModuleCall) {
+        add(node.arguments[0], 'import')
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sourceFile)
+  return found
+}
+
 export function readClientDeclarations(root: string): ClientDeclarations {
   const malformed: string[] = []
   const declarations = globSync(MANIFEST_GLOBS, { cwd: root })
@@ -227,6 +295,7 @@ export function collectClientPackageViolations(facts: ClientPackageFacts): strin
     ...collectModeViolations(facts),
     ...collectModuleViolations(facts),
     ...collectAssetViolations(facts),
+    ...collectClientTypedRootViolations(facts),
   ].sort((left, right) => left.localeCompare(right))
 }
 
@@ -529,6 +598,56 @@ function collectAssetViolations(facts: ClientPackageFacts): string[] {
   return violations
 }
 
+/**
+ * Reject repository references that name the package root of a workspace package whose root reuses the `./client`
+ * declarations; repository code names its `/client` subpath for values, types, and augmentations. Such a package root
+ * is published with the `./client` declarations for code outside the repository, but in the repository it resolves to
+ * the Host entry under `src/`, which carries neither the `/client` exports nor their declarations.
+ * @param facts - The client-typed roots and the references to them in repository sources.
+ * @returns One diagnostic per package-root reference.
+ */
+function collectClientTypedRootViolations(facts: ClientPackageFacts): string[] {
+  return facts.clientTypedRootReferences.flatMap(({ file, line, module, kind }) => {
+    if (!facts.clientTypedRoots.has(module)) return []
+    return [
+      file + ':' + String(line) + ': ' + (kind === 'augmentation' ? 'declare module ' : 'module reference ')
+      + JSON.stringify(module) + ' names the package root; repository code names ' + JSON.stringify(module + '/client')
+      + ' for values, types, and augmentations. The package publishes its ./client declarations as the root types for'
+      + ' code outside the repository, but in this repository the package root resolves to the Host entry under src/,'
+      + ' which carries neither the /client exports nor their declarations.',
+    ]
+  })
+}
+
+/**
+ * Whether a manifest's root `types` export is its `./client` declarations, as for a package whose root runtime is only a
+ * Host entry.
+ * @param manifest - Parsed `package.json`.
+ * @returns True when `exports["."].types` and `exports["./client"].types` name the same file.
+ */
+export function reusesClientTypes(manifest: { readonly exports?: unknown }): boolean {
+  if (!isRecord(manifest.exports)) return false
+  const rootEntry = manifest.exports['.']
+  const clientEntry = manifest.exports['./client']
+  const rootTypes = isRecord(rootEntry) ? rootEntry.types : undefined
+  const clientTypes = isRecord(clientEntry) ? clientEntry.types : undefined
+  return typeof clientTypes === 'string' && rootTypes === clientTypes
+}
+
+/**
+ * Read the workspace packages whose root reuses the `./client` declarations.
+ * @param root - Absolute repository root.
+ * @returns Package names.
+ */
+function readClientTypedRoots(root: string): ReadonlySet<string> {
+  const names = new Set<string>()
+  for (const path of globSync(MANIFEST_GLOBS, { cwd: root })) {
+    const manifest = JSON.parse(readFileSync(resolve(root, path), 'utf8')) as Manifest
+    if (typeof manifest.name === 'string' && reusesClientTypes(manifest)) names.add(manifest.name)
+  }
+  return names
+}
+
 interface Manifest {
   name?: unknown
   dsh?: unknown
@@ -650,6 +769,37 @@ function readStringLiteralArray(root: string, sourcePath: string, name: string):
   throw new Error(GATE + ': ' + sourcePath + ' declares no ' + name)
 }
 
+/**
+ * Read the references to the given packages and their `/client` subpaths in the tracked and untracked, not ignored,
+ * TypeScript sources outside `vendor/`.
+ * @param root - Absolute repository root.
+ * @param packages - Package names whose references to read.
+ * @returns The references, by file and then line.
+ */
+function readPackageReferences(root: string, packages: ReadonlySet<string>): ModuleReference[] {
+  const listing = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], {
+    cwd: root,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+  })
+  const found: ModuleReference[] = []
+  for (const entry of listing.split('\0')) {
+    const file = normalizePath(entry)
+    if (file === '' || file.startsWith('vendor/') || !TYPESCRIPT_SOURCE.test(file)) continue
+    let source: string
+    try {
+      source = readFileSync(resolve(root, file), 'utf8')
+    } catch (error: unknown) {
+      // A file deleted in the working tree is still listed until the deletion is staged.
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+      continue
+    }
+    if (![...packages].some(name => source.includes(name))) continue
+    found.push(...collectModuleReferences(file, source).filter(reference => packages.has(stripClientSuffix(reference.module))))
+  }
+  return found
+}
+
 async function readFacts(root: string): Promise<ClientPackageFacts> {
   const { declarations: bareDeclarations, malformed } = readClientDeclarations(root)
   const staticLinkedPackages = await readStaticLinkedRoster(root)
@@ -759,6 +909,7 @@ async function readFacts(root: string): Promise<ClientPackageFacts> {
     })
   }
 
+  const clientTypedRoots = readClientTypedRoots(root)
   return {
     packages,
     declarations,
@@ -766,6 +917,8 @@ async function readFacts(root: string): Promise<ClientPackageFacts> {
     platformModules: readStringLiteralArray(root, PLATFORM_SOURCE, 'PLATFORM_MODULES'),
     preloadedExternals: readStringLiteralArray(root, PLATFORM_SOURCE, 'PRELOADED_CLIENT_EXTERNALS'),
     parserPreloadIds: readStringLiteralArray(root, PARSER_PRELOAD_SOURCE, 'PARSER_PRELOAD_IDS'),
+    clientTypedRoots,
+    clientTypedRootReferences: readPackageReferences(root, clientTypedRoots),
     malformed,
   }
 }
@@ -822,15 +975,30 @@ async function main(): Promise<void> {
     for (const violation of violations) console.error('  ' + violation)
     process.exit(1)
   }
+  // The three `immediately` Client packages reuse their ./client declarations at the root, and repository code augments
+  // them in many files; an empty package set or no augmentation means a manifest or the source scan read nothing.
+  if (facts.clientTypedRoots.size === 0) {
+    console.error(GATE + ': no workspace package root reuses its ./client declarations, so the /client spelling rule'
+      + ' has no package to check')
+    process.exit(1)
+  }
+  const augmentations = facts.clientTypedRootReferences.filter(reference => reference.kind === 'augmentation').length
+  if (augmentations === 0) {
+    console.error(GATE + ': the module-reference scan found no declare module of '
+      + [...facts.clientTypedRoots].map(name => name + '/client').join(', '))
+    process.exit(1)
+  }
 
   const dynamic = facts.packages.filter(pkg => pkg.dynamic).length
   const requests = facts.declarations.reduce((total, pkg) => total + pkg.external.length, 0)
   const assetExports = facts.declarations.filter(pkg => pkg.assetExport !== undefined).length
   console.log(
     GATE + ': ' + String(facts.packages.length) + ' client packages (' + String(dynamic) + ' dynamic, '
-    + String(facts.packages.length - dynamic) + ' statically linked) satisfy package-mode, module-request, and '
-    + 'package-asset rules; ' + String(requests) + ' explicit external request(s), ' + String(assetExports)
-    + ' package-asset export(s).',
+    + String(facts.packages.length - dynamic) + ' statically linked) satisfy package-mode, module-request, '
+    + 'package-asset, and /client spelling rules; ' + String(requests) + ' explicit external request(s), '
+    + String(assetExports) + ' package-asset export(s), ' + String(facts.clientTypedRootReferences.length)
+    + ' /client reference(s) to ' + String(facts.clientTypedRoots.size) + ' package(s) whose root reuses the ./client'
+    + ' declarations, ' + String(augmentations) + ' of them augmentations.',
   )
 }
 
