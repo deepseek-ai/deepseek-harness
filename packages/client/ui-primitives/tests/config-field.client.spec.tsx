@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { ConfigField, type ConfigFieldProps } from '../src/ConfigField.tsx'
+import { ConfigField, type ConfigFieldProps } from '../src/client/ConfigField.tsx'
 
 afterEach(cleanup)
 

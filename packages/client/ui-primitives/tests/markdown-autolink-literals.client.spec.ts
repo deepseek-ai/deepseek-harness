@@ -1,6 +1,6 @@
 import type { Paragraph, Root } from 'mdast'
 import { describe, expect, it } from 'vitest'
-import { parseGfm, parseGfmWithMath } from '../src/markdown/parse.ts'
+import { parseGfm, parseGfmWithMath } from '../src/client/markdown/parse.ts'
 
 /** Each phrasing child as a link destination, its literal text, or its type. */
 function phrasing(root: Root): unknown[] {

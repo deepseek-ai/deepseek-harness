@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /** Overlay clearance follows the desktop frame and visible anchor position. */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { overlayTopMargin } from '../src/overlay-top-margin.ts'
+import { overlayTopMargin } from '../src/client/overlay-top-margin.ts'
 
 const root = document.documentElement
 let originalClearance: string

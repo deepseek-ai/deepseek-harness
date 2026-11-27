@@ -2,8 +2,8 @@
 import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { Menu, MenuItemButton } from '../src/Menu.tsx'
-import { ReferenceChip } from '../src/user-text.tsx'
+import { Menu, MenuItemButton } from '../src/client/Menu.tsx'
+import { ReferenceChip } from '../src/client/user-text.tsx'
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); cleanup(); document.documentElement.style.removeProperty('--dsh-frame-top-clearance') })
 

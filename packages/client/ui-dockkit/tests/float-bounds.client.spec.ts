@@ -6,9 +6,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   boundedResize, FLOAT_RESISTANCE, legalFloatRect, resistedRect, unresistedRect,
-} from '../src/engine/geometry.ts'
-import type { FloatBounds } from '../src/engine/geometry.ts'
-import { FLOAT_MIN_SIZE } from '../src/index.ts'
+} from '../src/client/engine/geometry.ts'
+import type { FloatBounds } from '../src/client/engine/geometry.ts'
+import { FLOAT_MIN_SIZE } from '../src/client/index.ts'
 
 const VIEWPORT: FloatBounds = { top: 0, width: 1000, height: 800 }
 const PANEL = { x: 100, y: 80, width: 300, height: 200 }

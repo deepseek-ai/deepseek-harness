@@ -7,7 +7,7 @@
 import { useRef } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render } from '@testing-library/react'
-import { useAnchoredMaxHeight } from '../src/useAnchoredMaxHeight.ts'
+import { useAnchoredMaxHeight } from '../src/client/useAnchoredMaxHeight.ts'
 
 afterEach(() => {
   cleanup()

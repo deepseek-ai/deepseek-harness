@@ -2,9 +2,9 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { JsonBlock, MarkdownText } from './markdown-test-components.tsx'
-import { LinkIconMedium, MarkdownDelegateProvider } from '../src/index.ts'
-import { cjkFriendlyStrong } from '../src/markdown/cjkFriendlyStrong.ts'
-import { mathCompatibility } from '../src/markdown/mathCompatibility.ts'
+import { LinkIconMedium, MarkdownDelegateProvider } from '../src/client/index.ts'
+import { cjkFriendlyStrong } from '../src/client/markdown/cjkFriendlyStrong.ts'
+import { mathCompatibility } from '../src/client/markdown/mathCompatibility.ts'
 
 afterEach(cleanup)
 

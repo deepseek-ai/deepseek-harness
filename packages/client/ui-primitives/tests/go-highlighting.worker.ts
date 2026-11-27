@@ -2,7 +2,7 @@
 import { parentPort } from 'node:worker_threads'
 import {
   highlightLines, highlightToHtml, StreamingHighlightSession, subscribeGrammarLoaded,
-} from '../src/markdown/highlight.ts'
+} from '../src/client/markdown/highlight.ts'
 import { GO_SOURCE } from './go-source.ts'
 
 const ready = Promise.withResolvers<undefined>()

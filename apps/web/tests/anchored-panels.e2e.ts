@@ -4,8 +4,8 @@ import { chromium, webkit } from 'playwright'
 import { expect, it, onTestFinished } from 'vitest'
 
 const PANELS = [
-  { file: 'client/ui-primitives/src/Menu.module.css', classes: 'list portal scrollable', align: 'start' },
-  { file: 'client/ui-primitives/src/Menu.module.css', classes: 'list portal scrollable', align: 'end' },
+  { file: 'client/ui-primitives/src/client/Menu.module.css', classes: 'list portal scrollable', align: 'start' },
+  { file: 'client/ui-primitives/src/client/Menu.module.css', classes: 'list portal scrollable', align: 'end' },
   { file: 'client/ui-schedule/src/client/TaskMenu.module.css', classes: 'list portal scrollable', align: 'start' },
   { file: 'client/ui-schedule/src/client/TaskMenu.module.css', classes: 'list portal scrollable alignEnd', align: 'end' },
   { file: 'client/ui-schedule/src/client/PickerPopover.module.css', classes: 'panel', align: 'start' },

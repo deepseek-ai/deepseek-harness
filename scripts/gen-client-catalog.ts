@@ -64,7 +64,7 @@ interface OptionDoc {
 
 /**
  * Register options per cardinality, curated from `KindOptions` in
- * `packages/client/ui-slots/src/index.ts` — the authority for what a register
+ * `packages/client/ui-slots/src/client/index.ts` — the authority for what a register
  * call may pass. Curated rather than projected because the authority is a
  * conditional type keyed on the slot's kind: it has no per-kind declaration a
  * lexical scan could read, and its own JSDoc addresses the compiler, not a

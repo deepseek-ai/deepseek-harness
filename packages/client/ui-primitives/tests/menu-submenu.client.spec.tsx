@@ -3,8 +3,8 @@
 import { useRef, useState } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { Menu, MenuItemButton, type MenuEntry } from '../src/Menu.tsx'
-import { POINTER_GRACE_MS } from '../src/pointer-grace.ts'
+import { Menu, MenuItemButton, type MenuEntry } from '../src/client/Menu.tsx'
+import { POINTER_GRACE_MS } from '../src/client/pointer-grace.ts'
 
 let panel: DOMRect
 let row: DOMRect

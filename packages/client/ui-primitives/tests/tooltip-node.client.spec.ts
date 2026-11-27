@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { Tooltip } from '../src/Tooltip.tsx'
+import { Tooltip } from '../src/client/Tooltip.tsx'
 
 describe('Tooltip module in Node', () => {
   it('loads without installing browser input listeners', () => {

@@ -1751,7 +1751,7 @@ describe('running and lock semantics', () => {
       })
     }
     vi.resetModules()
-    const detection = await import('@deepseek-ai/dsh-client-ui-primitives/src/focus.ts')
+    const detection = await import('@deepseek-ai/dsh-client-ui-primitives/src/client/focus.ts')
     // The bar reads the page's useMobile answer; the editor's submission binding still classifies the device itself.
     const device = vi.spyOn(uiPrimitives, 'isMobileDevice').mockImplementation(detection.isMobileDevice)
     onTestFinished(() => { device.mockRestore() })

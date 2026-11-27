@@ -3,10 +3,10 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, renderHook, waitFor } from '@testing-library/react'
 import { languageForPath as sharedLanguageForPath, readLangHintForPath } from '@deepseek-ai/dsh-util-code-language'
-import { CODE_HIGHLIGHT_EXTENSIONS, languageForPath, useCodeHighlighter } from '../src/code-highlighting.ts'
+import { CODE_HIGHLIGHT_EXTENSIONS, languageForPath, useCodeHighlighter } from '../src/client/code-highlighting.ts'
 import {
   StreamingHighlightSession, grammarForHint, highlightLines, highlightToHtml, supportsHighlighting,
-} from '../src/markdown/highlight.ts'
+} from '../src/client/markdown/highlight.ts'
 
 afterEach(cleanup)
 

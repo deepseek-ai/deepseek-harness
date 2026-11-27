@@ -1,6 +1,6 @@
 import { runInNewContext } from 'node:vm'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createSnapshotStore, defineStore, shallowEqual } from '../src/index.ts'
+import { createSnapshotStore, defineStore, shallowEqual } from '../src/client/index.ts'
 
 interface State {
   a: { n: number }

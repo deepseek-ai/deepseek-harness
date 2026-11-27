@@ -2,7 +2,7 @@
 /** Split availability in the horizontal layout used by the right sidebar. */
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { DockLayout } from '../src/components/DockSurface.tsx'
+import { DockLayout } from '../src/client/components/DockSurface.tsx'
 import { seededController, TEST_LABELS } from './fixtures.client.ts'
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals() })

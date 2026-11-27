@@ -2,8 +2,8 @@
 import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { MarkdownDelegateProvider } from '../src/index.ts'
-import { parseGfm, parseGfmWithMath } from '../src/markdown/parse.ts'
+import { MarkdownDelegateProvider } from '../src/client/index.ts'
+import { parseGfm, parseGfmWithMath } from '../src/client/markdown/parse.ts'
 import { MarkdownText } from './markdown-test-components.tsx'
 
 afterEach(cleanup)

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /** Submenu layout mode: CSS anchors place the card, so only the side-or-page decision is unit tested. */
 import { expect, it } from 'vitest'
-import { submenuNeedsPage } from '../src/menu-submenu-position.ts'
+import { submenuNeedsPage } from '../src/client/menu-submenu-position.ts'
 
 it.each([
   { name: 'right side fits', parentX: 100, width: 200, viewport: 1024, page: false },

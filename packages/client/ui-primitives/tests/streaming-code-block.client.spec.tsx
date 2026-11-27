@@ -8,8 +8,8 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render } from '@testing-library/react'
-import { CodeBlock } from '../src/markdown/CodeBlock.tsx'
-import { StreamingHighlightSession } from '../src/markdown/highlight.ts'
+import { CodeBlock } from '../src/client/markdown/CodeBlock.tsx'
+import { StreamingHighlightSession } from '../src/client/markdown/highlight.ts'
 import { markdownLabels } from './labels.client.ts'
 
 const LABELS = markdownLabels.code

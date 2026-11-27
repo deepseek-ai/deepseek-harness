@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
-import { UserMessageBubble } from '../src/UserMessageBubble.tsx'
+import { UserMessageBubble } from '../src/client/UserMessageBubble.tsx'
 
 afterEach(cleanup)
 

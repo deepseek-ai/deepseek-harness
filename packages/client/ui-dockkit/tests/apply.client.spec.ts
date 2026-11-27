@@ -3,15 +3,15 @@
  * that applying its inverse returns the exact state it started from.
  */
 import { describe, expect, it } from 'vitest'
-import { applyOp, replay } from '../src/engine/operations.ts'
-import { createIdMinter, createInitialState } from '../src/engine/initial.ts'
+import { applyOp, replay } from '../src/client/engine/operations.ts'
+import { createIdMinter, createInitialState } from '../src/client/engine/initial.ts'
 import { asPane, asSplit, asTab, childAt, fileTab, firstTab, seedTab } from './fixtures.client.ts'
 import {
   assertNever, dockPaneIds, findParent, findTabPane, firstDockPaneId, floatIndex, floatRect, getNode, getPane, getSplit,
   getTab, normalizeSizes, onlyTabId, replaceInParent, topRightPaneId,
-} from '../src/engine/tree.ts'
-import type { IdMinter } from '../src/engine/initial.ts'
-import type { LayoutOp, LayoutState, PaneId, PaneNode, TabId } from '../src/contract/types.ts'
+} from '../src/client/engine/tree.ts'
+import type { IdMinter } from '../src/client/engine/initial.ts'
+import type { LayoutOp, LayoutState, PaneId, PaneNode, TabId } from '../src/client/contract/types.ts'
 
 interface Fixture {
   readonly state: LayoutState

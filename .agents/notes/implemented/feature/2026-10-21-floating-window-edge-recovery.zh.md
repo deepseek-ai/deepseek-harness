@@ -63,13 +63,13 @@ x = x + v * h
 
 | 文件 | 变更 |
 |---|---|
-| `packages/client/ui-dockkit/src/engine/geometry.ts` | `FloatBounds`、`FLOAT_RESISTANCE`、`legalFloatRect`、`resistedRect`、`unresistedRect`、`boundedResize` |
-| `packages/client/ui-dockkit/src/engine/spring.ts` | 纯弹簧积分器、静止判定函数 `springSettled`、`launchVelocity` 与时间上限 |
-| `packages/client/ui-dockkit/src/components/FloatLayer.tsx` | `useFloatGestures`：视口投影、阻力、松手弹簧、绘制速度采样、减弱动态效果、帧循环与取消；供两个渲染器使用的 `rectOf` 与 `floatStyle` |
-| `packages/client/ui-dockkit/src/components/TabLayout.tsx` | 通过 `floatStyle` 绘制 hook 给出的显示矩形 |
-| `packages/client/ui-dockkit/src/components/TabBody.tsx` | 各布局（`FloatLayer`、`TabLayout`、`TabPanel`）共用的 memo 化标签页内容 |
-| `packages/client/ui-dockkit/src/contract/adapter.ts` | `TabRenderer` 何时被再次调用 |
-| `packages/client/ui-dockkit/src/components/dockkit.module.css` | `.float` 上位置与尺寸的静止钳制 |
+| `packages/client/ui-dockkit/src/client/engine/geometry.ts` | `FloatBounds`、`FLOAT_RESISTANCE`、`legalFloatRect`、`resistedRect`、`unresistedRect`、`boundedResize` |
+| `packages/client/ui-dockkit/src/client/engine/spring.ts` | 纯弹簧积分器、静止判定函数 `springSettled`、`launchVelocity` 与时间上限 |
+| `packages/client/ui-dockkit/src/client/components/FloatLayer.tsx` | `useFloatGestures`：视口投影、阻力、松手弹簧、绘制速度采样、减弱动态效果、帧循环与取消；供两个渲染器使用的 `rectOf` 与 `floatStyle` |
+| `packages/client/ui-dockkit/src/client/components/TabLayout.tsx` | 通过 `floatStyle` 绘制 hook 给出的显示矩形 |
+| `packages/client/ui-dockkit/src/client/components/TabBody.tsx` | 各布局（`FloatLayer`、`TabLayout`、`TabPanel`）共用的 memo 化标签页内容 |
+| `packages/client/ui-dockkit/src/client/contract/adapter.ts` | `TabRenderer` 何时被再次调用 |
+| `packages/client/ui-dockkit/src/client/components/dockkit.module.css` | `.float` 上位置与尺寸的静止钳制 |
 | `packages/client/ui-dockkit/README.md` 对 | 在悬浮渲染器说明旁补充边界规则 |
 | `apps/web/tests/sidebar-right.e2e.ts` | 覆盖阻力与回弹的浏览器用例 |
 

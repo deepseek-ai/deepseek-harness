@@ -3,8 +3,8 @@
  * independence, and determinism, all with fixed frame steps.
  */
 import { describe, expect, it } from 'vitest'
-import { launchVelocity, SPRING_DEADLINE_MS, SPRING_MAX_VELOCITY, springSettled, stepSpring } from '../src/engine/spring.ts'
-import type { SpringAxis } from '../src/engine/spring.ts'
+import { launchVelocity, SPRING_DEADLINE_MS, SPRING_MAX_VELOCITY, springSettled, stepSpring } from '../src/client/engine/spring.ts'
+import type { SpringAxis } from '../src/client/engine/spring.ts'
 
 /** Analytic overshoot bound for the shipped damping ratio, exp(-pi*zeta/sqrt(1-zeta^2)). */
 const OVERSHOOT_BOUND = Math.exp(-Math.PI * 0.72 / Math.sqrt(1 - 0.72 ** 2))

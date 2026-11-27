@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it } from 'vitest'
-import { ImagePreview } from '../src/ImagePreview.tsx'
+import { ImagePreview } from '../src/client/ImagePreview.tsx'
 
 afterEach(cleanup)
 it('keeps status inside the preview and resets failures when the source changes', () => {

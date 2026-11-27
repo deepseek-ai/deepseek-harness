@@ -203,9 +203,9 @@ async function compileFixture(): Promise<{ script: string; css: string }> {
   const code = `
     import React, { useState } from 'react'
     import { createRoot } from 'react-dom/client'
-    import { Menu } from ${source('ui-primitives/src/Menu.tsx')}
-    import { Switch } from ${source('ui-primitives/src/Switch.tsx')}
-    import ${source('ui-primitives/src/input-modality.ts')}
+    import { Menu } from ${source('ui-primitives/src/client/Menu.tsx')}
+    import { Switch } from ${source('ui-primitives/src/client/Switch.tsx')}
+    import ${source('ui-primitives/src/client/input-modality.ts')}
     import ${source('ui-theme/src/styles/base.css')}
     import ${source('ui-theme/src/styles/design-platform.css')}
     import ${source('ui-theme/src/styles/focus.css')}
@@ -213,8 +213,8 @@ async function compileFixture(): Promise<{ script: string; css: string }> {
     import triggerCss from ${source('ui-permission-presets/src/client/PermissionSelect.module.css')}
     import feedbackCss from ${source('ui-message-feedback/src/client/FeedbackDialog.module.css')}
     import workflowCss from ${source('ui-workflow-run/src/client/WorkflowRunPanel.module.css')}
-    import cardCss from ${source('ui-primitives/src/HoverCard.module.css')}
-    import pillCss from ${source('ui-primitives/src/Pill.module.css')}
+    import cardCss from ${source('ui-primitives/src/client/HoverCard.module.css')}
+    import pillCss from ${source('ui-primitives/src/client/Pill.module.css')}
     import trajectoryCss from ${source('ui-trajectory/src/client/TrajectoryTable.module.css')}
     import onboardingCss from ${source('ui-settings-account/src/client/DesktopOnboarding.module.css')}
     function Fixture() {

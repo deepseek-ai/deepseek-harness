@@ -8,7 +8,7 @@ Status: implemented
 
 Markdown fence 指围栏代码块：开头一行是三个或更多反引号（或波浪号），后接 info string，例如 `ts title=demo`；随后是正文和闭合围栏。info string 的第一个词表示 fence 的语言。
 
-会话流要按语言渲染 fence，插件需要能注册、替换或装饰某一种语言的渲染。primitives 在固定分支里选择 fence 的渲染方式：[render.tsx](../../../../packages/client/ui-primitives/src/markdown/render.tsx) 的 `renderCode` 把 `math` 交给 KaTeX，[CodeBlock.tsx](../../../../packages/client/ui-primitives/src/markdown/CodeBlock.tsx) 给 `diff` / `patch` 画行着色，其余语言走 shiki。[ui-primitives](../../../../packages/client/ui-primitives/README.zh.md) 不依赖 Cordis，组件拿不到 slot；其他 `MarkdownText` 调用方的渲染必须保持不变。
+会话流要按语言渲染 fence，插件需要能注册、替换或装饰某一种语言的渲染。primitives 在固定分支里选择 fence 的渲染方式：[render.tsx](../../../../packages/client/ui-primitives/src/client/markdown/render.tsx) 的 `renderCode` 把 `math` 交给 KaTeX，[CodeBlock.tsx](../../../../packages/client/ui-primitives/src/client/markdown/CodeBlock.tsx) 给 `diff` / `patch` 画行着色，其余语言走 shiki。[ui-primitives](../../../../packages/client/ui-primitives/README.zh.md) 不依赖 Cordis，组件拿不到 slot；其他 `MarkdownText` 调用方的渲染必须保持不变。
 
 ## 决定
 

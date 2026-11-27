@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { AnimatedRows } from '../src/AnimatedRows.tsx'
+import { AnimatedRows } from '../src/client/AnimatedRows.tsx'
 
 interface RecordedAnimation {
   element: HTMLElement

@@ -3,7 +3,7 @@
 import { createRef } from 'react'
 import { afterEach, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { ZoomControls, type ZoomControlsHandle } from '../src/ZoomControls.tsx'
+import { ZoomControls, type ZoomControlsHandle } from '../src/client/ZoomControls.tsx'
 
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 

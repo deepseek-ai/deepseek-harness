@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { SegmentedTabs } from '../src/SegmentedTabs.tsx'
+import { SegmentedTabs } from '../src/client/SegmentedTabs.tsx'
 
 afterEach(cleanup)
 

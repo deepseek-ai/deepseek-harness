@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { TextShimmer } from '../src/TextShimmer.tsx'
+import { TextShimmer } from '../src/client/TextShimmer.tsx'
 
 afterEach(cleanup)
 

@@ -3,8 +3,8 @@
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { SettingsForm } from '../src/settings-form/SettingsForm.tsx'
-import type { SettingsFormShell } from '../src/settings-form/form-model.ts'
+import { SettingsForm } from '../src/client/settings-form/SettingsForm.tsx'
+import type { SettingsFormShell } from '../src/client/settings-form/form-model.ts'
 
 afterEach(cleanup)
 

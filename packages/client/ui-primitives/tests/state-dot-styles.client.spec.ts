@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
-const css = readFileSync(fileURLToPath(new URL('../src/StateDot.module.css', import.meta.url)), 'utf8')
+const css = readFileSync(fileURLToPath(new URL('../src/client/StateDot.module.css', import.meta.url)), 'utf8')
 
 describe('StateDot.module.css', () => {
   it.each(['done', 'warning', 'error', 'idle'] as const)('gives the %s state its own color rule', (state) => {

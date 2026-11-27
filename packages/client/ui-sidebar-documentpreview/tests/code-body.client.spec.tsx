@@ -12,7 +12,7 @@ import type { CodeBodyProps } from '../src/client/code/CodeBody.tsx'
 import type { DocumentContent } from '../src/client/document/contract.ts'
 import { en, zh } from '../src/client/code/locales.ts'
 import css from '../src/client/code/CodeBody.module.css'
-import primitiveCss from '../../ui-primitives/src/markdown/CodeBlock.module.css'
+import primitiveCss from '../../ui-primitives/src/client/markdown/CodeBlock.module.css'
 
 const SESSION = 'code-preview' as SessionId
 let stylesheet: HTMLStyleElement | undefined
@@ -62,7 +62,7 @@ function installStyles(): void {
   const directory = dirname(fileURLToPath(import.meta.url))
   const own = readFileSync(resolve(directory, '../src/client/code/CodeBody.module.css'), 'utf8')
     .replaceAll('.renderer', `.${css.renderer}`).replaceAll('.code', `.${css.code}`)
-  const shared = readFileSync(resolve(directory, '../../ui-primitives/src/markdown/CodeBlock.module.css'), 'utf8')
+  const shared = readFileSync(resolve(directory, '../../ui-primitives/src/client/markdown/CodeBlock.module.css'), 'utf8')
     .replaceAll('.block', `.${primitiveCss.block}`)
     .replaceAll('.content', `.${primitiveCss.content}`)
   stylesheet = document.createElement('style')

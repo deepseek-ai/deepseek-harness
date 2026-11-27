@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { MarkdownText } from './markdown-test-components.tsx'
-import { copyKatexAsTex } from '../src/markdown/copy-tex.ts'
+import { copyKatexAsTex } from '../src/client/markdown/copy-tex.ts'
 
 // jsdom implements no layout or innerText, so textContent stands in for it here
 // and these specs assert only the TeX fragments; math-rendering.e2e.ts covers

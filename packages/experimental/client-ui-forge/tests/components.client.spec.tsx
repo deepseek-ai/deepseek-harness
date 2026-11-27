@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import toastCss from '@deepseek-ai/dsh-client-ui-primitives/src/Toast.module.css'
+import toastCss from '@deepseek-ai/dsh-client-ui-primitives/src/client/Toast.module.css'
 import type { PaneId, SidebarRightTabInfo, TabId } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { ActionToast } from '../src/client/ActionToast.tsx'

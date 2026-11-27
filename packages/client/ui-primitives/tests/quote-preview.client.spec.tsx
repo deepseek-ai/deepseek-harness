@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { QuotePreview } from '@deepseek-ai/dsh-client-ui-primitives'
-import { POINTER_GRACE_MS } from '../src/pointer-grace.ts'
+import { POINTER_GRACE_MS } from '../src/client/pointer-grace.ts'
 
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 

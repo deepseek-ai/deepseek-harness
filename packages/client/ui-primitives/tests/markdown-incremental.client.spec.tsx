@@ -7,8 +7,8 @@ import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { Root, RootContent } from 'mdast'
 import { MarkdownText } from './markdown-test-components.tsx'
-import { IncrementalMarkdownParser } from '../src/markdown/incremental.ts'
-import { parseGfm } from '../src/markdown/parse.ts'
+import { IncrementalMarkdownParser } from '../src/client/markdown/incremental.ts'
+import { parseGfm } from '../src/client/markdown/parse.ts'
 
 afterEach(cleanup)
 

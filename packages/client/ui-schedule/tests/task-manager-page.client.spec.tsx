@@ -22,7 +22,7 @@ import {
 } from '../src/client/schedule-format.ts'
 import { en, zh } from '../src/client/task-manager-locales.ts'
 import css from '../src/client/TaskManagerPage.module.css'
-import modalCss from '../../ui-primitives/src/Modal.module.css'
+import modalCss from '../../ui-primitives/src/client/Modal.module.css'
 import pluginsCss from '../../ui-plugin-manager/src/client/PluginManagerPage.module.css'
 import { pinSystemZone } from './zone-fixture.ts'
 
@@ -48,7 +48,7 @@ function installStyles(selectors: Record<string, string | undefined>): void {
   for (const [name, hashed] of Object.entries(selectors)) {
     if (hashed !== undefined) mapped = mapped.replaceAll(`.${name}`, `.${hashed}`)
   }
-  const layer = readFileSync(resolve(import.meta.dirname, '../../ui-primitives/src/Modal.module.css'), 'utf8')
+  const layer = readFileSync(resolve(import.meta.dirname, '../../ui-primitives/src/client/Modal.module.css'), 'utf8')
     .replaceAll('.root', `.${modalCss.root}`)
   installedStyles = document.createElement('style')
   installedStyles.textContent = `${mapped}\n${layer}`

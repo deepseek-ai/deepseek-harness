@@ -3,7 +3,7 @@
 import { useRef } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render } from '@testing-library/react'
-import { Menu } from '../src/Menu.tsx'
+import { Menu } from '../src/client/Menu.tsx'
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
 

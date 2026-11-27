@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { DetailDocument, detailDocumentState, useDetailDocumentLabels, type DetailDocumentCopy, type DetailDocumentLabels } from '../src/DetailDocument.tsx'
+import { DetailDocument, detailDocumentState, useDetailDocumentLabels, type DetailDocumentCopy, type DetailDocumentLabels } from '../src/client/DetailDocument.tsx'
 
 afterEach(cleanup)
 

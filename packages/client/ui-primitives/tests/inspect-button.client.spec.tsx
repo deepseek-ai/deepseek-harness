@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render } from '@testing-library/react'
-import { InspectButton } from '../src/InspectButton.tsx'
+import { InspectButton } from '../src/client/InspectButton.tsx'
 
 afterEach(cleanup)
 

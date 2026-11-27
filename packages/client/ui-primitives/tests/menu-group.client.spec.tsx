@@ -2,7 +2,7 @@
 /** Menu-group naming, sticky transitions, and viewport-observer ownership. */
 import { cleanup, fireEvent, isInaccessible, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { MenuGroup, observeStickyMenuGroups } from '../src/MenuGroup.tsx'
+import { MenuGroup, observeStickyMenuGroups } from '../src/client/MenuGroup.tsx'
 
 const disposers: (() => void)[] = []
 const intersections: StubIntersectionObserver[] = []

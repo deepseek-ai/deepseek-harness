@@ -2,9 +2,9 @@
 import { useRef, useState } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { Modal } from '../src/Modal.tsx'
-import { closeTopModal, isBehindModal, useModalLayer } from '../src/useModalLayer.ts'
-import { Menu, MenuItemButton } from '../src/Menu.tsx'
+import { Modal } from '../src/client/Modal.tsx'
+import { closeTopModal, isBehindModal, useModalLayer } from '../src/client/useModalLayer.ts'
+import { Menu, MenuItemButton } from '../src/client/Menu.tsx'
 
 afterEach(cleanup)
 function Nested({ withSearch = true }: { withSearch?: boolean }) {

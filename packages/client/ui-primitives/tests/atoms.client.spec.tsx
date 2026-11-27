@@ -3,9 +3,9 @@ import { createRef, useState } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Button, ConnectionIndicator, Input, Menu, MenuItemButton, Modal, Pill } from '@deepseek-ai/dsh-client-ui-primitives'
-import { POINTER_GRACE_MS } from '../src/pointer-grace.ts'
-import { focusWithoutRing } from '../src/focus.ts'
-import buttonCss from '../src/Button.module.css'
+import { POINTER_GRACE_MS } from '../src/client/pointer-grace.ts'
+import { focusWithoutRing } from '../src/client/focus.ts'
+import buttonCss from '../src/client/Button.module.css'
 
 afterEach(cleanup)
 
@@ -32,7 +32,7 @@ describe('isMobileDevice', () => {
         else Object.defineProperty(navigator, name, descriptor)
       })
     }
-    const { isMobileDevice } = await import('../src/focus.ts')
+    const { isMobileDevice } = await import('../src/client/focus.ts')
     expect(isMobileDevice()).toBe(mobile)
   })
 
@@ -41,16 +41,16 @@ describe('isMobileDevice', () => {
     const desktopUA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
     const ua = vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(mobile ? mobileUA : desktopUA)
     onTestFinished(() => { ua.mockRestore() })
-    const first = await import('../src/focus.ts')
+    const first = await import('../src/client/focus.ts')
     expect(first.isMobileDevice()).toBe(mobile)
 
     ua.mockReturnValue(mobile ? desktopUA : mobileUA)
-    const other = await import('@deepseek-ai/dsh-client-ui-primitives/src/focus.ts')
+    const other = await import('@deepseek-ai/dsh-client-ui-primitives/src/client/focus.ts')
     expect(other.isMobileDevice()).toBe(mobile)
     expect(ua).toHaveBeenCalledTimes(1)
 
     vi.resetModules()
-    const reloaded = await import('../src/focus.ts')
+    const reloaded = await import('../src/client/focus.ts')
     expect(reloaded.isMobileDevice()).toBe(!mobile)
     expect(ua).toHaveBeenCalledTimes(2)
   })

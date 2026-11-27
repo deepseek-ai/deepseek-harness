@@ -2,7 +2,7 @@
 /** Native row previews keep cloned controls inert and release their DOM. */
 import { cleanup, createEvent, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { useRowDragPreview } from '../src/useRowDragPreview.ts'
+import { useRowDragPreview } from '../src/client/useRowDragPreview.ts'
 
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 

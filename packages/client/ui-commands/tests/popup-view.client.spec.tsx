@@ -159,7 +159,7 @@ describe('PopupSelectView', () => {
       })
     }
     vi.resetModules()
-    const detection = await import('@deepseek-ai/dsh-client-ui-primitives/src/focus.ts')
+    const detection = await import('@deepseek-ai/dsh-client-ui-primitives/src/client/focus.ts')
     const device = vi.spyOn(uiPrimitives, 'isMobileDevice').mockImplementation(detection.isMobileDevice)
     onTestFinished(() => { device.mockRestore() })
     const { popup, search } = await mountOpen()

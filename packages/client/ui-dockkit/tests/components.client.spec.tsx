@@ -12,17 +12,17 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
-import type { DockIntents } from '../src/contract/adapter.ts'
-import type { PaneId, TabId } from '../src/contract/types.ts'
-import { DockController } from '../src/engine/controller.ts'
-import { applyOp } from '../src/engine/operations.ts'
-import { FLOAT_DEFAULT_SIZE, FLOAT_MIN_SIZE } from '../src/engine/constraints.ts'
-import { floatRectAt } from '../src/engine/geometry.ts'
-import { DockSurface, type DockSurfaceProps } from '../src/components/DockSurface.tsx'
-import { TabTitle } from '../src/components/TabTitle.tsx'
-import type { TabMenuExtras } from '../src/contract/adapter.ts'
-import { FloatLayer, type FloatLayerProps } from '../src/components/FloatLayer.tsx'
-import { dockPaneIds, getPane } from '../src/engine/tree.ts'
+import type { DockIntents } from '../src/client/contract/adapter.ts'
+import type { PaneId, TabId } from '../src/client/contract/types.ts'
+import { DockController } from '../src/client/engine/controller.ts'
+import { applyOp } from '../src/client/engine/operations.ts'
+import { FLOAT_DEFAULT_SIZE, FLOAT_MIN_SIZE } from '../src/client/engine/constraints.ts'
+import { floatRectAt } from '../src/client/engine/geometry.ts'
+import { DockSurface, type DockSurfaceProps } from '../src/client/components/DockSurface.tsx'
+import { TabTitle } from '../src/client/components/TabTitle.tsx'
+import type { TabMenuExtras } from '../src/client/contract/adapter.ts'
+import { FloatLayer, type FloatLayerProps } from '../src/client/components/FloatLayer.tsx'
+import { dockPaneIds, getPane } from '../src/client/engine/tree.ts'
 import { TEST_LABELS, asPane, asTab, fileTab, seededController } from './fixtures.client.ts'
 
 afterEach(() => {
@@ -787,7 +787,7 @@ describe('DockSurface', () => {
     if (menu === null) throw new Error('expected the extras component menu')
     // Vitest stubs CSS Modules; bind the real stylesheet's menu selector to its generated class.
     const style = document.createElement('style')
-    style.textContent = readFileSync(resolve(import.meta.dirname, '../src/components/dockkit.module.css'), 'utf8')
+    style.textContent = readFileSync(resolve(import.meta.dirname, '../src/client/components/dockkit.module.css'), 'utf8')
       .replaceAll(/\.menu(?=[:\s{])/g, `.${[...menu.classList].join('.')}`)
     document.head.append(style)
     onTestFinished(() => { style.remove() })

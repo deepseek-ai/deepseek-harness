@@ -50,7 +50,7 @@ test.each([
   // its source tree: the sweep reports it where an exact-path admission would
   // reject the bundle.
   const file = mode === 'other-css'
-    ? fileURLToPath(new URL('packages/client/ui-primitives/src/StateDot.module.css', root))
+    ? fileURLToPath(new URL('packages/client/ui-primitives/src/client/StateDot.module.css', root))
     : `${cssBase}${extension}`
   const message = mode === 'error'
     ? 'dockkit-negative-control'
