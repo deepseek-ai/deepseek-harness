@@ -645,6 +645,51 @@ describe('WorkspaceAnalyzer', { timeout: 60_000 }, () => {
     )
   })
 
+  it('accepts a package root whose declarations re-export an interface that a consumer augments', () => {
+    const root = copyFixture('typert-augmented-reexport-')
+    const libraryRoot = join(root, 'packages/library')
+    const librarySource = 'src/client/index.ts'
+    mkdirSync(join(libraryRoot, 'src/client'), { recursive: true })
+    writeFileSync(join(libraryRoot, 'package.json'), JSON.stringify({
+      name: '@fixture/library',
+      private: true,
+      type: 'module',
+      exports: { '.': { types: './lib/types/client/index.d.ts', default: './lib/index.js' } },
+    }, null, 2))
+    writeFileSync(join(libraryRoot, 'tsconfig.json'), JSON.stringify({
+      extends: '../../tsconfig.base.json',
+      compilerOptions: { rootDir: 'src', outDir: 'lib/types' },
+      include: ['src'],
+    }, null, 2))
+    writeFileSync(join(libraryRoot, librarySource), 'export interface LibraryRecord { readonly value: string }\n')
+    writeFileSync(join(libraryRoot, 'src/index.d.ts'), "export * from './client/index.ts'\n")
+    writeFileSync(join(libraryRoot, 'src/index.js'), 'export function apply() {}\n')
+    const basePath = join(root, 'tsconfig.base.json')
+    const base = JSON.parse(readFileSync(basePath, 'utf8')) as {
+      compilerOptions: { paths: Record<string, string[]> }
+    }
+    base.compilerOptions.paths['@fixture/library'] = ['./packages/library/src']
+    writeFileSync(basePath, `${JSON.stringify(base, null, 2)}\n`)
+    const aggregatePath = join(root, 'tsconfig.host.json')
+    const aggregate = JSON.parse(readFileSync(aggregatePath, 'utf8')) as { references: { path: string }[] }
+    aggregate.references.push({ path: './packages/library' })
+    writeFileSync(aggregatePath, `${JSON.stringify(aggregate, null, 2)}\n`)
+    addSameFacePackage(root, '@fixture/library', 'LibraryRecord', {
+      'augment.ts': "declare module '@fixture/library' {\n  interface LibraryRecord { readonly extra: string }\n}\nexport {}\n",
+    })
+    const consumerConfigPath = join(root, 'packages/consumer/tsconfig.json')
+    const consumerConfig = JSON.parse(readFileSync(consumerConfigPath, 'utf8')) as {
+      references: { path: string }[]
+    }
+    consumerConfig.references.push({ path: '../library' })
+    writeFileSync(consumerConfigPath, `${JSON.stringify(consumerConfig, null, 2)}\n`)
+
+    const host = new WorkspaceAnalyzer({ root }).analyze().faces.find(face => face.face === 'host')
+    const record = host?.graph.declarations.find(declaration => declaration.name === 'LibraryRecord')
+    expect(record?.id).toBe(`@fixture/library:packages/library/${librarySource}#LibraryRecord`)
+    expect(record?.kind === 'interface' ? record.members.map(member => member.name) : []).toEqual(['value', 'extra'])
+  })
+
   it('rejects relative imports across same-face package boundaries', () => {
     const root = copyFixture('typert-relative-package-')
     addSameFacePackage(root, '@fixture/host/models', 'Payload')

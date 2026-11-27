@@ -2757,7 +2757,11 @@ class FaceAnalyzer {
   }
 
   private resolveSymbol(symbol: ts.Symbol): ts.Symbol {
-    return (symbol.flags & ts.SymbolFlags.Alias) === 0 ? symbol : this.checker.getAliasedSymbol(symbol)
+    // A module augmentation of an interface reached through `export *` merges into a clone of the original symbol;
+    // the module's export table keeps the original, so identity compares merged symbols.
+    return this.checker.getMergedSymbol(
+      (symbol.flags & ts.SymbolFlags.Alias) === 0 ? symbol : this.checker.getAliasedSymbol(symbol),
+    )
   }
 
   private symbolId(symbol: ts.Symbol): SymbolId {
