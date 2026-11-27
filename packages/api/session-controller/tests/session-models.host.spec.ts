@@ -360,7 +360,18 @@ describe('Web session model selection', () => {
     } finally { await ctx.fiber.dispose() }
   })
 
-  it.each([false, true])('account login replaces a saved default only without another API key: %s', async (configuredKey) => {
+  it.each([
+    { outcome: 'replaces a default of another provider', configuredKey: false, saved: { provider: 'removed', model: 'saved' }, replaced: true },
+    { outcome: 'keeps the default when another API key is configured', configuredKey: true, saved: { provider: 'removed', model: 'saved' }, replaced: false },
+    {
+      outcome: 'keeps a listed account model with its effort', configuredKey: false, replaced: false,
+      saved: { provider: 'deepseek-account', model: 'second-model', reasoningEffort: brandString<ReasoningEffortId>('max') },
+    },
+    {
+      outcome: 'replaces an account model the account no longer lists', configuredKey: false, replaced: true,
+      saved: { provider: 'deepseek-account', model: 'delisted-model', reasoningEffort: brandString<ReasoningEffortId>('max') },
+    },
+  ])('account login $outcome', async ({ configuredKey, saved, replaced }) => {
     const { configurationFixture } = await import('../../../settings/settings/tests/configuration-fixture.ts')
     const configured = await configurationFixture({ hmr: false })
     const { ctx } = await harness(undefined, configured.ctx)
@@ -378,15 +389,15 @@ describe('Web session model selection', () => {
       ns: 'first' as never, autoGenerate: false, schema: {}, revision: 0, applies: 'live',
       value: { providers: { custom: { apiKeyEnv: 'CUSTOM_API_KEY', models: [] } } },
     }])
-    await ctx.agentDefaultModel.saveSelection({ provider: 'removed', model: 'saved' })
+    await ctx.agentDefaultModel.saveSelection(saved)
     const controller = await createSessionTestController(ctx, {
       defaultModelSelection: () => ctx.agentDefaultModel.currentSelection(), cwd: '/tmp',
     })
     await controller.initializeDefaultModel()
     expect(describe).toHaveBeenCalledWith('CUSTOM_API_KEY')
-    expect(ctx.agentDefaultModel.currentSelection()).toEqual(configuredKey
-      ? { provider: 'removed', model: 'saved' }
-      : { provider: 'deepseek-account', model: 'first-model', reasoningEffort: 'high' })
+    expect(ctx.agentDefaultModel.currentSelection()).toEqual(replaced
+      ? { provider: 'deepseek-account', model: 'first-model', reasoningEffort: 'high' }
+      : saved)
     await ctx.fiber.dispose()
   })
 
