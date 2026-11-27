@@ -1,9 +1,9 @@
 /** Default native Office body; the document preview renders the format-specific fallback after a reported failure. */
 import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import type { PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/client'
 import type { PresentationStore, PresentationAction } from './presentation-store.ts'
-import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
+import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit/client'
 import { OfficeView } from './View.tsx'
 import type { OfficePreviewClient } from './service.ts'
 

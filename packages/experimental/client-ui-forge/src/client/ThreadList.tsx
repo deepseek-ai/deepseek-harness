@@ -5,8 +5,8 @@
  */
 
 import { useLayoutEffect, useMemo, useRef, type KeyboardEvent, type ReactNode } from 'react'
-import { IconChevronLeftOutlineRegular, IconCloseOutlineRegular, Tag, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import { IconChevronLeftOutlineRegular, IconCloseOutlineRegular, Tag, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { ForgeReviewThread } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { ForgeDiffFile } from '../types.ts'
 import { FileLabel } from './FileLabel.tsx'

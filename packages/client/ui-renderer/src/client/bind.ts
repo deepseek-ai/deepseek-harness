@@ -7,7 +7,7 @@
 // Both the runtime and DefinitelyTyped exports maps expose this extensionless
 // shim subpath.
 import { useSyncExternalStoreWithSelector } from 'use-sync-external-store/shim/with-selector'
-import type { HostObservable, SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
+import type { HostObservable, SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots/client'
 
 /**
  * Bind a bare observable source to a typed uSES selector hook.

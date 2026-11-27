@@ -1,7 +1,7 @@
 /** Read-only spreadsheet surface backed by browser-parsed workbook data. */
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Workbook } from '@fortune-sheet/react'
-import { Button, IconWarningTriangleOutlineRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconWarningTriangleOutlineRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import fortuneCss from '@fortune-sheet/react/dist/index.css?inline'
 import type { ExcelFormat } from './format.ts'
 import type { ExcelPreview } from './model.ts'

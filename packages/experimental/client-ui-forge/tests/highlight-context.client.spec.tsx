@@ -2,7 +2,7 @@
 /** Highlighting of drawn rows with the lines before them: the old side rebuilt, runs, context tokens, and idle updates. */
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { CodeHighlighter } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { CodeHighlighter } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { ForgeDiffHunk } from '../src/types.ts'
 import { hunkRows } from '../src/client/diff-rows.ts'
 import {

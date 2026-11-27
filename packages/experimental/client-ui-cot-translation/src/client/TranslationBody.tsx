@@ -1,9 +1,9 @@
 /** Translation controls for one expanded reasoning body. */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button, IconLoadingOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconLoadingOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { LocaleSnapshot } from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
-import type { HostObservable, InjectFace, PropsLocale, PropsRenderFactories, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { HostObservable, InjectFace, PropsLocale, PropsRenderFactories, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { CotTranslationPreferences } from '../preferences.ts'
 import { ReasoningTranslation, type TranslateText, type TranslationState } from './translation.ts'
 import { NS } from './locales.ts'

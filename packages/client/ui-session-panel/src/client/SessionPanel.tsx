@@ -2,7 +2,7 @@
 import {
   useCallback, useEffect, useId, useMemo, useRef, useState, type AnimationEvent, type DragEvent, type FocusEvent, type ReactNode,
 } from 'react'
-import { IconDragHandleOutlineRegular, isBehindModal, observeComposition, useRowDragPreview } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconDragHandleOutlineRegular, isBehindModal, observeComposition, useRowDragPreview } from '@deepseek-ai/dsh-client-ui-primitives/client'
 // Type-only: the `useMediaQuery` standard prop merge.
 import type {} from '@deepseek-ai/dsh-client-ui-responsive/client'
 import { panelElementId, toggleElementId } from './element-ids.ts'

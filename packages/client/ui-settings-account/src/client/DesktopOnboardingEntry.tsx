@@ -1,6 +1,6 @@
 /** Framework-hook projection into the desktop introduction's pure view. */
 import { useEffect, useLayoutEffect, useState } from 'react'
-import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 // Type-only: the `useMediaQuery` standard prop merge.
 import type {} from '@deepseek-ai/dsh-client-ui-responsive/client'

@@ -1,8 +1,8 @@
 /** The agent loop's settings page: how many tool calls one step may run at once. */
 
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
-import { SettingsForm, SettingsValueField } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import { SettingsForm, SettingsValueField } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { formLabels } from './locales.ts'
 import type { AgentLoopCardFace } from './agent-loop-card-controller.ts'
 

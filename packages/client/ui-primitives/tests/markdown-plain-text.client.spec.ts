@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extractMarkdownPlainText } from '@deepseek-ai/dsh-client-ui-primitives'
+import { extractMarkdownPlainText } from '@deepseek-ai/dsh-client-ui-primitives/client'
 
 const MARKDOWN = [
   '# Release notes',

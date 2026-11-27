@@ -2,7 +2,7 @@
 /** The toolbar action follows the presentation registered for its own tab. */
 import { fireEvent, render, screen } from '@testing-library/react'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
+import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit/client'
 import { expect, test, vi } from 'vitest'
 import { PresentationAction, type PresentationActionProps } from '../src/client/PresentationAction.tsx'
 import { createPresentationStore } from '../src/client/presentation-store.ts'

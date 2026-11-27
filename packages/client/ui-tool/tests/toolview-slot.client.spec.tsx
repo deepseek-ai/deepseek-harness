@@ -11,7 +11,7 @@ import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import {
   apply as applyChat, inject as injectChat, type ToolResultNode,
 } from '@deepseek-ai/dsh-client-ui-chat/client'
-import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { SlotTestRuntime, contextMenuHook, stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
 import { toolFileInject } from '../src/client/tool/file-menu.ts'
 import { ReadRow } from '../src/client/tool/toolviews/read-row.tsx'

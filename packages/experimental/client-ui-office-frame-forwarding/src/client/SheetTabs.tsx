@@ -1,6 +1,6 @@
 /** Scrollable Office part navigation; the native document remains the selection owner. */
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { Button, IconFlatListOutlineRegular, Menu, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconFlatListOutlineRegular, Menu, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import css from './SheetTabs.module.css'
 
 interface Part {

@@ -14,8 +14,8 @@ import {
   IconEllipsisOutlineRegular, IconPlusOutlineRegular,
   Tag, Tooltip,
   languageForPath, Menu, MenuItemButton, useCodeHighlighter, type CodeHighlighter, type HighlightSpan,
-} from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+} from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { restorable } from '../restore.ts'
 import type { ForgeDiffFile } from '../types.ts'
 import {

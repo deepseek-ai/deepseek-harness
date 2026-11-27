@@ -7,8 +7,8 @@
 
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 
-import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import { Button } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { CreatedShare } from '../share-api-types.ts'
 import type { NS } from './locales.ts'

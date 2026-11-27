@@ -1,8 +1,8 @@
 /** Toolbar warning and non-modal details for the current preview’s missing fonts. */
 import { useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import clsx from 'clsx'
-import type { GlobalStandardProps, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
-import { Button, IconCloseOutlineRegular, IconWarningTriangleOutlineRegular, Tooltip, useDismissOnOutsidePointer } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { GlobalStandardProps, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
+import { Button, IconCloseOutlineRegular, IconWarningTriangleOutlineRegular, Tooltip, useDismissOnOutsidePointer } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import common from '../TextPreview.module.css'
 import css from './FontNotice.module.css'
 

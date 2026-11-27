@@ -11,7 +11,7 @@ import type { ComponentType } from 'react'
 import type {
   CommandClaim, PickOutcome, ReferenceInsert, TokenSpan,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { IconProps } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { IconProps } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 
 export type {

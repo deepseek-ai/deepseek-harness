@@ -2,7 +2,7 @@
 /** The glow a reveal draws on the revealed tab's pane. */
 import { afterEach, expect, it } from 'vitest'
 import { act } from '@testing-library/react'
-import type { PaneId } from '@deepseek-ai/dsh-client-ui-dockkit'
+import type { PaneId } from '@deepseek-ai/dsh-client-ui-dockkit/client'
 import { flashPane } from '../src/client/shell/flash.ts'
 
 afterEach(() => { document.body.replaceChildren() })

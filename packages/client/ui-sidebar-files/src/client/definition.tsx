@@ -9,7 +9,7 @@ import type { ShortcutCommandId } from '@deepseek-ai/dsh-client-shortcuts/client
 import type { SidebarRightTabDefinition } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-locale/client'
 import type {} from './locales.ts'
-import { GuideArtworkFiles } from '@deepseek-ai/dsh-client-ui-primitives'
+import { GuideArtworkFiles } from '@deepseek-ai/dsh-client-ui-primitives/client'
 
 /** The tab kind this package owns. */
 export const FILES_KIND = 'files'

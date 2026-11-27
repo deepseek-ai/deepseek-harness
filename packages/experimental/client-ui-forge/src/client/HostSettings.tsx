@@ -2,9 +2,9 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import {
   Button, IconRefreshOutlineRegular, IconTrashOutlineRegular, SettingsForm, StateDot, Tooltip, type StateDotState,
-} from '@deepseek-ai/dsh-client-ui-primitives'
+} from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import type { ForgePanelKey, NS } from './locales.ts'

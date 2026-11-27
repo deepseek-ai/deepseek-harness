@@ -6,7 +6,7 @@ import { contextMenuHook, responsiveHooks, themeHooks } from '@deepseek-ai/dsh-c
  * asserted in scrollbar-quiet-styles.spec.ts (node environment — a jsdom spec
  * has no file: module URL to read the sheet through).
  */
-import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
+import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { allowAllAccess } from '@deepseek-ai/dsh-client-test-runtime'

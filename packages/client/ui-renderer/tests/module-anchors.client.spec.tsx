@@ -6,7 +6,7 @@ import { createClientModuleSystem, type ClientModuleLoaderTarget } from '@deepse
 import { act, fireEvent, render, type RenderResult } from '@testing-library/react'
 import { useState, type ReactNode } from 'react'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import type { FactoryLocalComponentPropsOf, StandardSourceBinding } from '@deepseek-ai/dsh-client-ui-slots'
+import type { FactoryLocalComponentPropsOf, StandardSourceBinding } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { SlotRegistry } from '../src/client/registry.ts'
 import { createSlotRenderer } from '../src/client/scoped-slots.tsx'
 

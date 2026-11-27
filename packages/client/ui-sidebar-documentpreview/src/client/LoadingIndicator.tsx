@@ -1,7 +1,7 @@
 /** Shared indeterminate loading feedback for document reads and rendering. */
 import type { ReactNode } from 'react'
 import clsx from 'clsx'
-import { StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
+import { StateDot } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import css from './LoadingIndicator.module.css'
 
 /**

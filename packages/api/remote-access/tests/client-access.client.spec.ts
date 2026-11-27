@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import type { HostObservable, RootStandardSourceContribution } from '@deepseek-ai/dsh-client-ui-slots'
+import type { HostObservable, RootStandardSourceContribution } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { TypertRemoteContribution, TypertResource } from '@deepseek-ai/dsh-typert-protocol'
 import type { RemoteAccessFrame, RemoteAccessGrant } from '../src/types.ts'
 import { ClientAccessState, parseInjectedBaseline, type Baseline } from '../src/client/state.ts'

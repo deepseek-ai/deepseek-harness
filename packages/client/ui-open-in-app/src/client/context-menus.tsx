@@ -1,7 +1,7 @@
 /** Native path and URL menu contributions, independent of their trigger components. */
 import { useState } from 'react'
-import { IconRightUpOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import { IconRightUpOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { Context } from '@deepseek-ai/cordis'
 import type { ContextMenuTargetMap, MenuAction } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'

@@ -6,7 +6,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
-import type { StoredEntry } from '@deepseek-ai/dsh-client-ui-slots'
+import type { StoredEntry } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { SECTION_ORDER_STORAGE_KEY, sectionSource } from '../src/client/sections.ts'
 
 const entry = (id: string, order: number): StoredEntry => ({ component: () => null, options: { id, order, label: id.toUpperCase() } })

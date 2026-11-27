@@ -7,8 +7,8 @@ import type { FC, ReactNode } from 'react'
 import type {
   BoundActions, DefineStore, FactoryComponentPropsOf, FactoryLocalComponentPropsOf,
   PropsRenderFactories, PropsRenderSlots, PropsRuntime, PropsStore, SlotComponent, SlotHookFactory,
-} from '@deepseek-ai/dsh-client-ui-slots'
-import { SlotCore } from '@deepseek-ai/dsh-client-ui-slots'
+} from '@deepseek-ai/dsh-client-ui-slots/client'
+import { SlotCore } from '@deepseek-ai/dsh-client-ui-slots/client'
 
 // Only package-unique SlotMap keys are merged here. The standard-kit
 // interfaces (SessionStandardProps/GlobalStandardProps) are NOT re-merged:

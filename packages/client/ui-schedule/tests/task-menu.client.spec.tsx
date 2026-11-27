@@ -4,7 +4,7 @@
  * handover a portaled list performs once it is placed, the row walk, and the
  * dismissal and focus-return paths the task manager's four menus rely on.
  */
-import * as uiPrimitives from '@deepseek-ai/dsh-client-ui-primitives'
+import * as uiPrimitives from '@deepseek-ai/dsh-client-ui-primitives/client'
 import { useState } from 'react'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'

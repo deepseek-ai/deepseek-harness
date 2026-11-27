@@ -1,5 +1,5 @@
 /** Locale-owned messages shared by microphone preview and dictation. */
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { RecordingError } from './audio.ts'
 import type { NS } from './locales.ts'
 

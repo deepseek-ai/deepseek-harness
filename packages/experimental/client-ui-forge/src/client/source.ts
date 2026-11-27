@@ -3,7 +3,7 @@
  * of the Session list) and the store behind action notices.
  */
 
-import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
+import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { ForgeChangeRequestListState, ForgeChangeRequestStatesFrame, ForgePanelState } from '../types.ts'
 import type { ForgePanelKey } from './locales.ts'
 

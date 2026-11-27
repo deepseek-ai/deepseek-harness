@@ -4,8 +4,8 @@
  */
 import { useCallback, useEffect, useState } from 'react'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { IconWarningOutlineRegular, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import { IconWarningOutlineRegular, Toast } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { NS } from './locales.ts'
 import type { ReaderState } from './reader.ts'
 

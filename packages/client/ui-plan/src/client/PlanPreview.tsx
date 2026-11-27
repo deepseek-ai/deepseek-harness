@@ -1,7 +1,7 @@
 /** Read-only Markdown viewer for logged plans and temporary review documents. */
 import { useMemo } from 'react'
-import { FileTypeIcon, MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import { FileTypeIcon, MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {} from './plan-resource.ts'
 import { isReviewPreviewAddress } from './review-preview.ts'

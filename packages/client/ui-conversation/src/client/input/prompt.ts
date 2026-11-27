@@ -1,5 +1,5 @@
 /** Serialize semantic draft spans without turning quoted references into gestures. */
-import { formatQuoteText } from '@deepseek-ai/dsh-client-ui-primitives'
+import { formatQuoteText } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { DraftSnapshot } from '../contract/draft-editor.ts'
 
 type DraftToken = { readonly kind: 'text'; text: string } | { readonly kind: 'quote'; readonly text: string }

@@ -1,6 +1,6 @@
 /** Frozen line selections shared by the diff UI, composer references, and review submission. */
 
-import type { QuoteSummary } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { QuoteSummary } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { ForgeCommitRange, ForgeDiffFile } from '../types.ts'
 import type { ForgePanelKey } from './locales.ts'
 

@@ -1,5 +1,5 @@
 /** Locale-owned copy for experimental read-aloud. */
-import type {} from '@deepseek-ai/dsh-client-ui-slots'
+import type {} from '@deepseek-ai/dsh-client-ui-slots/client'
 
 /** Dictionary namespace for every read-aloud control. */
 export const NS = 'read-aloud'

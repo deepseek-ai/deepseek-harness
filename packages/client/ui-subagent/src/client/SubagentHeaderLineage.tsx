@@ -1,8 +1,8 @@
 /** Breadcrumb switcher for subagent Sessions: the current title opens its siblings' tree. */
 import { useCallback, useMemo, useEffect, useId, useRef, useState } from 'react'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import { MenuSurface } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { GlobalStandardProps, InjectFace, PropsLocale, PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import { MenuSurface } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { GlobalStandardProps, InjectFace, PropsLocale, PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { NS } from './locales.ts'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import {

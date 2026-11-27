@@ -12,7 +12,7 @@ import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import {
   IconCheckOutlineRegular, isMobileDevice, useDismissOnOutsidePointer,
-} from '@deepseek-ai/dsh-client-ui-primitives'
+} from '@deepseek-ai/dsh-client-ui-primitives/client'
 import css from './TaskMenu.module.css'
 
 /** Selectable row of a {@link TaskMenu}. */

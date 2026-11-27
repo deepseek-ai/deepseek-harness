@@ -2,7 +2,7 @@
 // result's text blocks; rendered page images reach the model but are not displayed.
 
 import { extractTextContent } from '@deepseek-ai/dsh-llm/message'
-import { IconBrowseOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconBrowseOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { Context } from '@deepseek-ai/cordis'
 import { toolFileInject } from '../file-menu.ts'
 import { officeRowModel } from '../models/office-card-model.ts'

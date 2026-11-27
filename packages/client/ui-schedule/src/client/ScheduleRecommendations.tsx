@@ -1,6 +1,6 @@
 /** Built-in task recommendations under the empty task catalog; choosing one prefills a new Session. */
 import { useId, type ReactNode } from 'react'
-import { Button, IconClockOutlineRegular, IconPlusOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconClockOutlineRegular, IconPlusOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { TaskManagerKey } from './task-manager-locales.ts'
 import {
   BranchGlyph, CalendarCheckGlyph, CloudSunGlyph, DumbbellGlyph, IssueGlyph, NewspaperGlyph, PluginCheckGlyph,

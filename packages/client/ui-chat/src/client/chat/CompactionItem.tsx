@@ -5,7 +5,7 @@ import {
   IconApiOutlineRegular,
   IconChevronRightOutlineRegular,
   Tooltip,
-} from '@deepseek-ai/dsh-client-ui-primitives'
+} from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { ChatViewSlotProps } from '../contract/slots.ts'
 import type { CompactionSummaryNode } from '../contract/snapshot.ts'

@@ -1,7 +1,7 @@
 /** Read-only historical /team failures and fallback output. */
 import { useState } from 'react'
-import { DisclosureRow, IconUsersOutlineRegular, TextShimmer } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import { DisclosureRow, IconUsersOutlineRegular, TextShimmer } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import type { NS } from './locales.ts'

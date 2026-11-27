@@ -2,7 +2,7 @@
 
 import clsx from 'clsx'
 import type { ReactNode } from 'react'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { NS } from './locales.ts'
 import css from './ChangesLoading.module.css'
 

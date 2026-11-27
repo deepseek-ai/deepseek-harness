@@ -1,7 +1,7 @@
 /** The custom servers section: the MCP server rows in a list, and one server's page with its form. */
 import { useEffect, useState, type ReactNode } from 'react'
-import { Button, IconSettingsOutlineRegular, PluginArtworkDefault, RiskConfirmation, Switch, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { InjectFace, PropsLocale, PropsRenderFactories, PropsRuntime, Translate } from '@deepseek-ai/dsh-client-ui-slots'
+import { Button, IconSettingsOutlineRegular, PluginArtworkDefault, RiskConfirmation, Switch, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { InjectFace, PropsLocale, PropsRenderFactories, PropsRuntime, Translate } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type {} from '@deepseek-ai/dsh-client-ui-connector-account/client'
 import type { CustomServer, CustomServersFace } from './custom-servers-store.ts'
 import type { ConnectorsLocaleKey } from './locales.ts'

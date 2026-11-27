@@ -5,7 +5,7 @@
 // even when this UI version has never seen its producer.
 
 import type { ReactNode } from 'react'
-import { JsonBlock } from '@deepseek-ai/dsh-client-ui-primitives'
+import { JsonBlock } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { ChatViewSlotProps } from '../contract/slots.ts'
 import type { ContextMessageNode } from '../contract/snapshot.ts'
 import type { KnownContextForm, SystemMessageSections } from '@deepseek-ai/dsh-client-ui-conversation/client'

@@ -1,4 +1,4 @@
-import type { Translate } from '@deepseek-ai/dsh-client-ui-slots'
+import type { Translate } from '@deepseek-ai/dsh-client-ui-slots/client'
 
 /** Locale namespace owned by the Liveshare owner-side browser plugin. */
 export const NS = 'liveshare'

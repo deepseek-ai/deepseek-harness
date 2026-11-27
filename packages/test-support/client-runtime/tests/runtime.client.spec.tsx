@@ -19,7 +19,7 @@ import type { WorkspaceId } from '@deepseek-ai/dsh-api-workspace-controller/clie
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {
   GlobalStandardProps, PropsRenderSlots, SessionStandardProps, SlotRendererHost,
-} from '@deepseek-ai/dsh-client-ui-slots'
+} from '@deepseek-ai/dsh-client-ui-slots/client'
 import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 
 declare module '@deepseek-ai/dsh-client-ui-slots/client' {

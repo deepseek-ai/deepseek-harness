@@ -1,7 +1,7 @@
 /** The Connectors tab action that opens the form of a new custom MCP server. */
 import type { ReactNode } from 'react'
-import { Button, IconPlusOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import { Button, IconPlusOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { CustomServersFace } from './custom-servers-store.ts'
 import css from './CustomServers.module.css'
 

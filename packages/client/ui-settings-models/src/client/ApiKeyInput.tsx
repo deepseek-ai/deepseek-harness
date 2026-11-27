@@ -1,7 +1,7 @@
 /** API key field: an editable draft, or a saved key shown read-only until its replace action. */
 import { useState } from 'react'
 import type { InputHTMLAttributes, ReactNode } from 'react'
-import { IconEditOutlineRegular, IconTrashOutlineRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconEditOutlineRegular, IconTrashOutlineRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { en } from './locales.ts'
 import styles from './ModelsSection.module.css'
 

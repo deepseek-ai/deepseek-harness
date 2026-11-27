@@ -1,5 +1,5 @@
 /** Literal display for text-derived quote nodes. */
-import { QuotePreview } from '@deepseek-ai/dsh-client-ui-primitives'
+import { QuotePreview } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { UserTextNodeProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 
 /**

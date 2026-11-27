@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render } from '@testing-library/react'
-import { MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
+import { MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import { readTextSelection, selectedText } from '../src/client/chat/text-selection.ts'
 
 function readSelection(root: HTMLElement, selection: Selection | null) {

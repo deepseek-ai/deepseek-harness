@@ -1,6 +1,6 @@
 /** This page's client plugin synchronization: an ongoing line while it runs, and the failures with a retry. */
 import type { ReactNode } from 'react'
-import { StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
+import { StateDot } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { ClientEntryState } from '@deepseek-ai/dsh-client-modules/client'
 import { FailureNotice } from './FailureNotice.tsx'
 import type { Translate } from './presentation.ts'

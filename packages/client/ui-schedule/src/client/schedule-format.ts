@@ -1,5 +1,5 @@
 /** Browser-safe formatting shared by Session and Host reminder catalogs. */
-import type { Translate } from '@deepseek-ai/dsh-client-ui-slots'
+import type { Translate } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { ScheduleRecord } from '@deepseek-ai/dsh-schedule/client'
 import { hostFrequencyKind, ruleFields, taskNextRunAt } from './task-record.ts'
 import { assertNever } from '@deepseek-ai/dsh-util-values'

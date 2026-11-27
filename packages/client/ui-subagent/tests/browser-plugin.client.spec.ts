@@ -13,7 +13,7 @@ import type { ComposerChainProps } from '@deepseek-ai/dsh-client-ui-conversation
 import { apply as applyLocale, inject as localeInject } from '@deepseek-ai/dsh-client-locale/client'
 import { SubagentHeaderLineage } from '../src/client/SubagentHeaderLineage.tsx'
 import type { SubagentCatalogInjected } from '../src/client/SubagentCatalog.tsx'
-import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
+import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { en } from '../src/client/locales.ts'
 import {
   SubagentReadOnlyComposer, type SubagentReadOnlyMatch,

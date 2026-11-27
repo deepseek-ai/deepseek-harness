@@ -1,7 +1,7 @@
 /** A market entry's long description: the Markdown document the Host reads for one listed version. */
 import { useEffect, useMemo, type ReactNode } from 'react'
-import { DetailDocument, detailDocumentState, useDetailDocumentLabels, type MarkdownPathImages } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import { DetailDocument, detailDocumentState, useDetailDocumentLabels, type MarkdownPathImages } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { detailKey, type DetailFace, type DetailFailureKind, type DetailRequest } from './market-store.ts'
 
 const FAILURE_KEYS = {

@@ -6,7 +6,7 @@
 
 import type { ReactNode } from 'react'
 import clsx from 'clsx'
-import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import { pathPartsOf } from '@deepseek-ai/dsh-util-workspace-path'
 import css from './FileLabel.module.css'
 

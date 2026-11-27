@@ -5,7 +5,7 @@
  * tab record's signal.
  */
 import { defineStore, type EngineStoreHandle } from '@deepseek-ai/dsh-client-store'
-import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
+import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit/client'
 
 /** One review tab's choices. */
 export interface ReviewTabState {

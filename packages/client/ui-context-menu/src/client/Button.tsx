@@ -1,6 +1,6 @@
 /** Shared ellipsis control for explicit context-menu targets. */
-import { Button, IconEllipsisOutlineRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { FactoryComponentPropsOf } from '@deepseek-ai/dsh-client-ui-slots'
+import { Button, IconEllipsisOutlineRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { FactoryComponentPropsOf } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { useId } from 'react'
 import type { MouseEvent, PointerEvent } from 'react'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'

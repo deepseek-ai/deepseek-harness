@@ -1,6 +1,6 @@
 /** `secretMask` dictionaries for the per-credential reveal control. */
 
-import type {} from '@deepseek-ai/dsh-client-ui-slots'
+import type {} from '@deepseek-ai/dsh-client-ui-slots/client'
 
 /** Dictionary namespace owned by this plugin. */
 export const NS = 'secretMask'

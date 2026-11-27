@@ -1,7 +1,7 @@
 /** Shared value rendering for JSON details and lazy runtime objects with identity links. */
 
 import { useCallback, useMemo, useState, useSyncExternalStore } from 'react'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { InspectorObjects, InspectorObjectReference } from './objects.ts'
 import { InspectorObjectValue, type InspectorObjectEntry } from './object-value.ts'
 import css from './inspector.module.css'

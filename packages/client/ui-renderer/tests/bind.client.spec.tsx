@@ -3,7 +3,7 @@ import { StrictMode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { act, render } from '@testing-library/react'
 import { bindSnapshotSelector } from '../src/client/bind.ts'
-import type { HostObservable as ObservableSnapshot, SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
+import type { HostObservable as ObservableSnapshot, SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots/client'
 
 // Keep equality local: this suite asserts the eq parameter contract without
 // adding a reverse dependency from the UI renderer to runtime.

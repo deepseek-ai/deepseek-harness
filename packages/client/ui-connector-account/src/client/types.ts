@@ -1,6 +1,6 @@
 /** Browser-side state and face of the accounts the Plugins page shows. */
 import type { ClientRemote } from '@deepseek-ai/dsh-api-remotes/client'
-import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
+import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
 import type { ConnectorAccountEntry, ConnectorOperationId } from '../types.ts'
 

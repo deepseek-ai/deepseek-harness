@@ -4,8 +4,8 @@
  * Factory, so the rows of every section describe themselves alike.
  */
 import type { ReactNode } from 'react'
-import { IconClockOutlineRegular, IconDatabaseOutlineRegular, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { FactoryComponentPropsOf } from '@deepseek-ai/dsh-client-ui-slots'
+import { IconClockOutlineRegular, IconDatabaseOutlineRegular, StateDot } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { FactoryComponentPropsOf } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { PanelDetailsFact } from './slots.ts'
 import css from './PanelDetails.module.css'
 

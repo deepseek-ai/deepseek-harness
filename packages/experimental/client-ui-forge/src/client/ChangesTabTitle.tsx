@@ -1,8 +1,8 @@
 /** Chip title of a changes tab: the changes icon and the view's name in the current language. */
 
 import type { ReactNode } from 'react'
-import { IconFilesDiffOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import { IconFilesDiffOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { changesTitle, parseChangesAddress } from './changes-address.ts'
 import type { NS } from './locales.ts'

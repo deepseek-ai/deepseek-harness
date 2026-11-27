@@ -1,7 +1,7 @@
 /** Shortcut reference plugin; commands and entry points share one declared store. */
 import type { Context } from '@deepseek-ai/cordis'
 import type { ShortcutCommandId } from '@deepseek-ai/dsh-client-shortcuts/client'
-import { closeTopModal } from '@deepseek-ai/dsh-client-ui-primitives'
+import { closeTopModal } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'

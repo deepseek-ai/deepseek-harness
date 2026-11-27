@@ -3,7 +3,7 @@ import { createElement } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-import { isMobileDevice } from '@deepseek-ai/dsh-client-ui-primitives'
+import { isMobileDevice } from '@deepseek-ai/dsh-client-ui-primitives/client'
 /**
  * Browser-half lifecycle over the real SlotRegistry: the dictionary,
  * header-slot, and document-preview path registrations with fiber teardown
@@ -33,8 +33,8 @@ import type { OpenInAppOutcome } from '../src/client/outcome.ts'
 import { OpenInAppToast, type OpenInAppToastProps, type OpenInAppToastSource } from '../src/client/open-toast.tsx'
 import { en, NS, zh } from '../src/client/locales.ts'
 
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', async original => ({
-  ...await original<typeof import('@deepseek-ai/dsh-client-ui-primitives')>(),
+vi.mock('@deepseek-ai/dsh-client-ui-primitives/client', async original => ({
+  ...await original<typeof import('@deepseek-ai/dsh-client-ui-primitives/client')>(),
   isMobileDevice: vi.fn(() => false),
 }))
 

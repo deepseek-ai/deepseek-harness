@@ -11,7 +11,7 @@
  * through {@link readSearchPreferences} rather than trusted.
  */
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
+import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots/client'
 import {
   changedSearchPreferences, defaultSearchPreferences, readSearchPreferences, type WorkspaceSearchPreferences,
 } from './search-rules.ts'

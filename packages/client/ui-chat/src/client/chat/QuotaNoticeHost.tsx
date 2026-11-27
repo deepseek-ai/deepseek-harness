@@ -4,7 +4,7 @@
  * `shell.quota-notice` entry may replace the generic Toast for codes it claims.
  */
 import { Fragment } from 'react'
-import { IconWarningOutlineRegular, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconWarningOutlineRegular, Toast } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { QuotaNoticeHostProps, QuotaNoticeOwnerProps } from '../contract/slots.ts'
 
 /**

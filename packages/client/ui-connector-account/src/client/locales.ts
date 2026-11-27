@@ -1,5 +1,5 @@
 /** Locale-owned copy the connector account surfaces share; each registrant's own text arrives from the Host. */
-import type {} from '@deepseek-ai/dsh-client-ui-slots'
+import type {} from '@deepseek-ai/dsh-client-ui-slots/client'
 
 /** Dictionary namespace of the shared account copy. */
 export const NS = 'connectorAccount'

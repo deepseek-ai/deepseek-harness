@@ -1,8 +1,8 @@
 /** Office presents retained conversion results and font notices around the shared PDF view. */
 import { useCallback, useEffect, type ReactNode } from 'react'
-import type { PropsLocale, PropsRenderSlots, PropsStore, SlotHookFactory } from '@deepseek-ai/dsh-client-ui-slots'
-import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
-import { Button, FileTypeIcon, classifyFileType } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { PropsLocale, PropsRenderSlots, PropsStore, SlotHookFactory } from '@deepseek-ai/dsh-client-ui-slots/client'
+import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit/client'
+import { Button, FileTypeIcon, classifyFileType } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import { pathPartsOf } from '@deepseek-ai/dsh-util-workspace-path'
 import type { UseSidebarRightTabInfo } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { DocumentBodyOwner, DocumentPreviewProps, DocumentContent } from '../document/contract.ts'

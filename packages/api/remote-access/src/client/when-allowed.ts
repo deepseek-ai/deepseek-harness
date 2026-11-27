@@ -5,7 +5,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
+import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots/client'
 
 /** One synchronous effect installed while access holds: a disposer, or disposers installed as one transaction. */
 export type AccessEffect = (() => void) | Iterable<() => void, void, void>

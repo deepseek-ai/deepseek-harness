@@ -1,6 +1,6 @@
 /** Quote action rendered through the Chat text-interaction Slot. */
 import { useEffect } from 'react'
-import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import css from './QuoteSelection.module.css'
 
 /**

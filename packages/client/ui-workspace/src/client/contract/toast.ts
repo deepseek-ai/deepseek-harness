@@ -1,7 +1,7 @@
 /** Keyed Workspace notices and the shared Toast Factory's display data. */
 import type {
   FactoryComponentPropsOf, InjectFace, PropsLocale, PropsRenderFactories, PropsRuntime, PropsStore,
-} from '@deepseek-ai/dsh-client-ui-slots'
+} from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { RowToastState, WorkspaceViewStoreHandle } from './slots.ts'
 
 /** Business key of one existing Workspace notice. */

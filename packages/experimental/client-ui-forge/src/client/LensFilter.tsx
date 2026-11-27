@@ -1,8 +1,8 @@
 /** The changes toolbar's filter lens menu: the Host's lenses with the files each keeps among the shown files. */
 
 import { useState, type ReactNode } from 'react'
-import { IconChevronDownOutlineRegular, IconLayersOutlineRegular, IconLoadingOutlineRegular, Menu, type MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import { IconChevronDownOutlineRegular, IconLayersOutlineRegular, IconLoadingOutlineRegular, Menu, type MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { LensRun } from './lens-filter.ts'
 import type { NS } from './locales.ts'
 import css from './LensFilter.module.css'

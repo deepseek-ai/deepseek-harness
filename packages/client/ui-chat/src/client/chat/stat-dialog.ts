@@ -3,7 +3,7 @@
 // the matching dialog surface skin lives in stat-dialog.module.css.
 
 import { useEffect, useId, useRef, useState, type RefObject } from 'react'
-import { useDismissOnOutsidePointer } from '@deepseek-ai/dsh-client-ui-primitives'
+import { useDismissOnOutsidePointer } from '@deepseek-ai/dsh-client-ui-primitives/client'
 
 /** Open state, refs, and CSS anchor identity for one stat dialog. */
 export interface StatDialogSeat {

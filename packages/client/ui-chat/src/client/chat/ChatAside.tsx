@@ -1,6 +1,6 @@
 /** The Chat View's aside layer: one Session-level occupant beside the transcript, which the layer's stylesheet tells the end gutter. */
 import { memo } from 'react'
-import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots/client'
 import css from './ChatView.module.css'
 
 /**

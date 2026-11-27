@@ -1,7 +1,7 @@
 /** Locally resizable raw-data panel; pointer capture owns the drag lifetime. */
 
 import { useId, useRef, useState, type PointerEvent, type ReactNode } from 'react'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import css from './inspector.module.css'
 
 /** Raw text and owner callbacks for one Inspector's detail panel. */

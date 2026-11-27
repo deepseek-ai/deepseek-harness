@@ -2,7 +2,7 @@
  * Fixed theme snapshots for hand-built component props and the Slot test renderer.
  * @module @deepseek-ai/dsh-client-test-runtime/src/theme
  */
-import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
+import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { ThemeDefinition, ThemeSnapshot } from '@deepseek-ai/dsh-client-ui-theme/client'
 
 /** The theme Hook every Slot component receives. */

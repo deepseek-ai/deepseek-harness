@@ -1,7 +1,7 @@
 /** Shared approval presentation; each caller retains its decision policy and answer channel. */
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import { Button, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { FactoryComponentPropsOf } from '@deepseek-ai/dsh-client-ui-slots'
+import { Button, StateDot } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { FactoryComponentPropsOf } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type {} from './contract/slots.ts'
 import css from './ApprovalPanel.module.css'
 import { ApprovalWarning } from './ApprovalWarning.tsx'

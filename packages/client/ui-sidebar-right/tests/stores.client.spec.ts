@@ -9,8 +9,8 @@
  * default page arrives with the expansion that would otherwise show nothing.
  */
 import { describe, expect, it, vi } from 'vitest'
-import type { LayoutState, PaneId, TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
-import { dockPaneIds, findTabPane, getPane, getSplit } from '@deepseek-ai/dsh-client-ui-dockkit'
+import type { LayoutState, PaneId, TabId } from '@deepseek-ai/dsh-client-ui-dockkit/client'
+import { dockPaneIds, findTabPane, getPane, getSplit } from '@deepseek-ai/dsh-client-ui-dockkit/client'
 import { createSidebarRightStore } from '../src/client/stores.ts'
 import { pageAddress } from '../src/client/contract/seed.ts'
 

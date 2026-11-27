@@ -14,11 +14,11 @@
  * portal's synthetic events through the strip, which is why the press guards
  * below remain necessary.
  */
-import { MenuSurface } from '@deepseek-ai/dsh-client-ui-primitives'
+import { MenuSurface } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import { Children, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { focusWithoutRing, modalSelector, observeComposition } from '@deepseek-ai/dsh-client-ui-primitives'
+import { focusWithoutRing, modalSelector, observeComposition } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { DockLabels } from '../contract/adapter.ts'
 import css from './dockkit.module.css'
 

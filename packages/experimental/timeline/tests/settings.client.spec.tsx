@@ -11,7 +11,7 @@ import { HISTORY_MS } from '../src/policy.ts'
 import { en } from '../src/client/locales.ts'
 import type { TimelineKey } from '../src/client/locales.ts'
 
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
+vi.mock('@deepseek-ai/dsh-client-ui-primitives/client', () => ({
   Button: (props: ButtonHTMLAttributes<HTMLButtonElement>) => <button {...props} />,
   Switch: ({
     checked,

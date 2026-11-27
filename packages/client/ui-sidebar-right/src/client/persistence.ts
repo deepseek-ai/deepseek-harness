@@ -1,6 +1,6 @@
 /** Validated current-layout snapshots; undo history belongs to the live window. */
 import { z } from 'zod'
-import { applyOp, createIdMinter, EMPTY_HISTORY, planSettle, replay, type LayoutState } from '@deepseek-ai/dsh-client-ui-dockkit'
+import { applyOp, createIdMinter, EMPTY_HISTORY, planSettle, replay, type LayoutState } from '@deepseek-ai/dsh-client-ui-dockkit/client'
 import { isContentTab } from './contract/seed.ts'
 import type { SurfaceState } from './stores.ts'
 

@@ -2,7 +2,7 @@
 /** The Factory that renders one settings page wherever a surface shows it. */
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { FactoryComponentPropsOf } from '@deepseek-ai/dsh-client-ui-slots'
+import type { FactoryComponentPropsOf } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { SettingsSectionView } from '../src/client/SettingsSectionView.tsx'
 
 afterEach(cleanup)

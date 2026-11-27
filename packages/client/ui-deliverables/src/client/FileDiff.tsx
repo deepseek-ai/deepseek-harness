@@ -1,9 +1,9 @@
 /** Shared file comparison for the turn-tail hover preview and Sidebar review. */
 import { useMemo, useRef } from 'react'
 import type { ReactNode, UIEvent } from 'react'
-import { Button, languageForPath, useCodeHighlighter } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { CodeHighlighter, HighlightSpan } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import { Button, languageForPath, useCodeHighlighter } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { CodeHighlighter, HighlightSpan } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { WorkspaceDiffHunk } from '@deepseek-ai/dsh-workspace-changes/types'
 import type { ChangesDiff } from '../changes.ts'
 import type { ChangesDiffState } from './changes-diff.ts'

@@ -2,7 +2,7 @@
 /** Account take-over of the frame-wide quota notice, and its generic fallback. */
 import { act, cleanup, render, fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi, type Mock } from 'vitest'
-import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
+import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { QuotaNoticeOwnerProps } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { AccountView } from '@deepseek-ai/dsh-deepseek-account/types'
 import type { AccountSnapshot } from '../src/client/AccountSection.tsx'

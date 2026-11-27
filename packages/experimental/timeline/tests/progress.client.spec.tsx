@@ -2,14 +2,14 @@
 import { cloneElement } from 'react'
 import type { ReactElement } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { formatProgress, Progress } from '../src/client/Progress.tsx'
 import { en, dictionaries } from '../src/client/locales.ts'
 import { patchSchema } from '../src/records.ts'
 import { measureAll, patchTasks } from '../src/tasks.ts'
 
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
+vi.mock('@deepseek-ai/dsh-client-ui-primitives/client', () => ({
   Tooltip: ({
     children,
     label,

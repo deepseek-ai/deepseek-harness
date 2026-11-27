@@ -1,8 +1,8 @@
 /** One retained Markdown renderer over the document owner's accumulated text. */
 import { lazy, Suspense, useMemo } from 'react'
 import type { ReactNode } from 'react'
-import { MarkdownText, type MarkdownLabels, type MarkdownPathImages } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import { MarkdownText, type MarkdownLabels, type MarkdownPathImages } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { DocumentPreviewProps } from '../document/contract.ts'
 import { splitFrontmatter } from './frontmatter.ts'
 import type { FrontmatterFieldsProps } from './frontmatter-fields.tsx'

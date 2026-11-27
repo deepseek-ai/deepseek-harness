@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { formatQuoteText } from '@deepseek-ai/dsh-client-ui-primitives'
+import { formatQuoteText } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import { UserTextRegistry } from '@deepseek-ai/dsh-client-ui-conversation/src/client/conversation/user-text-registry.ts'
 import type { UserTextFacts } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { quoteRule } from '../src/client/quote-rule.ts'

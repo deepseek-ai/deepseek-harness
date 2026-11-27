@@ -1,7 +1,7 @@
 /** Catalog query states shared by the task list, the detail, and the task tab. */
 import type { ReactNode } from 'react'
-import { Button, IconWarningOutlineRegular, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import { Button, IconWarningOutlineRegular, StateDot } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import css from './TaskManagerPage.module.css'
 
 /** Props of the catalog states: query state, shown content, and the retry action. */

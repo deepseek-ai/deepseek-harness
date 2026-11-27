@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, createEvent, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
+import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { PaneId } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { trackSessionDrags } from '../src/client/sidebar-chat/index.tsx'

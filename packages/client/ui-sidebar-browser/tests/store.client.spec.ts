@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
+import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit/client'
 import { BrowserNavigation } from '../src/client/browser/BrowserNavigation.ts'
 import { createBrowserStore } from '../src/client/browser/store.ts'
 

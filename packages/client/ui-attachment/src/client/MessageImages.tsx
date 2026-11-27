@@ -1,6 +1,6 @@
 /** Official image gallery Factory and default image Slot adapter. */
 import { useMemo } from 'react'
-import type { FactoryComponentPropsOf, PropsRenderFactories } from '@deepseek-ai/dsh-client-ui-slots'
+import type { FactoryComponentPropsOf, PropsRenderFactories } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { MessageImagesOwnerProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { ImageGallery } from '../MessageImage.tsx'
 import { messageImageLabels } from './labels.ts'

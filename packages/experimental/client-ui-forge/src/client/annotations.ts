@@ -3,7 +3,7 @@
  * file's lines.
  */
 
-import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
+import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { ChangesTarget } from './changes-address.ts'
 import type { ForgeAnnotationSource, ForgeLineAnnotation } from './changes-service.ts'
 

@@ -1,8 +1,8 @@
 /** Approval controls and persistent outcome notices, independent of Cordis contexts. */
 import { useId, useState } from 'react'
-import { Button, IconWarningOutlineMedium, StateDot, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconWarningOutlineMedium, StateDot, Toast } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
-import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type {} from '@deepseek-ai/dsh-client-resources/client'
 import type { RemoteConnectionContentProps } from './slots.ts'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'

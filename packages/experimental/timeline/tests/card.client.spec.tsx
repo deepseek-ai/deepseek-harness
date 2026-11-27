@@ -8,7 +8,7 @@ import { en, dictionaries } from '../src/client/locales.ts'
 import type { TimelineKey } from '../src/client/locales.ts'
 import { taskReceiptSchema } from '../src/records.ts'
 
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
+vi.mock('@deepseek-ai/dsh-client-ui-primitives/client', () => ({
   Button: (props: ButtonHTMLAttributes<HTMLButtonElement>) => <button {...props} />,
   Tooltip: ({ children }: { children: ReactNode }) => children,
   IconCheckOutlineRegular: () => <svg />,

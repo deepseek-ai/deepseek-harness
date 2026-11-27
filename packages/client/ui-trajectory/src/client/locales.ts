@@ -228,7 +228,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots/client' {
 
 /** Namespace-bound translator threaded through trajectory presentation code. */
 export type TrajectoryTranslate =
-  import('@deepseek-ai/dsh-client-ui-slots').TranslateNS<typeof NS>
+  import('@deepseek-ai/dsh-client-ui-slots/client').TranslateNS<typeof NS>
 
 /** English dictionary, checked complete against the Chinese source of truth. */
 export const en: Record<TrajectoryKey, string> = {

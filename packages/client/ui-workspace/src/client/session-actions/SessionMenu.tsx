@@ -1,6 +1,6 @@
 /** Legacy external Session contributions shared by the row, header, and More trigger. */
 import { useMemo } from 'react'
-import type { PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 
 type Props = Pick<PropsRuntime<'contextMenu.content'>, 'target' | 'dismiss'> & PropsRenderSlots<'sidebar.workspaces.session.menu.item'>
 /** @param props - captured Session and the existing extension position. @returns legacy component contributions. */

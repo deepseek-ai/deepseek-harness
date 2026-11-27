@@ -8,8 +8,8 @@
  * same provider-owned binding its body does and keeps naming the shown task.
  */
 import type { ReactNode } from 'react'
-import { IconClockOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import { IconClockOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { taskName } from './schedule-format.ts'
 import type { ScheduleTaskBindingInjected, ScheduleTaskCatalogInjected } from './ScheduleTaskTab.tsx'
 import { useTaskTabTarget } from './task-tab-target.ts'

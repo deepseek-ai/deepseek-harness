@@ -20,13 +20,13 @@
  * open.
  */
 import { useState } from 'react'
-import { Menu, ShortcutKeys } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Menu, ShortcutKeys } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { ShortcutCatalogEntry } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { ReactNode } from 'react'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type {
   ChainRenderOpts, HookContextOf, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime,
-} from '@deepseek-ai/dsh-client-ui-slots'
+} from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { SidebarRightGuideActionsOwnerProps } from '../../contract/slots.ts'
 import type { SidebarRightGuideBox } from '../../tab-registry.ts'
 import { CompassGlyph, CubeGlyph } from './GuideTitle.tsx'

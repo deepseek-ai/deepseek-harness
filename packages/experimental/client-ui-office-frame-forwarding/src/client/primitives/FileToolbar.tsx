@@ -1,6 +1,6 @@
 /** Icon action matching the document toolbar's file controls. */
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
-import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import css from './FileToolbar.module.css'
 
 /**

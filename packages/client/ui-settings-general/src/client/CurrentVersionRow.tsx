@@ -1,7 +1,7 @@
 /** Installed release version in General Settings, with hidden 5-click unlock in Desktop. */
 import { useState } from 'react'
-import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { DesktopChannelSource } from './desktop-channel-source.ts'
 import css from './CurrentVersionRow.module.css'
 

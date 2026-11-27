@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render } from '@testing-library/react'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { CommandId } from '@deepseek-ai/dsh-commands/types'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import { IconUsersOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconUsersOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import { TeamCommandRow, type TeamCommandRowProps } from '../src/client/TeamCommandRow.tsx'
 import { zh, en, ja, es, fr, de, ru, pt } from '../src/client/locales.ts'
 

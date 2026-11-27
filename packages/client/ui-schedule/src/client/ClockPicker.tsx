@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent, ReactNode, RefObject } from 'react'
 import clsx from 'clsx'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { PickerPopover } from './PickerPopover.tsx'
 import type { TaskManagerKey } from './task-manager-locales.ts'
 import css from './ClockPicker.module.css'

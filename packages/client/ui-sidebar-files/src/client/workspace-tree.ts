@@ -15,7 +15,7 @@
  */
 import type { RemoteFailure } from '@deepseek-ai/dsh-api-remotes/client'
 import type { TreeDirectoryState, TreeEntry } from './FileTree.tsx'
-import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type {} from './locales.ts'
 import { isHiddenEntry } from './search-rules.ts'
 import { childPath, type DirLevel, type FilesTreeState } from './store.ts'

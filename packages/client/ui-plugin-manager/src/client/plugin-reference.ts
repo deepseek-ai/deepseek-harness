@@ -3,7 +3,7 @@ import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { BundleInfo } from '@deepseek-ai/dsh-api-remotes/client'
 import type { InputTriggerSource } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import type { UserTextRule } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { PluginArtworkDefault } from '@deepseek-ai/dsh-client-ui-primitives'
+import { PluginArtworkDefault } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
 import {
   formatPluginMention, isPluginPackageName, nextPluginMention, packageNameOfPluginMention,

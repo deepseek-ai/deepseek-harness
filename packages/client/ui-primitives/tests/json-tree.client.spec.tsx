@@ -3,7 +3,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ComponentProps } from 'react'
-import { JsonTree as LocalizedJsonTree } from '@deepseek-ai/dsh-client-ui-primitives'
+import { JsonTree as LocalizedJsonTree } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import { jsonTreeLabels } from './labels.client.ts'
 
 function JsonTree(props: Omit<ComponentProps<typeof LocalizedJsonTree>, 'label' | 'labels'> & {

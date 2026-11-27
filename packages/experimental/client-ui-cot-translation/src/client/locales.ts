@@ -1,5 +1,5 @@
 /** Locale-owned copy for reasoning translation and its preferences. */
-import type { SettingsFormLabels } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { SettingsFormLabels } from '@deepseek-ai/dsh-client-ui-primitives/client'
 
 /** Dictionary namespace for this plugin. */
 export const NS = 'cotTranslation'

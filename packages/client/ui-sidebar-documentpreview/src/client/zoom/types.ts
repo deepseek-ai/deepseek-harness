@@ -1,4 +1,4 @@
-import type { DocumentZoomLabels } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { DocumentZoomLabels } from '@deepseek-ai/dsh-client-ui-primitives/client'
 
 /** Automatic fit or an explicit actual-size scale selected by the reader. */
 export type ZoomPreference =

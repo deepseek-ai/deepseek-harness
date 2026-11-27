@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
-import type { PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { act, fireEvent, screen, within } from '@testing-library/react'
 import { afterAll, beforeAll, expect, vi } from 'vitest'
 import {

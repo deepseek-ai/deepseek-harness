@@ -4,7 +4,7 @@ import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import { createFilesStore } from '../src/client/store.ts'
 import { DEFAULT_NAVIGATOR_WIDTH } from '../src/client/store.ts'
 import type { DirLevel, FilesSearchResult } from '../src/client/store.ts'
-import type { PaneId } from '@deepseek-ai/dsh-client-ui-dockkit'
+import type { PaneId } from '@deepseek-ai/dsh-client-ui-dockkit/client'
 
 const ROOT = '/work/app'
 const PANE = 'pane-1' as PaneId

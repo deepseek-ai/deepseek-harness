@@ -1,4 +1,4 @@
-import { IconFolderOpenOutlineRegular, IconCopyOutlineRegular, IconPanelLeftOutlineRegular, IconRightUpOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconFolderOpenOutlineRegular, IconCopyOutlineRegular, IconPanelLeftOutlineRegular, IconRightUpOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import { ContextMenuApplicationIcon, registerContextMenus } from './context-menus.tsx'
 import type {} from '@deepseek-ai/dsh-client-ui-context-menu/client'
 /**

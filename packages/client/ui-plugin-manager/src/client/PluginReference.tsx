@@ -1,7 +1,7 @@
 /** Read-only plugin reference chip in sent user text. */
 import type { ReactNode } from 'react'
 import type { UserTextNodeProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { PluginArtworkDefault, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
+import { PluginArtworkDefault, Tag } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type {} from './plugin-reference.ts'
 import css from './PluginReference.module.css'
 

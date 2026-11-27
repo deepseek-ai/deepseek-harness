@@ -1,7 +1,7 @@
 /** General Settings renders registered groups with shared headings and cards. */
 import { useId } from 'react'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
-import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import css from './GeneralSection.module.css'
 
 /** Winning group identities and resolved labels, in display order. */

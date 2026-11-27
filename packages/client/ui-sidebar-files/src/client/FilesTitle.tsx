@@ -5,8 +5,8 @@
  * this one.
  */
 import type { ReactNode } from 'react'
-import { FileTypeIcon } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import { FileTypeIcon } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import css from './FilesBody.module.css'
 
 /**

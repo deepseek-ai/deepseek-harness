@@ -8,8 +8,8 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {
   ActionsDecl, FactoryComponentPropsOf, FactoryLocalComponentPropsOf, HostObservable,
   PropsRenderFactories, PropsRuntime, StoreHandle, StoreInstanceLike,
-} from '@deepseek-ai/dsh-client-ui-slots'
-import { StaleAuthorizationError } from '@deepseek-ai/dsh-client-ui-slots'
+} from '@deepseek-ai/dsh-client-ui-slots/client'
+import { StaleAuthorizationError } from '@deepseek-ai/dsh-client-ui-slots/client'
 
 interface CounterState { count: number }
 interface CounterActions extends ActionsDecl<CounterState> {

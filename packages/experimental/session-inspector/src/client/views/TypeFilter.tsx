@@ -1,8 +1,8 @@
 /** Anchored type-filter editor with asynchronous suggestions and explicit confirmation. */
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
-import { MenuSurface } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { GlobalStandardProps, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import { MenuSurface } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { GlobalStandardProps, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import css from './inspector.module.css'
 
 /** The application-document portal a mounted Slot component receives from `useDocumentPortal()`. */

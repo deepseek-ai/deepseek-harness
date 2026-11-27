@@ -8,7 +8,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { ChangeRequestLabel, ChangeRequestSummary } from '@deepseek-ai/dsh-experimental-forge/types'
 import { en } from '../src/client/locales.ts'
 import { fittingLabels, ReviewLabels } from '../src/client/review-page/ReviewLabels.tsx'

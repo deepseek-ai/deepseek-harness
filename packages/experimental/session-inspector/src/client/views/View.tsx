@@ -1,7 +1,7 @@
 /** One Sidebar Inspector with locally selected Chat and Session-log presentations. */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 // Type-only: the `useMediaQuery` standard prop merge.
 import type {} from '@deepseek-ai/dsh-client-ui-responsive/client'

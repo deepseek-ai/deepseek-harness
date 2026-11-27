@@ -1,5 +1,5 @@
 /** Preserve existing tab-menu extensions under the clicked Session's retained scope. */
-import type { PropsRuntime, PropsRenderSlots, InjectFace } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsRuntime, PropsRenderSlots, InjectFace } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { SidebarSessionViewSnapshot } from '../session-views.ts'
 

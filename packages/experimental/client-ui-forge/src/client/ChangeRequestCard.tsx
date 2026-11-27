@@ -16,9 +16,9 @@ import {
   IconCopyOutlineRegular, IconEllipsisOutlineRegular, IconFilesDiffOutlineRegular, IconTriangleRightFillRegular, Menu,
   MenuItemButton, StateDot, Tooltip,
   type MenuEntry, type MenuItem, type StateDotState,
-} from '@deepseek-ai/dsh-client-ui-primitives'
+} from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { PanelDetailsProps } from '@deepseek-ai/dsh-client-ui-session-panel/client'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type {
   AutoMergeRequest, ChangeRequestAutoMerge, ChangeRequestSnapshot, CheckState, ChecksRollup, ForgeFailure, MergeMethod, MergeRequest,
 } from '@deepseek-ai/dsh-experimental-forge/types'

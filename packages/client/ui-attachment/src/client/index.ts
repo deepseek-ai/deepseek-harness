@@ -1,7 +1,7 @@
 import type {} from '@deepseek-ai/dsh-client-ui-context-menu/client'
 /** Browser attachment plugin: composer entries and independently replaceable image galleries. */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
-import type { SlotFactoryMap } from '@deepseek-ai/dsh-client-ui-slots'
+import type { SlotFactoryMap } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'

@@ -9,8 +9,8 @@ import {
   Button, IconBranchOutlineRegular, IconCheckCircleOutlineRegular, IconChevronDownOutlineRegular, IconClockOutlineRegular,
   IconCloseCircleFillRegular, IconEditOutlineRegular, IconEyeOutlineRegular, IconUserOutlineRegular, MarkdownText, ShortcutKeys,
   type MarkdownLabels,
-} from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+} from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { ChangeRequestActivity, ForgeCommentAuthor, ReviewVerdict } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { assertNever } from '@deepseek-ai/dsh-util-values'

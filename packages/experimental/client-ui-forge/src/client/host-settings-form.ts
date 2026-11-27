@@ -1,5 +1,5 @@
 /** Staged host list of a provider row, using the shared Plugins form model. */
-import { SettingsFormModel, type SettingsFormScope, type SettingsFormShell } from '@deepseek-ai/dsh-client-ui-primitives'
+import { SettingsFormModel, type SettingsFormScope, type SettingsFormShell } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 
 /** The live-editable field of a forge provider's Config. */

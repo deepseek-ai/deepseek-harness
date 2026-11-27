@@ -5,8 +5,8 @@
  */
 import { act, cleanup } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import * as uiPrimitives from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import * as uiPrimitives from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 import UiResponsiveService from '../src/client/index.ts'
 import { apply as applyHost } from '../src/index.ts'

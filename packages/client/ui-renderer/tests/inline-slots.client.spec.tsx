@@ -3,7 +3,7 @@ import { useState, type ReactNode } from 'react'
 import { act, cleanup, fireEvent } from '@testing-library/react'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
-import type { PropsRenderFactories, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsRenderFactories, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 
 declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotMap {

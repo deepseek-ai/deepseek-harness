@@ -1,8 +1,8 @@
 /** Chat's language layers for Markdown fences: display math and unified-diff rows. */
 import { useMemo } from 'react'
 import type { ReactNode } from 'react'
-import { FenceCodeBlock, FenceMathBlock } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { HocShare, PropsLocale, PropsRuntime, SlotMap } from '@deepseek-ai/dsh-client-ui-slots'
+import { FenceCodeBlock, FenceMathBlock } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { HocShare, PropsLocale, PropsRuntime, SlotMap } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { markdownLabels } from '../markdown-labels.ts'
 
 /** Props of the math layer: the fence and the next inner content. */

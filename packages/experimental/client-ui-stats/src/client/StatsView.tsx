@@ -4,7 +4,7 @@ import {
   useEffect, useLayoutEffect, useRef, useState,
   type ReactElement, type UIEvent,
 } from 'react'
-import { SegmentedControl, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
+import { SegmentedControl, Switch } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { LoadOlderResult } from './stats-contract.ts'
 import { aggregateTotals, turnContext } from './stats-aggregate.ts'
 import { isNumber } from './stats-usage.ts'

@@ -1,7 +1,7 @@
 /** Display the Host's effective admission interval before selecting per-run conversations. */
 import { useEffect, useState, type ReactNode } from 'react'
-import { Button, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import { Button, StateDot } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { HostTaskActions } from './TaskDetail.tsx'
 import css from './TaskManagerPage.module.css'
 

@@ -1,7 +1,7 @@
 /** Refresh glyph that turns while a refresh runs. */
 
 import { useState, type ReactNode } from 'react'
-import { IconRefreshOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconRefreshOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import css from './RefreshGlyph.module.css'
 
 /** Props of the refresh glyph. */

@@ -1,6 +1,6 @@
 /** Rename dialog shared by Session menus, shortcuts, and title double-clicks. */
 import { useRef, useState } from 'react'
-import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type {
   SessionRenameDialogInjected, SessionRenameDialogProps, SessionRenameTarget,
 } from '../contract/slots.ts'

@@ -1,6 +1,6 @@
 import { memo, useCallback, useMemo, useState } from 'react'
 import type { ChatViewSlotProps } from '../contract/slots.ts'
-import { DisclosureRow, IconApiOutlineRegular, TextShimmer } from '@deepseek-ai/dsh-client-ui-primitives'
+import { DisclosureRow, IconApiOutlineRegular, TextShimmer } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import a11yCss from './accessibility.module.css'
 import css from './CommandStatusRow.module.css'
 

@@ -1,5 +1,5 @@
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
-import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { APP_LABEL_KEY } from './applications.ts'
 import type { OpenInAppLaunchState } from './controller.ts'
 import type { OpenInAppOutcome } from './outcome.ts'

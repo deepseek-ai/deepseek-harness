@@ -3,8 +3,8 @@
  * with an Install action or its enable switch, above the custom servers section.
  */
 import { useEffect, type ReactNode } from 'react'
-import { Button, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, Translate } from '@deepseek-ai/dsh-client-ui-slots'
+import { Button, Switch } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, Translate } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { PluginTabProps } from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import dingtalk from './assets/dingtalk.svg'

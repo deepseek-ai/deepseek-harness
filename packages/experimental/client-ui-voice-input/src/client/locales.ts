@@ -1,5 +1,5 @@
 /** Locale-owned copy for experimental voice input. */
-import type {} from '@deepseek-ai/dsh-client-ui-slots'
+import type {} from '@deepseek-ai/dsh-client-ui-slots/client'
 /** Dictionary namespace for every voice control. */
 export const NS = 'voice-input'
 

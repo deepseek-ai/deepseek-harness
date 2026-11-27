@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
-import { Button, IconChevronRightOutlineRegular, IconListPenOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import { Button, IconChevronRightOutlineRegular, IconListPenOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { IntervalReport, TimelineView } from '../records.ts'
 import { formatDuration, formatPeriod, savedPeriod } from '../periods.ts'
 import { DetailHeader } from './DetailHeader.tsx'

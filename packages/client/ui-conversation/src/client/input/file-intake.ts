@@ -7,7 +7,7 @@
  * inert subtree, or behind the foreground modal dialog or menu, is never
  * addressed.
  */
-import { modalSelector } from '@deepseek-ai/dsh-client-ui-primitives'
+import { modalSelector } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { ComposerFileIntake, ComposerFileIntakeTarget } from '../contract/slots.ts'
 
 /** Controls that own their own paste; the document-level route never takes it from them. */

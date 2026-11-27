@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
-import { ICON_SYMBOLS } from '@deepseek-ai/dsh-client-ui-primitives'
+import { ICON_SYMBOLS } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { ThemeSettings } from '@deepseek-ai/dsh-client-ui-theme/client'
 import { ThemeRuntime } from '@deepseek-ai/dsh-client-ui-theme/client'
 import { installIconSprite } from '../src/client/icon-sprite.ts'

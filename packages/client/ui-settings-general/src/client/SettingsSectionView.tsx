@@ -1,6 +1,6 @@
 /** The `settings.section.view` Factory: one settings page entry, wherever a surface shows it. */
 import type { ReactNode } from 'react'
-import type { FactoryComponentPropsOf } from '@deepseek-ai/dsh-client-ui-slots'
+import type { FactoryComponentPropsOf } from '@deepseek-ai/dsh-client-ui-slots/client'
 // Type-only: the Factory and `settings.section` declarations.
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 

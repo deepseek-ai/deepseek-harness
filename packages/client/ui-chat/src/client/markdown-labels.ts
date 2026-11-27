@@ -1,6 +1,6 @@
 /** Localized copy adapters for Cordis-free Markdown primitives. */
 
-import type { MarkdownLabels } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { MarkdownLabels } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { ChatViewSlotProps } from './contract/slots.ts'
 
 /**

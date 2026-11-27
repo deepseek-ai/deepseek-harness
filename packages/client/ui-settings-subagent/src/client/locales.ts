@@ -1,6 +1,6 @@
 /** Locale bundles for the Subagent settings page. */
 
-import type { SettingsFormLabels } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { SettingsFormLabels } from '@deepseek-ai/dsh-client-ui-primitives/client'
 
 /** Locale keys the page renders. */
 export type SubagentSettingsLocaleKey =

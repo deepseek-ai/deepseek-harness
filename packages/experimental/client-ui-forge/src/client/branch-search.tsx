@@ -1,8 +1,8 @@
 /** The search shared by the branch pickers: the query, the listing it read, and the status a menu shows instead of rows. */
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import { Button, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import { Button, StateDot } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { NS } from './locales.ts'
 

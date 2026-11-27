@@ -2,7 +2,7 @@
  * The speaker control shared by the reply action row and the voice preference: a speaker while idle, four pulsing bars
  * from the click until sound, and a moving waveform while audio plays.
  */
-import { IconSpeakerOutlineRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconSpeakerOutlineRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import css from './ReadAloud.module.css'
 
 const BARS = { loading: [0, 1, 2, 3], playing: [0, 1, 2, 3, 4] } as const

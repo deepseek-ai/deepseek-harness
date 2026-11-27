@@ -1,6 +1,6 @@
 /** One settings navigation entry owning the Remote connection panel and appended options. */
 import { useEffect } from 'react'
-import type { PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type {} from './slots.ts'
 import css from './RemoteConnectionSection.module.css'
 

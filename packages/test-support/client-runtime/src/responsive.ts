@@ -3,7 +3,7 @@
  * @module @deepseek-ai/dsh-client-test-runtime/src/responsive
  */
 import { Service, type Context } from '@deepseek-ai/cordis'
-import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
+import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-responsive/client'
 

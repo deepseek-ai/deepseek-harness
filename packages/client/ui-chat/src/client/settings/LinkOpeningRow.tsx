@@ -1,6 +1,6 @@
 /** General Settings row for Chat HTTP(S) link destinations. */
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
-import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { LinkOpening } from '../../chat-settings.ts'
 import { PreferenceRow } from './PreferenceRow.tsx'
 

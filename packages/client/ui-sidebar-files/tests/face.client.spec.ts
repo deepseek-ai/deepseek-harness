@@ -13,7 +13,7 @@ import { DirectoryNode } from '../src/client/directory-node.ts'
 import { memoryBook, scriptedSearch } from './search-fixture.client.ts'
 import { scriptedList } from './scripted-list.client.ts'
 import { sessionFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
-import type { PaneId, TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
+import type { PaneId, TabId } from '@deepseek-ai/dsh-client-ui-dockkit/client'
 
 const SESSION = 's-1' as SessionId
 const ROOT = '/work/app'

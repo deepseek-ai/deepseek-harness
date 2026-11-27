@@ -6,7 +6,7 @@
  * home for copy: the strings live in `locales.ts`.
  */
 import type { ShortcutCatalogEntry } from '@deepseek-ai/dsh-client-shortcuts/client'
-import type { DockLabels } from '@deepseek-ai/dsh-client-ui-dockkit'
+import type { DockLabels } from '@deepseek-ai/dsh-client-ui-dockkit/client'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-locale/client'
 
 /**

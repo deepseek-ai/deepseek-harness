@@ -1,7 +1,7 @@
 /** Card bodies registered by action kind for the shared card frame. */
 import { createElement, type ComponentType, type ReactNode } from 'react'
 import type { Context } from '@deepseek-ai/cordis'
-import type { HostObservable, LocaleNamespaceMap, Translate, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { HostObservable, LocaleNamespaceMap, Translate, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {
   ActionCardDecision, ActionCardFields, ActionCardProposal, ActionCardResult,
