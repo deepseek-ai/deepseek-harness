@@ -3,23 +3,23 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-settings-subagent/README.md
 /:
-  en: 91ac9c71d17a231a
-  zh: c0f89c3d36b51581
+  en: c3ed50a7609282ec
+  zh: d1de1c1c3fa1a043
 /deepseek-ai-dsh-client-ui-settings-subagent:
   en: d1fc570c45a5f42e
   zh: 01eabcac395bca62
 /deepseek-ai-dsh-client-ui-settings-subagent/summary:
-  en: 4b6bf8db1752b902
-  zh: b8ac25ba6bdb96fb
+  en: 9edf34c69c43562f
+  zh: 4a51b73f68f4a983
 /deepseek-ai-dsh-client-ui-settings-subagent/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-client-ui-settings-subagent/use-this-package:
-  en: 09ac65efa3352ef4
-  zh: 0a6f9e74e304ef1f
+  en: 1a2a9c52a0198bf7
+  zh: f40aa922dca32f56
 /deepseek-ai-dsh-client-ui-settings-subagent/understand-the-implementation:
-  en: 5124ebc1880ba9fa
-  zh: 89c2eb2d483962a7
+  en: a2dc43d94ecd2231
+  zh: 0bded5e6c4354f99
 /deepseek-ai-dsh-client-ui-settings-subagent/further-exploration:
   en: 9b43ebcd30efbdea
   zh: e6ec50d755fb5e24
@@ -30,8 +30,8 @@
   en: ca75c51c89c2c9b0
   zh: 6e1c9a8fdde89577
 /deepseek-ai-dsh-client-ui-settings-subagent/known-limitations-and-deferred-work:
-  en: 23012dfa92ce3e01
-  zh: 66fb0e3d8ef9cb7c
+  en: 61174abda27ea0ee
+  zh: 35f05146f8e3ecd4
 /deepseek-ai-dsh-client-ui-settings-subagent/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: e88aeb617ffb74ea

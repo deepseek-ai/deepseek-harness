@@ -105,6 +105,19 @@ describe('SubagentModelSelectionConfig', () => {
     await ctx.fiber.dispose()
   })
 
+  it('reads the default route live and independently of the enabled switch', async () => {
+    const ctx = ownContext(new Context())
+    selectionConfigs.set(ctx, await liveConfig(ctx, SubagentModelSelectionConfig))
+    expect(ctx.subagentModelSelection.defaultRoute()).toBeUndefined()
+    await selectionConfigs.get(ctx)!.update({ defaultModel: ALLOWED_MODELS[0] })
+    const route = ctx.subagentModelSelection.defaultRoute()
+    expect(route).toEqual(ALLOWED_MODELS[0])
+    expect(route).not.toBe(ALLOWED_MODELS[0])
+    await selectionConfigs.get(ctx)!.update({ enabled: false, defaultModel: undefined })
+    expect(ctx.subagentModelSelection.defaultRoute()).toBeUndefined()
+    await ctx.fiber.dispose()
+  })
+
   it('ignores disabled routes and rejects duplicate or empty routes only while enabled', async () => {
     const ctx = ownContext(new Context())
     selectionConfigs.set(ctx, await liveConfig(ctx, SubagentModelSelectionConfig))
@@ -147,6 +160,18 @@ describe('SubagentModelSelectionConfig', () => {
     for (const agent of [parent, child]) {
       expect(agent.session.snapshotEvents().some(event => event.type === 'subagent/model-selection-policy')).toBe(false)
     }
+    await ctx.fiber.dispose()
+  })
+
+  it('keeps the parent prompt and tool schemas stable when the default child route changes', async () => {
+    const ctx = await boot()
+    const parent = assembleContextFor(await createAgent(ctx, 'default-route-parent'))
+    const before = await ctx.systemPrompt.assemble(parent)
+    await selectionConfigs.get(ctx)!.update({ defaultModel: ALLOWED_MODELS[0] })
+    const after = await ctx.systemPrompt.assemble(parent)
+    expect(after.sections).toEqual(before.sections)
+    expect(after.tools).toEqual(before.tools)
+    expect(after.contexts).toEqual(before.contexts)
     await ctx.fiber.dispose()
   })
 

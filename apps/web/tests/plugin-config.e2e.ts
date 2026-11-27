@@ -343,6 +343,8 @@ describe('web e2e: plugin configuration pages', () => {
     const toggle = panel.getByRole('switch', { name: '允许 Agent 为子智能体选择模型' })
 
     await panel.getByLabel('最大递归深度', { exact: true }).fill('2')
+    await panel.getByRole('button', { name: '子智能体默认模型 与父 Agent 相同' }).click()
+    await page.getByRole('menuitem', { name: 'DeepSeek-V4-Flash · DeepSeek', exact: true }).click()
     await toggle.click()
     const models = panel.getByRole('group', { name: 'Agent 可选择的模型' })
     await models.waitFor({ timeout: 10_000 })
@@ -357,6 +359,7 @@ describe('web e2e: plugin configuration pages', () => {
     expect(saved).toContain('id: subagent-model-selection-settings')
     expect(saved).toContain('maxDepth: 2')
     expect(saved).toContain('enabled: true')
+    expect(saved).toContain('defaultModel:')
     expect(saved).toContain('allowedModels:')
     expect(saved).toContain('provider:')
     expect(saved).toContain('model:')
@@ -367,6 +370,9 @@ describe('web e2e: plugin configuration pages', () => {
     await expect.poll(async () => (await settingsDocument()).includes('enabled: false'), { timeout: 10_000 })
       .toBe(true)
     await expect.poll(() => toggle.getAttribute('aria-checked'), { timeout: 5_000 }).toBe('false')
+    await openPlugins()
+    await openPage(panel, '子智能体')
+    await panel.getByRole('button', { name: /^子智能体默认模型 DeepSeek-V4-Flash · / }).waitFor()
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 

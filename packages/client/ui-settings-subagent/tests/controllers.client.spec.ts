@@ -126,6 +126,95 @@ describe('SubagentModelSelectionCardController', () => {
     })
   })
 
+  it('loads the catalog while disabled and saves or clears the default route', async () => {
+    const host = stubConfigForm<SubagentModelSelectionSettings>()
+    acceptWrites(host)
+    const models = modelsApi({
+      groups: [{ id: 'alpha', name: 'Alpha API', models: [{ id: 'fast', name: 'Fast' }] }],
+    })
+    const controller = new SubagentModelSelectionCardController(host.scope, models.ctx)
+    host.publish({
+      status: 'ready', writable: true, revision: 2,
+      value: { enabled: false, allowedModels: [] }, user: {},
+    })
+    const face = controller.inject()
+    const state = () => face.hooks.subagentModelSelectionCard.getSnapshot()
+    await vi.waitFor(() => { expect(state().defaultCandidates).toHaveLength(1) })
+    expect(state()).toMatchObject({ enabled: false, defaultKey: undefined })
+
+    face.selectDefault('missing')
+    expect(state().dirty).toBe(false)
+    face.selectDefault('alpha\0fast')
+    expect(state()).toMatchObject({ dirty: true, invalid: false, defaultKey: 'alpha\0fast' })
+    face.save()
+    await vi.waitFor(() => { expect(state().dirty).toBe(false) })
+    expect(host.mutate).toHaveBeenLastCalledWith([
+      { op: 'set', path: ['enabled'], value: false },
+      { op: 'set', path: ['allowedModels'], value: [] },
+      { op: 'set', path: ['defaultModel'], value: { provider: 'alpha', model: 'fast' } },
+    ], 2)
+    expect(state().defaultKey).toBe('alpha\0fast')
+
+    face.selectDefault(undefined)
+    expect(state()).toMatchObject({ dirty: true, defaultKey: undefined })
+    face.save()
+    await vi.waitFor(() => { expect(state().dirty).toBe(false) })
+    expect(host.mutate.mock.lastCall?.[0]).toContainEqual({ op: 'unset', path: ['defaultModel'] })
+    expect(state().defaultKey).toBeUndefined()
+  })
+
+  it('settles or conflicts a default-route draft when another client changes the default', () => {
+    const host = stubConfigForm<SubagentModelSelectionSettings>()
+    const controller = new SubagentModelSelectionCardController(host.scope, modelsApi({
+      groups: [{ id: 'alpha', name: 'Alpha', models: [{ id: 'fast', name: 'Fast' }, { id: 'deep', name: 'Deep' }] }],
+    }).ctx)
+    host.publish({ status: 'ready', writable: true, revision: 1, value: { enabled: false, allowedModels: [] }, user: {} })
+    const face = controller.inject()
+    const state = () => face.hooks.subagentModelSelectionCard.getSnapshot()
+    face.selectDefault(undefined)
+    host.publish({ revision: 1, value: { enabled: false, allowedModels: [] } })
+    expect(state().dirty).toBe(false)
+
+    return vi.waitFor(() => { expect(state().defaultCandidates).toHaveLength(2) }).then(() => {
+      face.selectDefault('alpha\0fast')
+      host.publish({ revision: 2, value: { enabled: false, allowedModels: [], defaultModel: { provider: 'alpha', model: 'fast' } } })
+      expect(state()).toMatchObject({ dirty: false, conflicted: false })
+
+      face.selectDefault('alpha\0deep')
+      host.publish({ revision: 3, value: { enabled: false, allowedModels: [], defaultModel: { provider: 'alpha', model: 'fast' } } })
+      expect(state()).toMatchObject({ dirty: true, conflicted: true })
+    })
+  })
+
+  it('keeps a stored default route that no adapter advertises selectable', async () => {
+    const host = stubConfigForm<SubagentModelSelectionSettings>()
+    const models = modelsApi({
+      groups: [{ id: 'alpha', name: 'Alpha API', models: [{ id: 'fast', name: 'Fast' }] }],
+    })
+    const controller = new SubagentModelSelectionCardController(host.scope, models.ctx)
+    host.publish({
+      status: 'ready', writable: true, revision: 1,
+      value: { enabled: false, allowedModels: [], defaultModel: { provider: 'legacy', model: 'old' } }, user: {},
+    })
+    const face = controller.inject()
+    const state = () => face.hooks.subagentModelSelectionCard.getSnapshot()
+    await vi.waitFor(() => { expect(state().catalogStatus).toBe('ready') })
+    expect(state().defaultKey).toBe('legacy\0old')
+    expect(state().defaultCandidates.map(({ key, available, selected }) => ({ key, available, selected }))).toEqual([
+      { key: 'alpha\0fast', available: true, selected: false },
+      { key: 'legacy\0old', available: false, selected: true },
+    ])
+
+    face.selectDefault('alpha\0fast')
+    expect(state().defaultCandidates.map(candidate => candidate.key)).toEqual(['alpha\0fast', 'legacy\0old'])
+    face.discard()
+    expect(state()).toMatchObject({ dirty: false, defaultKey: 'legacy\0old' })
+
+    host.publish({ writable: false })
+    face.selectDefault('alpha\0fast')
+    expect(state().dirty).toBe(false)
+  })
+
   it('starts an empty draft when a ready test scope has no decoded value', () => {
     const host = stubConfigForm<SubagentModelSelectionSettings>()
     const controller = new SubagentModelSelectionCardController(host.scope, modelsApi().ctx)

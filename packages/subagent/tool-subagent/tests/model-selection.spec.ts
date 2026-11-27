@@ -342,12 +342,11 @@ describe('dsh-tool-subagent model selection', () => {
       const props = (schema.parameters as { properties: Record<string, { description: string }> }).properties
       return { tool: schema.description, provider: props['provider']!.description, effort: props['reasoning_effort']!.description }
     }
+    const providerHint = 'LLM provider id for the subagent. Set it with `model` only when the task requires a specific model.'
     const owner = await setup({ provider: 'mock', withModelSelection: true })
     expect(routeDescriptions(owner, 'subagent')).toEqual({
       tool: expect.not.stringContaining('reasoning_effort') as string,
-      provider: 'LLM provider id for the subagent; requires `model`. Set only when the task needs a different model; '
-        + 'omit `provider`, `model`, and `reasoning_effort` to run the subagent on your current model and reasoning effort. '
-        + 'Use a provider id listed by `list_subagent_models`.',
+      provider: providerHint + ' Use a provider id listed by `list_subagent_models`.',
       effort: 'Reasoning effort id; requires `provider` and `model`. Omit to use that model\'s default effort.',
     })
     expect(owner.tools.get('list_subagent_models', modelSelectionSetupAgent(owner))?.description).toBe(
@@ -356,12 +355,11 @@ describe('dsh-tool-subagent model selection', () => {
     )
 
     const selectionOnly = await setup({ provider: 'mock', modelSelection: true })
-    expect(routeDescriptions(selectionOnly, 'subagent').provider).not.toContain('list_subagent_models')
+    expect(routeDescriptions(selectionOnly, 'subagent').provider).toBe(providerHint)
     const configured = await setup({
       provider: 'mock', modelSelection: true, agentOptions: { provider: 'alpha', model: 'configured-model' },
     })
-    expect(routeDescriptions(configured, 'subagent').provider)
-      .toContain('to run the subagent on the default model configured for this tool.')
+    expect(routeDescriptions(configured, 'subagent').provider).toBe(providerHint)
   })
 
   it.each(['configured', 'provider'] as const)('rejects effort-only selection despite %s route defaults', async (source) => {

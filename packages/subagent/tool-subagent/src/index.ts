@@ -28,7 +28,7 @@ import {
   preflightChildLlmRoute,
   requestedAgentOptions,
 } from './model-selection.ts'
-import type { DelegationModelRequest } from './model-selection.ts'
+import type { AllowedModelRoute, DelegationModelRequest } from './model-selection.ts'
 import { registerListSubagentModels } from './list-models.ts'
 import { SubagentPresetSelection, type PresetSelectionConfig, type PresetSelectionRequest } from './preset-selection.ts'
 // Retains the released Session event declaration in emitted declarations.
@@ -196,6 +196,17 @@ export function apply(ctx: Context, config: Config): void {
 
   if (config.modelDiscovery === true) registerListSubagentModels(ctx)
 
+  /**
+   * Read the Host default child route for a call without route fields. It
+   * replaces only parent inheritance: tool or provider route defaults win.
+   */
+  const settingsDefaultRoute = (subagentProvider: SubagentProvider): AllowedModelRoute | undefined => (
+    modelSelectionEnabled && subagentProvider.agentRouteDefaults === undefined
+      && config.agentOptions?.provider === undefined && config.agentOptions?.model === undefined
+      ? ctx.get('subagentModelSelection')?.defaultRoute()
+      : undefined
+  )
+
   // Load order and HMR replacement can change provider availability while
   // this fiber remains active.
   let mounted: { subagentProvider: SubagentProvider; definition: ToolDefinition; disposeTool: () => void } | undefined
@@ -203,9 +214,6 @@ export function apply(ctx: Context, config: Config): void {
     assertSubagentProviderConfiguration(subagentProvider)
     const wording = providerWording(subagentProvider.inheritsParentContext)
     const providerRouteDefaults = subagentProvider.agentRouteDefaults
-    const defaultRoute = providerRouteDefaults !== undefined || hasConfiguredLlmSelection(config.agentOptions)
-      ? 'the default model configured for this tool'
-      : 'your current model and reasoning effort'
     const providerSource = config.modelDiscovery === true ? ' Use a provider id listed by `list_subagent_models`.' : ''
     const definition = defineTool({
       name: toolName,
@@ -250,8 +258,8 @@ export function apply(ctx: Context, config: Config): void {
         ...modelSelectionEnabled ? {
           provider: {
             type: 'string' as const,
-            description: 'LLM provider id for the subagent; requires `model`. Set only when the task needs a different model; '
-              + `omit \`provider\`, \`model\`, and \`reasoning_effort\` to run the subagent on ${defaultRoute}.${providerSource}`,
+            description: 'LLM provider id for the subagent. Set it with `model` only when the task requires a specific model.'
+              + providerSource,
           },
           model: {
             type: 'string' as const,
@@ -285,6 +293,7 @@ export function apply(ctx: Context, config: Config): void {
 
         const agentPreset = presets.resolve(args as PresetSelectionRequest)
         const modelRequest = delegationModelRequest(args as DelegationModelRequest)
+        const settingsRoute = hasDelegationModelRequest(modelRequest) ? undefined : settingsDefaultRoute(subagentProvider)
         const routes = modelSelectionEnabled && hasDelegationModelRequest(modelRequest)
           ? ctx.get('subagentModelSelection')?.allowedRoutes()
           : undefined
@@ -292,9 +301,13 @@ export function apply(ctx: Context, config: Config): void {
         const parentOptions = parentAgentOptionsForDelegation(parent)
         const requiresRoutePreflight = hasDelegationModelRequest(modelRequest)
           || hasConfiguredLlmSelection(config.agentOptions)
-        const configuredChildAgentOptions = requiresRoutePreflight && providerRouteDefaults !== undefined
-          ? { ...providerRouteDefaults, ...config.agentOptions }
-          : config.agentOptions
+          || settingsRoute !== undefined
+        // Like an explicit route, the settings route clears configured and inherited effort so the model's default applies.
+        const configuredChildAgentOptions = settingsRoute !== undefined
+          ? { ...config.agentOptions, ...settingsRoute, reasoningEffort: undefined }
+          : requiresRoutePreflight && providerRouteDefaults !== undefined
+            ? { ...providerRouteDefaults, ...config.agentOptions }
+            : config.agentOptions
         const requestedChildAgentOptions = requestedAgentOptions(
           configuredChildAgentOptions,
           modelRequest,
@@ -308,6 +321,7 @@ export function apply(ctx: Context, config: Config): void {
             throw new ToolContextUnavailableError('cannot resolve the selected child LLM route because the `llm` service is unavailable')
           }
           const inheritParentReasoningEffort = providerRouteDefaults === undefined && !hasDelegationModelRequest(modelRequest)
+            && settingsRoute === undefined
           await preflightChildLlmRoute(
             llm,
             parentOptions,

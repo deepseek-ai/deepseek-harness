@@ -24,6 +24,7 @@ import { loadStoredSession } from '../../subagent/tests/persistence-helpers.ts'
 import * as mock from './scripted-provider.ts'
 import type { Config as toolConfig } from '../src/index.ts'
 import * as tool from '../src/index.ts'
+import SubagentModelSelectionConfig from '../src/model-selection-settings.ts'
 import * as Cordis from '@deepseek-ai/cordis'
 import * as Brand from '@deepseek-ai/dsh-brand'
 import * as Subagent from '@deepseek-ai/dsh-subagent'
@@ -273,14 +274,82 @@ describe('dsh-tool-subagent', () => {
       provider: 'alpha',
       model: 'child-model',
     })
-    const schema = ctx.tools.getAll(modelSelectionSetupAgent(ctx)).find(entry => entry.name === 'subagent')!
-    expect((schema.parameters as { properties: Record<string, { description: string }> }).properties['provider']!.description)
-      .toContain('to run the subagent on the default model configured for this tool.')
     expect(seen?.agentOptions).toEqual({
       provider: 'alpha',
       model: 'child-model',
       maxTokens: 321,
     })
+  })
+
+  it('starts a child without route fields on the Host default route', async () => {
+    const seen: SubagentStartRequest[] = []
+    const ctx = await setup({
+      provider: 'mock',
+      withModelSelection: true,
+      hostDefaultModel: { provider: 'alpha', model: 'child-model' },
+      parentAgentOptions: {
+        provider: 'current-provider',
+        model: 'parent-model',
+        reasoningEffort: brandString<ReasoningEffortId>('high'),
+      },
+      agentOptions: { maxTokens: 321 },
+      maxDepth: 'provider-managed',
+    }, { onStart: (request) => { seen.push(request) } })
+    const resolved: unknown[] = []
+    const resolveCallConfig = ctx.llm.resolveCallConfig.bind(ctx.llm)
+    vi.spyOn(ctx.llm, 'resolveCallConfig').mockImplementation((request, signal) => {
+      resolved.push(request)
+      return resolveCallConfig(request, signal)
+    })
+    ctx.llm.registerAdapter(['alpha'], new MockAdapter([]))
+
+    const defaulted = await callSubagent(ctx, { description: 'd', prompt: 'p' })
+    if (defaulted.isError) throw new Error(text(defaulted))
+    const explicit = await callSubagent(ctx, { description: 'd', prompt: 'p', provider: 'alpha', model: 'other-model' })
+    if (explicit.isError) throw new Error(text(explicit))
+
+    expect(seen.map(request => request.agentOptions)).toEqual([
+      { provider: 'alpha', model: 'child-model', maxTokens: 321 },
+      { provider: 'alpha', model: 'other-model', maxTokens: 321 },
+    ])
+    expect(Object.hasOwn(seen[0]!.agentOptions!, 'reasoningEffort')).toBe(true)
+    expect(resolved[0]).toEqual({ provider: 'alpha', model: 'child-model' })
+  })
+
+  it('keeps tool-configured routes and non-selectable tools off the Host default route, but not effort-only tools', async () => {
+    const seen: SubagentStartRequest[] = []
+    const configured = await setup({
+      provider: 'mock',
+      withModelSelection: true,
+      hostDefaultModel: { provider: 'alpha', model: 'child-model' },
+      agentOptions: { provider: 'alpha', model: 'configured-model' },
+      maxDepth: 'provider-managed',
+    }, { onStart: (request) => { seen.push(request) } })
+    configured.llm.registerAdapter(['alpha'], new MockAdapter([]))
+    const result = await callSubagent(configured, { description: 'd', prompt: 'p' })
+    if (result.isError) throw new Error(text(result))
+
+    const effortOnly = await setup({
+      provider: 'mock',
+      withModelSelection: true,
+      hostDefaultModel: { provider: 'alpha', model: 'child-model' },
+      agentOptions: { reasoningEffort: brandString<ReasoningEffortId>('high') },
+      maxDepth: 'provider-managed',
+    }, { onStart: (request) => { seen.push(request) } })
+    effortOnly.llm.registerAdapter(['alpha'], new MockAdapter([]))
+    const effortResult = await callSubagent(effortOnly, { description: 'd', prompt: 'p' })
+    if (effortResult.isError) throw new Error(text(effortResult))
+
+    const plain = await setup({ provider: 'mock', maxDepth: 'provider-managed' }, { onStart: (request) => { seen.push(request) } })
+    await plain.plugin(SubagentModelSelectionConfig, { defaultModel: { provider: 'alpha', model: 'child-model' } })
+    const plainResult = await callSubagent(plain, { description: 'd', prompt: 'p' })
+    if (plainResult.isError) throw new Error(text(plainResult))
+
+    expect(seen.map(request => request.agentOptions)).toEqual([
+      { provider: 'alpha', model: 'configured-model' },
+      { provider: 'alpha', model: 'child-model' },
+      undefined,
+    ])
   })
 
   it('does not inherit parent effort for a provider-owned route default', async () => {

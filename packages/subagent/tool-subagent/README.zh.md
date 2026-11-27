@@ -76,6 +76,8 @@ kind: "package-reference"
 
 设置 `modelSelection: true` 后，该实例公开可选的 `provider`、`model` 和 `reasoning_effort` 字段；未设置的实例拒绝选择字段。在每个工具作用域的一个实例上设置 `modelDiscovery: true`，以注册 `list_subagent_models`；该选项独立于 `modelSelection`，默认关闭。同一作用域的第二个发现工具所有者会注册失败。发现工具随其所属插件实例存续，在委派提供方缺席时仍然可用，并在该实例卸载时移除。Web 与 Desktop preset 为 spawn 启用发现和路由字段，为 fork 保持两者关闭。允许模型选择的委派工具在显式选择路由时、发现工具在每次调用时读取 Host 的 `/model-selection-settings` 服务，因此设置编辑会对所有运行中、已恢复和子 Session 的下一次调用生效。启用时，发现和显式选择允许其精确路由列表。设置关闭或未挂载时，只允许父 Agent 当前生效的 provider/model 及其支持的强度。启用但路由列表为空、格式无效或重复时，读取该设置的每次调用都会抛出错误码为 `INVALID_MODEL_SELECTION_SETTINGS` 的 `SubagentError`。普通委派和关闭模型选择的工具不读取路由列表；Host 设置关闭时也不读取该列表。Session 不记录授权；忽略早期的 `subagent/model-selection-policy` 事件。路由字段要求后端公布 `agentOptions`；进程内 Spawn、Fork 和 DSH SDK 满足条件，ACP、Codex 和 Claude Code 会使挂载失败。
 
+同一 Host 设置中可选的 `defaultModel` 路由，会在允许模型选择的委派工具收到不含路由字段的调用时取代对父 Agent 的继承，无论显式选择是否启用；工具配置或提供方自有的路由默认值优先于它，未设置 `modelSelection` 的工具忽略它。与未指定强度的显式 provider/model 组合一样，它使用所选模型的默认强度。每次调用时都会读取该路由，因此编辑会在下一次委派时生效；模型不会被告知默认路由是哪一个，`provider` 参数描述保留其省略字段时的措辞。清除用户设置的值后，如果组合设置了部署的 `defaultModel`，则恢复为该值。
+
 一次调用需同时提供 `provider` 与 `model`；`reasoning_effort` 要求同一次调用包含这两个字段。仅指定强度的调用会在查询路由或创建子级之前被拒绝。省略全部三个字段时，保留配置的子级默认值与现有回退行为。静态的 `provider.agentRouteDefaults` 在存在时构成提供方／模型基线；工具配置与模型字段会在路由相关强度合并和确切路由预检前覆盖它。没有这些默认值的提供方捕获父代理的 `agent.model.current()`，包括刚选中、尚未使用的模型，并保留配置的 `maxTokens`。本地子级在校验和启动期间使用该选择。创建后可通过[子代理控制 API](../subagent/README.zh.md#child-model-choices)切换模型。显式提供提供方／模型组合但省略强度时，会清除配置及继承的强度，即使路由未变，也由所选模型解析自己的默认值。实时 LLM 适配器在创建子 agent 前校验有效路由。目录成员资格只提供建议，因此适配器接受时，模型可以使用未列出的 id。
 
 -----
@@ -139,7 +141,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-生成的默认 [`subagent` schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-subagent) 在提供方存在时以配置的工具名公开。设置了 `modelSelection` 的实例在每个 Session 中都会增加 `provider`、`model`、`reasoning_effort`。`provider` 的描述告诉模型仅在任务需要其他模型时才设置这些字段，并说明省略时使用的路由：父级当前模型和推理强度，或工具或后端配置的默认值。同一实例启用 `modelDiscovery` 时，它还指明 provider id 取自 `list_subagent_models`。`allowedAgentPresets` 增加 `agent_preset` 枚举及默认或继承选择的引导。上下文继承和继续执行能力决定任务与后续工作描述。Agent 限制作用于继承自 preset 的委派工具的 schema、使用指引与执行入口，恢复历史 `toolFilter` 覆盖时也相同；同级 Agent 不受影响。preset 选择提示仅依赖工具配置，因此不依赖其他 preset 的声明顺序。
+生成的默认 [`subagent` schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-subagent) 在提供方存在时以配置的工具名公开。设置了 `modelSelection` 的实例在每个 Session 中都会增加 `provider`、`model`、`reasoning_effort`。`provider` 的说明要求仅在任务需要指定模型时才同时填写 `provider` 和 `model`。同一实例启用 `modelDiscovery` 时，它还指明 provider id 取自 `list_subagent_models`。`allowedAgentPresets` 增加 `agent_preset` 枚举及默认或继承选择的引导。上下文继承和继续执行能力决定任务与后续工作描述。Agent 限制作用于继承自 preset 的委派工具的 schema、使用指引与执行入口，恢复历史 `toolFilter` 覆盖时也相同；同级 Agent 不受影响。preset 选择提示仅依赖工具配置，因此不依赖其他 preset 的声明顺序。
 
 #### Token 影响
 

@@ -39,6 +39,8 @@ type SetupConfig = toolConfig & {
   withModelSelection?: boolean
   /** Host setting sampled by a `withModelSelection` setup; defaults to enabled. */
   hostSelectionEnabled?: boolean
+  /** Host default child route sampled by a `withModelSelection` setup. */
+  hostDefaultModel?: { provider: string; model: string }
   parentAgentOptions?: AgentOptions
 }
 
@@ -53,12 +55,13 @@ const TEST_ALLOWED_MODELS = [
 
 export async function setup(toolConfig: SetupConfig, mockConfig: Partial<mock.Config> = {}): Promise<Context> {
   const ctx = ownContext(new Context())
-  const { withModelSelection, hostSelectionEnabled = true, parentAgentOptions, ...config } = toolConfig
+  const { withModelSelection, hostSelectionEnabled = true, hostDefaultModel, parentAgentOptions, ...config } = toolConfig
   await mountAgentLoopTestDependencies(ctx)
   if (withModelSelection === true) {
     await ctx.plugin(SubagentModelSelectionConfig, {
       enabled: hostSelectionEnabled,
       allowedModels: TEST_ALLOWED_MODELS,
+      ...hostDefaultModel === undefined ? {} : { defaultModel: hostDefaultModel },
     })
     await ctx.plugin(AgentLoop, { agents: [] })
     await mountWorkingDirectoryFixture(ctx)

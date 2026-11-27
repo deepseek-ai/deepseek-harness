@@ -19,7 +19,10 @@
     - text: "12"
 - region "模型选择":
   - heading "模型选择" [level=3]
+  - text: 子智能体默认模型
+  - paragraph: 父智能体未指定模型时使用此项。
+  - button "子智能体默认模型 与父 Agent 相同": 与父 Agent 相同
   - text: 允许 Agent 为子智能体选择模型
   - switch "允许 Agent 为子智能体选择模型"
-  - paragraph: 关闭后，子智能体使用配置的默认模型或继承父 Agent 的模型；已选模型会保留。
+  - paragraph: 关闭后，子智能体使用配置的默认模型或继承父 Agent 的模型。
 - button "保存" [disabled]

@@ -465,7 +465,7 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.subagentModelSelection` — `SubagentModelSelectionConfig`
 
-Host settings owner whose current value authorizes explicit child routes in every Session.
+Host settings owner whose current value authorizes explicit child routes and names the default child route in every Session.
 
 ```ts cordis-catalog
 /**
@@ -476,6 +476,13 @@ Host settings owner whose current value authorizes explicit child routes in ever
  *   or its routes are malformed or repeated. Disabled settings do not read or validate routes.
  */
 allowedRoutes(): AllowedModelRoute[] | undefined
+
+/**
+ * Read the route a child uses when its delegation names none. Each call
+ * samples the live setting, independently of `enabled` and `allowedModels`.
+ * @returns a detached route, or undefined when the setting names none.
+ */
+defaultRoute(): AllowedModelRoute | undefined
 ```
 
 Source: [`packages/subagent/tool-subagent/src/model-selection-settings.ts`](../../packages/subagent/tool-subagent/src/model-selection-settings.ts)

@@ -4753,8 +4753,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'subagentModelSelection',
-    summary: 'Host settings owner whose current value authorizes explicit child routes in every Session.',
-    description: 'Host settings owner whose current value authorizes explicit child routes in every Session.',
+    summary: 'Host settings owner whose current value authorizes explicit child routes and names the default child route in every Session.',
+    description: 'Host settings owner whose current value authorizes explicit child routes and names the default child route in every Session.',
     methods: [
       {
         signature: 'allowedRoutes(): AllowedModelRoute[] | undefined',
@@ -4762,6 +4762,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [],
         returns: 'a detached route list, or undefined when the setting is disabled.',
         throws: ['{SubagentError} `INVALID_MODEL_SELECTION_SETTINGS` when the enabled setting has no route, or its routes are malformed or repeated. Disabled settings do not read or validate routes.'],
+      },
+      {
+        signature: 'defaultRoute(): AllowedModelRoute | undefined',
+        description: 'Read the route a child uses when its delegation names none. Each call samples the live setting, independently of `enabled` and `allowedModels`.',
+        parameters: [],
+        returns: 'a detached route, or undefined when the setting names none.',
       },
     ],
   },

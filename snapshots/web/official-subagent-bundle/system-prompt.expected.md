@@ -281,7 +281,7 @@ interface ToolArgsMap {
     name?: string;
     /** The complete, self-contained task for the subagent. It does not share this conversation's context, so include everything it needs. */
     prompt: string;
-    /** LLM provider id for the subagent; requires `model`. Set only when the task needs a different model; omit `provider`, `model`, and `reasoning_effort` to run the subagent on your current model and reasoning effort. Use a provider id listed by `list_subagent_models`. */
+    /** LLM provider id for the subagent. Set it with `model` only when the task requires a specific model. Use a provider id listed by `list_subagent_models`. */
     provider?: string;
     /** Model id within that provider; requires `provider`. */
     model?: string;

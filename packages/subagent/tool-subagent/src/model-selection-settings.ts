@@ -25,13 +25,17 @@ export interface Config {
   enabled: Volatile<boolean>
   /** Initial route list inherited when the user document does not override it. */
   allowedModels: Volatile<AllowedModelRoute[]>
+  /** Route that replaces parent inheritance for children started without route fields; omission inherits the parent route. */
+  defaultModel: Volatile<AllowedModelRoute | undefined>
 }
 
-/** Host settings owner whose current value authorizes explicit child routes in every Session. */
+/** Host settings owner whose current value authorizes explicit child routes and names the default child route in every Session. */
 export class SubagentModelSelectionConfig extends Service {
   static Config = z.object({
     enabled: z.boolean().default(false).volatile(),
     allowedModels: z.array(AllowedModelRouteSchema).default([]).volatile(),
+    // Prevent Schemastery from materializing an omitted route as `{}`.
+    defaultModel: (AllowedModelRouteSchema as z<AllowedModelRoute | undefined>).default(undefined).volatile(),
   })
 
   constructor(ctx: Context, private config: Config) {
@@ -53,6 +57,16 @@ export class SubagentModelSelectionConfig extends Service {
       throw new SubagentError('enabled subagent model selection requires at least one allowed model', 'INVALID_MODEL_SELECTION_SETTINGS')
     }
     return allowedModels.map(route => ({ ...route }))
+  }
+
+  /**
+   * Read the route a child uses when its delegation names none. Each call
+   * samples the live setting, independently of `enabled` and `allowedModels`.
+   * @returns a detached route, or undefined when the setting names none.
+   */
+  defaultRoute(): AllowedModelRoute | undefined {
+    const route = this.config.defaultModel.get()
+    return route === undefined ? undefined : { provider: route.provider, model: route.model }
   }
 }
 

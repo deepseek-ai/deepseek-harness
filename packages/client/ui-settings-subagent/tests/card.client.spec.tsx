@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /** The Subagent page as the Plugins page renders it: both sections on one page with one save. */
 
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -46,6 +46,8 @@ function renderSubagent(
     ...settled,
     enabled: false,
     candidates: [],
+    defaultCandidates: [],
+    defaultKey: undefined,
     catalogStatus: 'idle',
     catalogPartial: false,
     conflicted: false,
@@ -57,6 +59,7 @@ function renderSubagent(
     toggleEnabled: vi.fn(),
     toggleModel: vi.fn(),
     retryCatalog: vi.fn(),
+    selectDefault: vi.fn(),
     save: vi.fn(),
     discard: vi.fn(),
   }
@@ -84,6 +87,55 @@ describe('Subagent model selection fields', () => {
     fireEvent.click(control)
 
     expect(actions.toggleEnabled).toHaveBeenCalledOnce()
+  })
+
+  it('stages the default route from grouped candidates, including a saved unavailable route', () => {
+    const { actions, models } = renderSubagent({ available: false }, {
+      catalogStatus: 'ready',
+      defaultKey: 'legacy\0old',
+      defaultCandidates: [
+        {
+          key: 'alpha\0fast', provider: 'alpha', model: 'fast', providerName: 'Alpha API',
+          modelName: 'Fast', available: true, selected: false,
+        },
+        {
+          key: 'legacy\0old', provider: 'legacy', model: 'old', providerName: 'legacy',
+          modelName: 'old', available: false, selected: true,
+        },
+      ],
+    })
+
+    const picker = screen.getByRole('button', { name: `${en.subagentDefaultModel} legacy/old` })
+    fireEvent.click(picker)
+    const menu = within(screen.getByRole('menu'))
+    expect(menu.getByText('Alpha API')).toBeTruthy()
+    expect(menu.getByText(en.subagentModelSelectionUnavailableGroup)).toBeTruthy()
+    expect(menu.getByRole('menuitem', { name: 'Fast · Alpha API' })).toBeTruthy()
+    fireEvent.click(menu.getByRole('menuitem', { name: 'legacy/old' }))
+    expect(actions.selectDefault).not.toHaveBeenCalled()
+    expect(screen.queryByRole('menu')).toBeNull()
+
+    fireEvent.click(picker)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Fast · Alpha API' }))
+    act(() => { models.set({ ...models.getSnapshot(), defaultKey: 'alpha\0fast' }) })
+    expect(screen.getByRole('button', { name: `${en.subagentDefaultModel} Fast · Alpha API` })).toBe(picker)
+    fireEvent.click(picker)
+    fireEvent.click(screen.getByRole('menuitem', { name: en.subagentDefaultModelInherit }))
+    expect(actions.selectDefault.mock.calls).toEqual([['alpha\0fast'], [undefined]])
+  })
+
+  it('closes the default model menu when write access changes', () => {
+    const { models } = renderSubagent()
+    const picker = screen.getByLabelText(en.subagentDefaultModel)
+    fireEvent.click(picker)
+    expect(screen.getByRole('menu')).toBeTruthy()
+    fireEvent.keyDown(screen.getByRole('menuitem'), { key: 'Escape' })
+    expect(screen.queryByRole('menu')).toBeNull()
+    fireEvent.click(picker)
+    act(() => { models.set({ ...models.getSnapshot(), writable: false }) })
+    expect(screen.queryByRole('menu')).toBeNull()
+    act(() => { models.set({ ...models.getSnapshot(), writable: true }) })
+    expect(picker.getAttribute('aria-expanded')).toBe('false')
   })
 
   it('groups available adapter candidates by provider', () => {
@@ -173,6 +225,7 @@ describe('Subagent model selection fields', () => {
     const actions = renderSubagentModelSelection({ writable: false })
     const control = screen.getByRole('switch') as HTMLButtonElement
     expect(control.disabled).toBe(true)
+    expect(screen.getByLabelText(en.subagentDefaultModel)).toHaveProperty('disabled', true)
     fireEvent.click(control)
     expect(actions.toggleEnabled).not.toHaveBeenCalled()
   })
@@ -261,6 +314,7 @@ describe('SubagentCard', () => {
     })
     expect(screen.getByLabelText(en.subagentMaxDepth)).toHaveProperty('disabled', true)
     expect(screen.getByRole('switch')).toHaveProperty('disabled', true)
+    expect(screen.getByLabelText(en.subagentDefaultModel)).toHaveProperty('disabled', true)
     expect(screen.getByRole('button', { name: en.saving })).toHaveProperty('disabled', true)
     act(() => { limits.set({ ...limits.getSnapshot(), saving: false, dirty: false }) })
     expect(screen.getByRole('switch')).toHaveProperty('disabled', true)

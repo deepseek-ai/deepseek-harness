@@ -15,6 +15,7 @@ export type SubagentSettingsLocaleKey =
   | 'subagentDepthInvalid'
   | 'subagentCapacityInvalid'
   | 'subagentModelSelectionTitle'
+  | 'subagentDefaultModel' | 'subagentDefaultModelInherit' | 'subagentDefaultModelHint'
   | 'subagentModelSelectionToggle' | 'subagentModelSelectionChoose' | 'subagentModelSelectionAllowed'
   | 'subagentModelSelectionLoading' | 'subagentModelSelectionLoadFailed' | 'subagentModelSelectionRetry'
   | 'subagentModelSelectionPartial' | 'subagentModelSelectionUnavailable'
@@ -45,6 +46,9 @@ export const en: Record<SubagentSettingsLocaleKey, string> = {
   subagentDepthInvalid: 'Enter a whole number of 0 or more.',
   subagentCapacityInvalid: 'Enter a whole number of 1 or more.',
   subagentModelSelectionTitle: 'Model selection',
+  subagentDefaultModel: 'Default Subagent model',
+  subagentDefaultModelInherit: 'Same as parent agent',
+  subagentDefaultModelHint: 'Used when an agent starts a Subagent without choosing a model. A delegation tool with its own configured model keeps that model.',
   subagentModelSelectionToggle: 'Allow agents to choose models for Subagents',
   subagentModelSelectionChoose: 'When enabled, agents can choose a provider, model, and reasoning effort for each Subagent from the authorized models below. Changes apply immediately to every session.',
   subagentModelSelectionAllowed: 'Models agents may choose',
@@ -84,6 +88,9 @@ export const zh: Record<SubagentSettingsLocaleKey, string> = {
   subagentDepthInvalid: '请输入不小于 0 的整数。',
   subagentCapacityInvalid: '请输入不小于 1 的整数。',
   subagentModelSelectionTitle: '模型选择',
+  subagentDefaultModel: '子智能体默认模型',
+  subagentDefaultModelInherit: '与父 Agent 相同',
+  subagentDefaultModelHint: '父智能体未指定模型时使用此项。',
   subagentModelSelectionToggle: '允许 Agent 为子智能体选择模型',
   subagentModelSelectionChoose: '开启后，Agent 可以从下方授权模型中，为每个子智能体选择提供方、模型和推理强度。修改会立即对所有会话生效。',
   subagentModelSelectionAllowed: 'Agent 可选择的模型',
@@ -96,7 +103,7 @@ export const zh: Record<SubagentSettingsLocaleKey, string> = {
   subagentModelSelectionEmpty: '当前没有模型提供方公布模型。',
   subagentModelSelectionRequired: '保存前请至少选择一个模型。',
   subagentModelSelectionConflict: '设置已在其他位置更新。请放弃修改后重试。',
-  subagentModelSelectionOff: '关闭后，子智能体使用配置的默认模型或继承父 Agent 的模型；已选模型会保留。',
+  subagentModelSelectionOff: '关闭后，子智能体使用配置的默认模型或继承父 Agent 的模型。',
 }
 
 /**
@@ -132,6 +139,9 @@ export const ja = {
   'subagentDepthInvalid': '0以上の整数を入力してください。',
   'subagentCapacityInvalid': '1以上の整数を入力してください。',
   'subagentModelSelectionTitle': 'モデル選択',
+  'subagentDefaultModel': 'サブエージェントのデフォルトモデル',
+  'subagentDefaultModelInherit': '親エージェントと同じ',
+  'subagentDefaultModelHint': 'エージェントがモデルを指定せずにサブエージェントを開始するときに使用されます。独自のモデルが設定された委任ツールは、そのモデルを使い続けます。',
   'subagentModelSelectionToggle': 'エージェントによるサブエージェントのモデル選択を許可',
   'subagentModelSelectionChoose': '有効にすると、エージェントは以下の許可されたモデルからサブエージェントごとにプロバイダー、モデル、推論強度を選択できます。変更はすべてのセッションに直ちに適用されます。',
   'subagentModelSelectionAllowed': 'エージェントが選択可能なモデル',
@@ -171,6 +181,9 @@ export const es = {
   subagentDepthInvalid: 'Introduzca un número entero de 0 o más.',
   subagentCapacityInvalid: 'Introduzca un número entero de 1 o más.',
   subagentModelSelectionTitle: 'Selección de modelo',
+  subagentDefaultModel: 'Modelo predeterminado de Subagente',
+  subagentDefaultModelInherit: 'Igual que el agente principal',
+  subagentDefaultModelHint: 'Se usa cuando un agente inicia un Subagente sin elegir un modelo. Una herramienta de delegación con su propio modelo configurado conserva ese modelo.',
   subagentModelSelectionToggle: 'Permitir a los agentes elegir modelos para Subagentes',
   subagentModelSelectionChoose: 'Cuando está habilitado, los agentes pueden elegir un proveedor, modelo y esfuerzo de razonamiento para cada subagente entre los modelos autorizados a continuación. Los cambios se aplican de inmediato a todas las sesiones.',
   subagentModelSelectionAllowed: 'Los agentes modelos pueden elegir',
@@ -210,6 +223,9 @@ export const fr = {
   subagentDepthInvalid: 'Entrez un nombre entier de 0 ou plus.',
   subagentCapacityInvalid: 'Entrez un nombre entier de 1 ou plus.',
   subagentModelSelectionTitle: 'Sélection du modèle',
+  subagentDefaultModel: 'Modèle par défaut des sous-agents',
+  subagentDefaultModelInherit: "Identique à l'agent parent",
+  subagentDefaultModelHint: "Utilisé lorsqu'un agent démarre un sous-agent sans choisir de modèle. Un outil de délégation doté de son propre modèle configuré conserve ce modèle.",
   subagentModelSelectionToggle: 'Autoriser les agents à choisir des modèles pour les sous-agents',
   subagentModelSelectionChoose: "Lorsque cette option est activée, les agents peuvent choisir un fournisseur, un modèle et un effort de raisonnement pour chaque sous-agent parmi les modèles autorisés ci-dessous. Les modifications s'appliquent immédiatement à toutes les sessions.",
   subagentModelSelectionAllowed: 'Les agents modèles peuvent choisir',
@@ -249,6 +265,9 @@ export const de = {
   subagentDepthInvalid: 'Geben Sie eine ganze Zahl von 0 oder mehr ein.',
   subagentCapacityInvalid: 'Geben Sie eine ganze Zahl von 1 oder mehr ein.',
   subagentModelSelectionTitle: 'Modellauswahl',
+  subagentDefaultModel: 'Standardmodell für Subagenten',
+  subagentDefaultModelInherit: 'Wie der übergeordnete Agent',
+  subagentDefaultModelHint: 'Wird verwendet, wenn ein Agent einen Subagenten startet, ohne ein Modell auszuwählen. Ein Delegationswerkzeug mit eigenem konfiguriertem Modell behält dieses Modell.',
   subagentModelSelectionToggle: 'Erlauben Sie Agenten, Modelle für Subagenten auszuwählen',
   subagentModelSelectionChoose: 'Wenn diese Option aktiviert ist, können Agenten aus den unten aufgeführten autorisierten Modellen einen Anbieter, ein Modell und einen Argumentationsaufwand für jeden Subagenten auswählen. Änderungen gelten sofort für alle Sitzungen.',
   subagentModelSelectionAllowed: 'Modelagenten können wählen',
@@ -288,6 +307,9 @@ export const ru = {
   subagentDepthInvalid: 'Введите целое число от 0 или более.',
   subagentCapacityInvalid: 'Введите целое число от 1 или более.',
   subagentModelSelectionTitle: 'Выбор модели',
+  subagentDefaultModel: 'Модель субагента по умолчанию',
+  subagentDefaultModelInherit: 'Как у родительского агента',
+  subagentDefaultModelHint: 'Используется, когда агент запускает субагента, не выбрав модель. Инструмент делегирования с собственной настроенной моделью сохраняет эту модель.',
   subagentModelSelectionToggle: 'Разрешить агентам выбирать модели для субагентов',
   subagentModelSelectionChoose: 'Если этот параметр включен, агенты могут выбирать поставщика, модель и усилия по обоснованию для каждого субагента из авторизованных моделей, указанных ниже. Изменения сразу применяются ко всем сеансам.',
   subagentModelSelectionAllowed: 'Модели агенты могут выбирать',
@@ -327,6 +349,9 @@ export const pt = {
   subagentDepthInvalid: 'Insira um número inteiro de 0 ou mais.',
   subagentCapacityInvalid: 'Insira um número inteiro de 1 ou mais.',
   subagentModelSelectionTitle: 'Seleção de modelo',
+  subagentDefaultModel: 'Modelo padrão de subagente',
+  subagentDefaultModelInherit: 'Igual ao agente pai',
+  subagentDefaultModelHint: 'Usado quando um agente inicia um subagente sem escolher um modelo. Uma ferramenta de delegação com seu próprio modelo configurado mantém esse modelo.',
   subagentModelSelectionToggle: 'Permitir que os agentes escolham modelos para subagentes',
   subagentModelSelectionChoose: 'Quando ativado, os agentes podem escolher um provedor, um modelo e um esforço de raciocínio para cada subagente dentre os modelos autorizados abaixo. As alterações se aplicam imediatamente a todas as sessões.',
   subagentModelSelectionAllowed: 'Os agentes de modelos podem escolher',
