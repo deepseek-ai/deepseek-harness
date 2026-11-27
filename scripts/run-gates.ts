@@ -977,6 +977,10 @@ function hygieneLeafGates(options: { artifactNeeds?: string[] } = {}): Gate[] {
       label: 'node-next types',
       ...artifactOptions,
     }),
+    pnpmScript('client-package-consumer-types', 'verify-client-package-consumer-types', {
+      label: 'Client package consumer types',
+      ...artifactOptions,
+    }),
     ...sharedHygieneGates(),
   ]
 }

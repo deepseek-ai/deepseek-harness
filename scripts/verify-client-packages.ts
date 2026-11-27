@@ -44,6 +44,11 @@ const STYLESHEET_REQUEST = /\.css(?:\?inline)?$/u
 const INLINE_STYLESHEET_QUERY = /\?inline$/u
 /** Repository TypeScript sources whose module references the `/client` spelling rule reads. */
 const TYPESCRIPT_SOURCE = /\.(?:[cm]?ts|tsx)$/u
+/**
+ * Fixtures of code outside the repository, which may name these packages by either spelling; they compile against the
+ * published declarations ([check](verify-client-package-consumer-types.ts)).
+ */
+const EXTERNAL_CONSUMER_FIXTURES = 'scripts/fixtures/client-package-consumer/'
 /** Vitest calls whose first argument is a module specifier. */
 const VITEST_MODULE_CALLS = new Set(['mock', 'doMock', 'unmock', 'doUnmock', 'importActual', 'importMock'])
 
@@ -115,7 +120,7 @@ export interface ClientPackageFacts {
   readonly clientTypedRoots: ReadonlySet<string>
   /**
    * References to the {@link clientTypedRoots} packages, or to their `/client` subpaths, in the repository's
-   * TypeScript sources outside `vendor/`.
+   * TypeScript sources outside `vendor/` and the external consumer fixtures.
    */
   readonly clientTypedRootReferences: readonly ModuleReference[]
   readonly malformed: readonly string[]
@@ -771,7 +776,7 @@ function readStringLiteralArray(root: string, sourcePath: string, name: string):
 
 /**
  * Read the references to the given packages and their `/client` subpaths in the tracked and untracked, not ignored,
- * TypeScript sources outside `vendor/`.
+ * TypeScript sources outside `vendor/` and the external consumer fixtures.
  * @param root - Absolute repository root.
  * @param packages - Package names whose references to read.
  * @returns The references, by file and then line.
@@ -785,7 +790,8 @@ function readPackageReferences(root: string, packages: ReadonlySet<string>): Mod
   const found: ModuleReference[] = []
   for (const entry of listing.split('\0')) {
     const file = normalizePath(entry)
-    if (file === '' || file.startsWith('vendor/') || !TYPESCRIPT_SOURCE.test(file)) continue
+    if (file === '' || file.startsWith('vendor/') || file.startsWith(EXTERNAL_CONSUMER_FIXTURES)) continue
+    if (!TYPESCRIPT_SOURCE.test(file)) continue
     let source: string
     try {
       source = readFileSync(resolve(root, file), 'utf8')

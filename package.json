@@ -151,6 +151,7 @@
     "website:dev": "pnpm run docs:dev",
     "website:build": "pnpm run docs:build",
     "verify-package-readme-limitations": "tsx scripts/verify-package-readme-limitations.ts",
+    "verify-client-package-consumer-types": "tsx scripts/verify-client-package-consumer-types.ts",
     "verify-node-next-types": "tsx scripts/verify-node-next-types.ts",
     "verify-optional-dependency-imports": "tsx scripts/verify-optional-dependency-imports.ts",
     "verify-runtime-closure": "tsx scripts/verify-runtime-closure.ts",

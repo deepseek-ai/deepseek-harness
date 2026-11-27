@@ -21,6 +21,7 @@
     "**/.oxlint-contract-*/**", // Scratch files created by the executable lint-contract tests.
     "**/oxlint-contract-*", // Flat probes use real TypeScript project include paths.
     "packages/typert/generator/tests/fixtures/type-model/**", // tsgolint rejects this fixture's preserved project shapes before rules run.
+    "scripts/fixtures/client-package-consumer/**", // Resolves the Client packages only in the temporary install of verify-client-package-consumer-types, which type-checks it.
     "website/.generated/**",
     "vendor/**", // Vendored source keeps upstream style and idioms.
     "packages/experimental/claude-code-mods/examples/*/{hooks,tests,types}/**", // Claude Code's published example mods and their tests keep the upstream style; see the headers.
