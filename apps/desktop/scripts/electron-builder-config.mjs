@@ -77,7 +77,8 @@ export function createElectronBuilderConfig(
   let primaryRuntimeDestination
   let dshDestination
   let windowsCode = []
-  const unpack = ['**/*.{node,dylib,dll,so,exe}', '**/*.so.*', '**/spawn-helper', '**/@vscode/ripgrep-*/bin/rg',
+  const receiverBase = `lib/native/${resolvedPlatform}-${resolvedArch}/frame-forwarding`
+  const unpack = [`${receiverBase}.json`, '**/*.{node,dylib,dll,so,exe}', '**/*.so.*', '**/spawn-helper', '**/@vscode/ripgrep-*/bin/rg',
     `**/node_modules/@deepseek-ai/libreoffice-kit-${resolvedPlatform}-${resolvedArch}/**/*`,
     // LaunchServices opens the Computer Use helper as an application, so every file of its bundles stays on disk.
     // Both architectures ship: they form one notarized payload whose manifest staging verifies as a whole.
@@ -151,6 +152,8 @@ export function createElectronBuilderConfig(
       'lib/preload-update-dialog.cjs',
       'lib/preload-welcome.cjs',
       ...sharedTextureAddonNames(resolvedPlatform).map(name => `lib/native/${resolvedPlatform}-${resolvedArch}/${name}.node`),
+      ...(sharedTextureAddonNames(resolvedPlatform).includes('frame-forwarding') ? [`${receiverBase}.json`, `${receiverBase}.LICENSE`] : []),
+      'native/shared-texture/win-delay-load.LICENSE',
       'renderer/**/*',
       'package.json',
       '!node_modules/**/*.{js,cjs,mjs,ts,cts,mts,css}.map',

@@ -141,3 +141,9 @@ it('restores a contenteditable selection before opening Edit with the keyboard',
   expect(document.getSelection()!.toString()).toBe('itable')
   await vi.waitFor(() => { expect(buttons[1]!.getAttribute('aria-expanded')).toBe('false') })
 })
+
+it('hides the caption menu when the document enters native fullscreen', () => {
+  menu = installWindowsMenu()
+  const style = document.querySelector('[data-windows-menu]')!.shadowRoot!.querySelector('style')!
+  expect(style.textContent).toContain(':host-context(html[data-fullscreen]) { display: none; }')
+})

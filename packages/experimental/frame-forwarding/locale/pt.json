@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Encaminhamento de quadros",
+    "description": "Mostra na janela do Desktop os quadros que os processos nativos dos plugins do Host renderizam, sem copiar pixels."
+  }
+}

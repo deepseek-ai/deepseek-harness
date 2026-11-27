@@ -83,6 +83,7 @@ describe('release families', () => {
       '@deepseek-ai/dsh-forge-gitlab',
       '@deepseek-ai/dsh-experimental-forge-session',
       '@deepseek-ai/dsh-experimental-forge',
+      '@deepseek-ai/dsh-frame-forwarding',
       '@deepseek-ai/dsh-hook-protocol',
       '@deepseek-ai/dsh-hooks-claude-code',
       '@deepseek-ai/dsh-hooks-codex',

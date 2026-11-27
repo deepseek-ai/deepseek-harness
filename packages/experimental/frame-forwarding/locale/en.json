@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Frame forwarding",
+    "description": "Shows frames that native processes of Host plugins render in the Desktop window without copying pixels."
+  }
+}

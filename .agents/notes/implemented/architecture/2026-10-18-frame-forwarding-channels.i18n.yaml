@@ -1,0 +1,46 @@
+# Bilingual-pair consistency record for 2026-10-18-frame-forwarding-channels.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-18-frame-forwarding-channels.md
+/agent-note-frame-forwarding-channels-with-transferable-credentials-producer-local-handles-covered-views-and-a-memory-sized-budget:
+  en: 6ffcd2e12496f609
+  zh: 3aac5b5b6fcaf426
+/agent-note-frame-forwarding-channels-with-transferable-credentials-producer-local-handles-covered-views-and-a-memory-sized-budget/problem:
+  en: 41f0d6fa7045c3a2
+  zh: 15ee3e573127d43c
+/agent-note-frame-forwarding-channels-with-transferable-credentials-producer-local-handles-covered-views-and-a-memory-sized-budget/decision:
+  en: a15c7c13f167e5ac
+  zh: a15c7c13f167e5ac
+/agent-note-frame-forwarding-channels-with-transferable-credentials-producer-local-handles-covered-views-and-a-memory-sized-budget/decision/channels-and-credentials:
+  en: ccf914afe119ab1e
+  zh: 12fbff4a5e879ca4
+/agent-note-frame-forwarding-channels-with-transferable-credentials-producer-local-handles-covered-views-and-a-memory-sized-budget/decision/connections-and-handoff:
+  en: 4fdd0bed5e2a8bf9
+  zh: 361d50bee163c4d9
+/agent-note-frame-forwarding-channels-with-transferable-credentials-producer-local-handles-covered-views-and-a-memory-sized-budget/decision/producers-name-only-their-own-handles:
+  en: 1c00e9088f93e12f
+  zh: 060e06ef9ebc164b
+/agent-note-frame-forwarding-channels-with-transferable-credentials-producer-local-handles-covered-views-and-a-memory-sized-budget/decision/compatibility:
+  en: 0f0266faf90bd2b2
+  zh: 565841a9155bbfed
+/agent-note-frame-forwarding-channels-with-transferable-credentials-producer-local-handles-covered-views-and-a-memory-sized-budget/decision/host-and-renderer:
+  en: 135ab5329118eadb
+  zh: dd5f84ac1358764b
+/agent-note-frame-forwarding-channels-with-transferable-credentials-producer-local-handles-covered-views-and-a-memory-sized-budget/decision/hidden-and-covered-views-return-their-surfaces:
+  en: 216abcac1e6cd25d
+  zh: d19600a531086ccb
+/agent-note-frame-forwarding-channels-with-transferable-credentials-producer-local-handles-covered-views-and-a-memory-sized-budget/decision/the-window-budget-follows-physical-memory:
+  en: 070fdad928fd862d
+  zh: 85f39b3adccc19c5
+/agent-note-frame-forwarding-channels-with-transferable-credentials-producer-local-handles-covered-views-and-a-memory-sized-budget/decision/fullscreen-belongs-to-frame-forwarding:
+  en: 01ca9d01aacc84d6
+  zh: 82b7c5cdeedb33e1
+/agent-note-frame-forwarding-channels-with-transferable-credentials-producer-local-handles-covered-views-and-a-memory-sized-budget/alternatives-considered:
+  en: 43089e5b5935fe17
+  zh: 9534aa449fbdd343
+/agent-note-frame-forwarding-channels-with-transferable-credentials-producer-local-handles-covered-views-and-a-memory-sized-budget/verification:
+  en: f9130f0bda61a5d7
+  zh: c1bf0f49f6c51908
+/agent-note-frame-forwarding-channels-with-transferable-credentials-producer-local-handles-covered-views-and-a-memory-sized-budget/consequences:
+  en: d73bd477975a1249
+  zh: db4e9d5732c05513

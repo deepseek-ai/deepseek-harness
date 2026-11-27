@@ -121,8 +121,8 @@ it.each([
   const destination = join(resources, 'app')
   await mkdir(resources, { recursive: true })
   const names = sharedTextureAddonNames(platform)
-  expect(names).toEqual(['shared-texture-hop', 'shared-texture-ingress'])
-  const paths = names.map(name => `lib/native/${platform}-${arch}/${name}.node`)
+  expect(names).toEqual(['shared-texture-hop', 'shared-texture-ingress', 'frame-forwarding'])
+  const paths = [...names.map(name => `lib/native/${platform}-${arch}/${name}.node`), `lib/native/${platform}-${arch}/frame-forwarding.json`]
   const desktopConfig = createElectronBuilderConfig({
     DSH_DESKTOP_APP_ID: 'com.example.texture-files', DSH_DESKTOP_UNSIGNED: '1',
     DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN: 'https://policy.example.com',

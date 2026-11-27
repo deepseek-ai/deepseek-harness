@@ -19,12 +19,16 @@ vi.mock('node:child_process', async (importOriginal) => {
 vi.mock('node:fs', async importOriginal => ({
   ...await importOriginal<typeof import('node:fs')>(),
   existsSync: vi.fn(() => true),
+  readdirSync: vi.fn(() => []),
   readFileSync: vi.fn(() => JSON.stringify({ version: '1.0.0' })),
 }))
 vi.mock('node:module', () => ({ createRequire: () => () => 'fixture-electron' }))
 vi.mock('../scripts/development-app.ts', () => ({ prepareDevelopmentApp: vi.fn(() => 'fixture-macos-launcher') }))
 vi.mock('../scripts/development-project.ts', () => ({ prepareDevelopmentProject: vi.fn() }))
 vi.mock('../scripts/prepare-primary-runtime.ts', () => ({ preparePrimaryRuntime: vi.fn(async () => {}) }))
+vi.mock('../scripts/native-package-builds.mjs', () => ({
+  buildNativePackage: vi.fn(), nativeBuildEnvironment: vi.fn(), nativePackageBuildAt: vi.fn(),
+}))
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.clearAllMocks(); state.nativeStatus = 0 })
 
@@ -55,7 +59,7 @@ async function develop(platform: 'darwin' | 'win32', skipBuild = false) {
 
 it.each(['darwin', 'win32'] as const)('builds the native addons before launching the %s development runtime', async (platform) => {
   const { calls } = await develop(platform)
-  expect(calls.slice(0, 3).map(call => call[1])).toEqual([
+  expect(calls.slice(0, -1).map(call => call[1])).toEqual([
     ['fixture-pnpm.cjs', 'run', 'build:artifacts'],
     ['fixture-pnpm.cjs', 'run', 'build'],
     ['fixture-pnpm.cjs', 'run', 'build:native'],

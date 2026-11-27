@@ -27,7 +27,7 @@ Use `@deepseek-ai/dsh-shared-texture` to present or receive shared GPU-backed fr
 
 ### Host service (`@deepseek-ai/dsh-shared-texture`)
 
-A presentation host subclasses `SharedTexture`, implements `claim(): SharedTextureClaim`, and owns exclusive-claim concurrency control and native transport; Desktop Host is the provider. Consumers read `ctx.get('sharedTexture')`, which is absent in Hosts that do not present shared textures, and call `claim()` to obtain `capabilities(timeoutMs)`, `nativeSink(timeoutMs)`, `adapterLuid(timeoutMs)`, and `release()`. The Host entry's `apply` does nothing, because the Loader mounts the package only to deliver its Client half.
+A presentation host subclasses `SharedTexture`, implements `claim(): SharedTextureClaim`, and owns exclusive-claim concurrency control and native transport; Desktop Host is the provider. Consumers read `ctx.get('sharedTexture')`, which is absent in Hosts that do not present shared textures, and call `claim()` to obtain `capabilities(timeoutMs)`, `nativeSink(timeoutMs)`, `adapterLuid(timeoutMs)`, and `release()`. The Host entry's `apply` does nothing, because the Loader mounts the package only to deliver its Client half. Desktop Host provides the absolute path of the preinstalled receiver as `desktopFrameReceiver.path`.
 
 ### Client plugin (`@deepseek-ai/dsh-shared-texture/client`)
 

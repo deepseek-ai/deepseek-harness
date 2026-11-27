@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Frame-Weiterleitung",
+    "description": "Zeigt Frames, die native Prozesse von Host-Plugins rendern, ohne Kopieren von Pixeln im Desktop-Fenster an."
+  }
+}

@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write apps/desktop/tests/frame-forwarding/fuzz/README.md
+/frame-forwarding-wire-protocol-fuzz-targets:
+  en: bd1987338940c30d
+  zh: 4ab14df2903a7f3e
+/frame-forwarding-wire-protocol-fuzz-targets/targets:
+  en: 4771e92b7db05572
+  zh: a39f94cc47d29264
+/frame-forwarding-wire-protocol-fuzz-targets/seed-corpus:
+  en: 860401a8f1500b10
+  zh: 793dc744bc21c4d8
+/frame-forwarding-wire-protocol-fuzz-targets/run-on-windows:
+  en: 67b261c0532c1e8f
+  zh: 86790cb17d7a830b
+/frame-forwarding-wire-protocol-fuzz-targets/run-on-macos:
+  en: 4dc45e7832658303
+  zh: 1f61e17acff708a2
+/frame-forwarding-wire-protocol-fuzz-targets/read-a-run:
+  en: 4876ac4150522f1a
+  zh: d7b7750f8f97b13c

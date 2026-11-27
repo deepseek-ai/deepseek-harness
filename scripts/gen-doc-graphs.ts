@@ -331,6 +331,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'shared-texture',
     title: 'Shared-texture presentation',
     mode: 'seam',
+    consumers: ['frame-forwarding'],
     note: 'Desktop Host implements the exclusive Host claim that submits GPU-backed frames to Desktop; the Client half of the package provides the Desktop preload bridge as the Client service. Consumers never touch Mach ports, Win32 handles, or Electron.',
   },
   {

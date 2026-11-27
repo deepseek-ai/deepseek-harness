@@ -189,15 +189,19 @@ export const SERVICE_PAGE: Record<string, string> = {
  * or names itself here. Client-face keys (the projection analyzes the host
  * face only) name the package README that owns their surface.
  *
- * Two categories remain, and neither is a projection gap a scanning rule could
+ * Three categories remain, and none is a projection gap a scanning rule could
  * close. An OPTIONAL key (`key?: X`) is a value the launcher or boot code
  * installs before the tree mounts, which the analyzer skips by rule because no
  * plugin provides it and `inject` cannot reach it. A client-face key belongs to
  * the browser Context, which this host-face program never sees; the browser
  * surface has its own generated catalog (`scripts/gen-client-catalog.ts`, served
- * to a model as `cordis_runtime_inspect what:"client"`).
+ * to a model as `cordis_runtime_inspect what:"client"`). An experimental
+ * service whose package README is its only documentation until it stabilizes
+ * declares its key outside the package's top-level modules, so neither a
+ * subsystems page nor the model-visible runtime catalog publishes it.
  */
 export const SERVICE_WALK_EXEMPTIONS: Record<string, string> = {
+  desktopFrameReceiver: 'internal Desktop receiver for the experimental frame-forwarding plugin — packages/experimental/frame-forwarding/README.md owns its availability and lifecycle',
   timeline: 'experimental session data service internal to the bundle — packages/experimental/timeline/README.md owns its behavior',
   contextMenus: 'client-side interface-typed menu registry — packages/client/ui-context-menu/README.md owns the API',
   fileActions: 'client-side interface-typed file actions — packages/client/ui-file-actions/README.md owns the API',
@@ -247,6 +251,7 @@ export const SERVICE_WALK_EXEMPTIONS: Record<string, string> = {
   sidebarRightTabs: 'client-side right-Sidebar tab-type registry — packages/client/ui-sidebar-right/README.md owns the API',
   forgeChanges: 'client-side changes view face for other plugins — docs/subsystems/forge.md#extension-api owns the API',
   documentPreviews: 'client-side document renderer registry — docs/subsystems/sidebar-right.md owns the API',
+  frameForwarding: 'experimental Desktop service whose package README is its only documentation until it stabilizes — packages/experimental/frame-forwarding/README.md owns the API',
 }
 
 /**

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Reenvío de fotogramas",
+    "description": "Muestra en la ventana de Desktop los fotogramas que renderizan los procesos nativos de los plugins de Host, sin copiar píxeles."
+  }
+}

@@ -29,18 +29,18 @@ function split(name: typeof targets[number]): { platform: string; arch: string }
 }
 
 describe('Desktop shared-texture addons', () => {
-  async function fixture(name: typeof targets[number] = 'darwin-arm64', binaries: Partial<Record<'hop' | 'ingress', Buffer>> = {}) {
+  async function fixture(name: typeof targets[number] = 'darwin-arm64', binaries: Partial<Record<'shared-texture-hop' | 'shared-texture-ingress' | 'frame-forwarding', Buffer>> = {}) {
     const appDir = await mkdtemp(join(tmpdir(), 'shared-texture-addons-'))
     roots.push(appDir)
     const target = split(name)
     const directory = join(appDir, 'lib', 'native', name)
     await mkdir(directory, { recursive: true })
     const records: Record<string, { platform: string; sha256: string }> = {}
-    for (const addon of ['hop', 'ingress'] as const) {
+    for (const addon of ['shared-texture-hop', 'shared-texture-ingress', 'frame-forwarding'] as const) {
       const bytes = binaries[addon] ?? binaryFor(target.platform, target.arch)
-      await writeFile(join(directory, `shared-texture-${addon}.node`), bytes)
+      await writeFile(join(directory, `${addon}.node`), bytes)
       records[addon] = { platform: name, sha256: createHash('sha256').update(bytes).digest('hex') }
-      await writeFile(join(directory, `shared-texture-${addon}.json`), JSON.stringify(records[addon]))
+      await writeFile(join(directory, `${addon}.json`), JSON.stringify(records[addon]))
     }
     return { appDir, directory, records, target }
   }
@@ -53,10 +53,10 @@ describe('Desktop shared-texture addons', () => {
     const f = await fixture('darwin-arm64')
     await expect(verifySharedTextureAddons(f.appDir, { platform: 'darwin', arch: 'x64' })).rejects.toThrow('build:native --arch x64')
   })
-  it.each([['darwin-arm64', 'ingress'], ['win32-x64', 'hop']] as const)('requires both addons on %s', async (name, addon) => {
+  it.each([['darwin-arm64', 'shared-texture-ingress'], ['win32-x64', 'shared-texture-hop'], ['win32-x64', 'frame-forwarding']] as const)('requires each addon on %s', async (name, addon) => {
     const f = await fixture(name)
-    await rm(join(f.directory, `shared-texture-${addon}.node`))
-    await expect(verifySharedTextureAddons(f.appDir, f.target)).rejects.toThrow(`shared-texture-${addon}.node is missing`)
+    await rm(join(f.directory, `${addon}.node`))
+    await expect(verifySharedTextureAddons(f.appDir, f.target)).rejects.toThrow(`${addon}.node is missing`)
   })
   it('requires no addon where Desktop has no texture transport', async () => {
     const appDir = await mkdtemp(join(tmpdir(), 'shared-texture-addons-'))
@@ -68,12 +68,12 @@ describe('Desktop shared-texture addons', () => {
     ['another platform', { platform: 'darwin-x64' }],
   ] as const)('rejects a build record from %s', async (_name, override) => {
     const f = await fixture()
-    await writeFile(join(f.directory, 'shared-texture-hop.json'), JSON.stringify({ ...f.records.hop, ...override }))
+    await writeFile(join(f.directory, 'shared-texture-hop.json'), JSON.stringify({ ...f.records['shared-texture-hop'], ...override }))
     await expect(verifySharedTextureAddons(f.appDir, f.target)).rejects.toThrow('differs from its build record')
   })
   it.each([['darwin-arm64', 'darwin', 'x64'], ['win32-x64', 'win32', 'arm64']] as const)(
     'rejects a %s addon for another CPU even when its directory and record name the target', async (name, platform, arch) => {
-      const f = await fixture(name, { ingress: binaryFor(platform, arch) })
+      const f = await fixture(name, { 'shared-texture-ingress': binaryFor(platform, arch) })
       await expect(verifySharedTextureAddons(f.appDir, f.target)).rejects.toThrow(`ingress addon is not ${name}`)
     })
 })

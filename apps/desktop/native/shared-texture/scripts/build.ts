@@ -1,12 +1,12 @@
 /**
  * Build Desktop's Node-API 8 shared-texture addons with the target C++ toolchain: clang on macOS, MSVC on Windows.
- * `shared-texture-hop.node` (loaded by the Desktop Host) and `shared-texture-ingress.node` (loaded by Electron Main)
- * are written with their build records to `apps/desktop/lib/native/<platform>-<arch>/`.
+ * The Desktop Host loads frame-forwarding.node and shared-texture-hop.node. Main loads shared-texture-ingress.node.
+ * All three are written with their build records to `apps/desktop/lib/native/<platform>-<arch>/`.
  * Usage: `tsx scripts/build.ts [--arch x64|arm64]`. Headers come from `DSH_NODE_INCLUDE` or Desktop's `node-api-headers`.
  */
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -42,8 +42,9 @@ if (include === undefined) throw new Error(`shared-texture: Node-API headers mis
 type Libraries = Record<'darwin' | 'win32', readonly string[]>
 
 /** Compile one addon from its sources and write its build record beside it. */
-function buildAddon(name: string, moduleName: string, sources: readonly string[], libraries: Libraries): void {
+function buildAddon(name: string, moduleName: string, sources: readonly string[], libraries: Libraries, record: object = {}): void {
   const addon = resolve(output, `${name}.node`)
+  rmSync(resolve(output, `${name}.json`), { force: true })
   const defines = ['NAPI_VERSION=8', `NODE_GYP_MODULE_NAME=${moduleName}`]
   if (process.platform === 'win32') {
     // Objects, the Node-API import library, and the addon's own import library stay out of the packaged directory.
@@ -51,7 +52,7 @@ function buildAddon(name: string, moduleName: string, sources: readonly string[]
     try {
       const library = join(scratch, 'node.lib')
       run('lib.exe', ['/nologo', `/def:${join(headers, 'def', 'node_api.def')}`, '/name:node.exe', `/machine:${arch}`, `/out:${library}`])
-      run('cl.exe', ['/nologo', '/LD', '/O2', '/EHsc', '/MD', '/std:c++17', '/W4', `/I${include}`,
+      run('cl.exe', ['/nologo', '/LD', '/O2', '/EHsc', '/MD', '/std:c++17', '/W4', '/D_WIN32_WINNT=0x0602', `/I${include}`,
         ...defines.map(define => `/D${define}`), `/Fo${scratch}\\`, ...sources, 'win-delay-load.cc',
         '/link', '/DELAYLOAD:node.exe', 'delayimp.lib', library, ...libraries.win32, `/IMPLIB:${join(scratch, `${name}.lib`)}`, `/OUT:${addon}`])
     } finally {
@@ -67,7 +68,7 @@ function buildAddon(name: string, moduleName: string, sources: readonly string[]
     run('codesign', ['--force', '--sign', '-', addon])
   }
   writeFileSync(resolve(output, `${name}.json`), `${JSON.stringify({
-    platform,
+    platform, ...record,
     sha256: createHash('sha256').update(readFileSync(addon)).digest('hex'),
   }, null, 2)}\n`)
   console.log(`shared-texture: built ${addon}`)
@@ -76,3 +77,12 @@ function buildAddon(name: string, moduleName: string, sources: readonly string[]
 buildAddon('shared-texture-hop', 'dsh_shared_texture_hop', ['hop.cc', `hop-${process.platform}.cc`], { darwin: [], win32: [] })
 buildAddon('shared-texture-ingress', 'dsh_shared_texture_ingress', ['ingress.cc', `ingress-${process.platform}.cc`],
   { darwin: ['-lbsm'], win32: ['bcrypt.lib', 'dxgi.lib'] })
+
+const receiver = resolve(root, '../../../../packages/experimental/frame-forwarding/native')
+const header = readFileSync(join(receiver, 'transport.h'), 'utf8')
+const protocolVersion = Number(/DSH_FRAME_FORWARDING_PROTOCOL_VERSION (\d+)/u.exec(header)?.[1])
+if (!Number.isInteger(protocolVersion)) throw new Error('Missing frame-forwarding protocol version in transport.h')
+buildAddon('frame-forwarding', 'dsh_frame_forwarding', ['receiver.cc', 'transport.cc', 'desktop-bridge.cc'].map(file => join(receiver, file)),
+  { darwin: ['-lbsm'], win32: ['d3d11.lib', 'dxgi.lib', 'advapi32.lib', 'bcrypt.lib'] },
+  { protocolVersion, capabilities: ['transferable-tx', 'producer-local-handles'] })
+copyFileSync(join(receiver, 'LICENSE'), join(output, 'frame-forwarding.LICENSE'))

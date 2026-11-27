@@ -22,9 +22,9 @@ export class DesktopHostProcess extends Host {
     super(node, runtime, project, 0, environment, onFailure, primaryRuntime, packageManager)
     fixture.host = this
   }
-  async start() {
+  async start(frameReceiverPath) {
     try {
-      const result = await super.start()
+      const result = await super.start(frameReceiverPath)
       fixture.readyHosts.add(this)
       fixture.ready.resolve(result.url)
       return result

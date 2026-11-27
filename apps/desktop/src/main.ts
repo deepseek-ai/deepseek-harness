@@ -539,6 +539,8 @@ async function main(): Promise<void> {
   const platformView = new DesktopPlatformView(join(app.getAppPath(), 'lib', 'preload-platform-account.cjs'),
     () => locale.id === 'zh-CN' ? 'zh_CN' : 'en_US', process.platform === 'win32' ? 'win32' : 'darwin',
     owner => isMandatory() || updateOverlays.input(owner).blocked)
+  const nativeRoot = development ? app.getAppPath() : join(process.resourcesPath, 'app.asar.unpacked')
+  const frameReceiverPath = join(nativeRoot, 'lib', 'native', `${process.platform}-${process.arch}`, 'frame-forwarding.node')
   const backend = new DesktopBackendController((onFailure) => {
     const hostInspectPort = developmentHostInspectPort(development)
     const host = new DesktopHostProcess(resources.node, resources.dsh, activeProject,
@@ -555,7 +557,7 @@ async function main(): Promise<void> {
       }, [textures.channel])
     return {
       start: async () => {
-        const ready = await host.start()
+        const ready = await host.start(frameReceiverPath)
         const cookie = ready.authenticationCookie
         hostCookie = cookie
         hostUrl = ready.url

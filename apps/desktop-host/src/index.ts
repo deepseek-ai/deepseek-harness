@@ -1,6 +1,7 @@
 /** Launch the Desktop profile through the Web application and report its URL to Electron. */
 
-import { delimiter, join } from 'node:path'
+import { delimiter, isAbsolute, join } from 'node:path'
+import { parseArgs } from 'node:util'
 import { randomUUID } from 'node:crypto'
 import type { PluginOperationRunId } from '@deepseek-ai/dsh-plugin-manager/diagnostic'
 import { formatFatalDiagnostic } from './fatal-diagnostic.ts'
@@ -41,6 +42,13 @@ async function main(): Promise<void> {
   }
   const runtimeDir = process.argv[2] as string
   const projectDir = process.argv[3] as string
+  const { values, positionals: [pnpm, nodeBin] } = parseArgs({
+    args: process.argv.slice(5),
+    allowPositionals: true,
+    options: { 'frame-receiver-path': { type: 'string' } },
+  })
+  const receiverPath = values['frame-receiver-path']
+  if (receiverPath !== undefined && !isAbsolute(receiverPath)) throw new Error('--frame-receiver-path must be absolute')
   // Set before the launch-environment snapshot and profile evaluation; empty means the payload sits beside the runtime directory.
   process.env.DSH_PRIMARY_RUNTIME = process.argv[4] || join(runtimeDir, '..', 'runtime', 'primary-runtime')
   const installAnchor = join(runtimeDir, 'node_modules', '@deepseek-ai', 'dsh', 'package.json')
@@ -52,14 +60,14 @@ async function main(): Promise<void> {
     resolvedProfile: { profile, installAnchor },
     patchFiles: [],
     args: ['--no-open', '--host', '127.0.0.1', '--port', '0'],
-    ...(process.argv[5] === undefined ? {} : {
+    ...(pnpm === undefined ? {} : {
       packageManager: {
         command: process.execPath,
-        args: ['--expose-internals', process.argv[5]],
+        args: ['--expose-internals', pnpm],
         env: {
           ELECTRON_RUN_AS_NODE: '1',
           DSH_DESKTOP_NODE_EXECUTABLE: process.execPath,
-          PATH: `${process.argv[6] ?? ''}${delimiter}${process.env.PATH ?? ''}`,
+          PATH: `${nodeBin ?? ''}${delimiter}${process.env.PATH ?? ''}`,
         },
       },
     }),
@@ -154,6 +162,7 @@ async function main(): Promise<void> {
   installOperationDiagnostics(ctx, record => send({ type: 'plugin-operation', record }), 32, runId)
   control.updateTasks = installDesktopUpdateTaskControl(ctx)
   control.quitInspection = installDesktopQuitInspection(ctx)
+  if (receiverPath !== undefined) ctx.provide('desktopFrameReceiver', { path: receiverPath })
   await ctx.plugin(sharedTexture)
   installPlatformSessionPublisher(ctx, (session) => {
     if (process.connected) process.send?.({ type: 'platform-session', session })

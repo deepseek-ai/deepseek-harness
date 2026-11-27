@@ -3157,6 +3157,7 @@ describe('desktop main startup', () => {
       profile: 'desktop-test-profile',
     })
     expect(harness.hosts[0]!.environment).not.toBe(process.env)
+    expect(harness.hosts[0]!.start).toHaveBeenCalledWith(join('desktop-test-resources', 'app.asar.unpacked', 'lib', 'native', 'win32-x64', 'frame-forwarding.node'))
     expect(harness.hosts[0]!.environment?.DSH_CLIENT_VERSION).toBe('1.2.3')
     expect(harness.hosts[0]!.environment?.DSH_TEST_LOGIN_SHELL).toBe('login')
     expect(console.warn).toHaveBeenCalledWith('desktop login shell: /account/shell failed (timeout)')
@@ -3176,6 +3177,7 @@ describe('desktop main startup', () => {
     const project = join(harness.app.getAppPath(), '.desktop-build', 'development', 'project')
     expect(harness.hosts[0]).toMatchObject({ node: process.execPath, runtime: project,
       primaryRuntime: 'test-primary-runtime', profile: 'desktop-test-profile' })
+    expect(harness.hosts[0]!.start).toHaveBeenCalledWith(join(harness.app.getAppPath(), 'lib', 'native', 'win32-x64', 'frame-forwarding.node'))
     expect(harness.applyRelease).toHaveBeenCalledOnce()
     harness.hosts[0]!.ready.resolve()
     await harness.navigated.promise

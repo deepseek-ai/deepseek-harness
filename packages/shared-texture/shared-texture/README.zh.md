@@ -27,7 +27,7 @@ kind: "package-reference"
 
 ### Host 服务（`@deepseek-ai/dsh-shared-texture`）
 
-呈现宿主继承 `SharedTexture` 并实现 `claim(): SharedTextureClaim`，自行负责独占认领的并发控制与原生传输；目前的提供方是 Desktop Host。消费方通过 `ctx.get('sharedTexture')` 读取服务（不呈现共享纹理的 Host 中没有这个服务），再调用 `claim()` 获取 `capabilities(timeoutMs)`、`nativeSink(timeoutMs)`、`adapterLuid(timeoutMs)` 与 `release()`。Host 入口的 `apply` 什么也不做，因为 Loader 挂载本包只是为了送出它的 Client 半边。
+呈现宿主继承 `SharedTexture` 并实现 `claim(): SharedTextureClaim`，自行负责独占认领的并发控制与原生传输；目前的提供方是 Desktop Host。消费方通过 `ctx.get('sharedTexture')` 读取服务（不呈现共享纹理的 Host 中没有这个服务），再调用 `claim()` 获取 `capabilities(timeoutMs)`、`nativeSink(timeoutMs)`、`adapterLuid(timeoutMs)` 与 `release()`。Host 入口的 `apply` 什么也不做，因为 Loader 挂载本包只是为了送出它的 Client 半边。Desktop Host 通过 `desktopFrameReceiver.path` 提供预装接收器的绝对路径。
 
 ### Client 插件（`@deepseek-ai/dsh-shared-texture/client`）
 

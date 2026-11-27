@@ -71,6 +71,8 @@ export interface SharedTextureClaim extends SharedTextureService {
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
+    /** Absolute path to the receiver addon preinstalled by Desktop for this Host. */
+    desktopFrameReceiver: { readonly path: string }
     /**
      * Host shared-texture service; absent in Hosts that do not present shared textures, so read it with
      * `ctx.get('sharedTexture')`. One consumer holds a claim at a time.

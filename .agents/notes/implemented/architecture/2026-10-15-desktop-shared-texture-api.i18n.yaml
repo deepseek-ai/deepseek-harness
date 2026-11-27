@@ -1,0 +1,37 @@
+# Bilingual-pair consistency record for 2026-10-15-desktop-shared-texture-api.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-15-desktop-shared-texture-api.md
+/agent-note-generic-desktop-shared-texture-api-with-a-shared-frame-forwarding-package:
+  en: de5e9439711001ae
+  zh: e5ac22aa5d51043d
+/agent-note-generic-desktop-shared-texture-api-with-a-shared-frame-forwarding-package/problem:
+  en: 4adf47d0d97b0e23
+  zh: 12dedda00f579336
+/agent-note-generic-desktop-shared-texture-api-with-a-shared-frame-forwarding-package/decision:
+  en: beeb92d43bbf3389
+  zh: 39e77f9c22210ea3
+/agent-note-generic-desktop-shared-texture-api-with-a-shared-frame-forwarding-package/decision/desktop-shared-textures:
+  en: 9cf55a65959c002c
+  zh: b29f1fc65936632e
+/agent-note-generic-desktop-shared-texture-api-with-a-shared-frame-forwarding-package/decision/trust-model:
+  en: d056763e283a5d30
+  zh: fd7f1bba0ce5eba6
+/agent-note-generic-desktop-shared-texture-api-with-a-shared-frame-forwarding-package/decision/the-frame-forwarding-package:
+  en: 59b3109d10f52831
+  zh: f04c9bd2a730b30a
+/agent-note-generic-desktop-shared-texture-api-with-a-shared-frame-forwarding-package/decision/frame-path:
+  en: 7ba66e63258cc160
+  zh: 87373d062c2dde60
+/agent-note-generic-desktop-shared-texture-api-with-a-shared-frame-forwarding-package/alternatives-considered:
+  en: dfa341b1fe449288
+  zh: 475e6ab42702ba36
+/agent-note-generic-desktop-shared-texture-api-with-a-shared-frame-forwarding-package/verification:
+  en: a98f84f310538d8b
+  zh: bd345d71474eb862
+/agent-note-generic-desktop-shared-texture-api-with-a-shared-frame-forwarding-package/consequences:
+  en: b823f7ee32d12180
+  zh: f7338b942f03e81c
+/agent-note-generic-desktop-shared-texture-api-with-a-shared-frame-forwarding-package/consequences/native-producer-sdk:
+  en: 9eabfbc1a83598d4
+  zh: d43c9db0b40942c8

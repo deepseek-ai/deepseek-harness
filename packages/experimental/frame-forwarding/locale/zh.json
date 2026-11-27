@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "帧转发",
+    "description": "把 Host 插件的原生进程渲染的帧显示在 Desktop 窗口中，无需复制像素。"
+  }
+}

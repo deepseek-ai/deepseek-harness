@@ -1,0 +1,11 @@
+{
+  "mapping": [
+    { "name": "identity", "view": { "x": 0, "y": 0, "scale": 1 }, "window": { "x": 0, "y": 0, "width": 100, "height": 80 }, "expected": { "x": 0, "y": 0, "width": 100, "height": 80 } },
+    { "name": "scroll within an overscan window", "view": { "x": 30, "y": 120, "scale": 0.5 }, "window": { "x": 0, "y": 100, "width": 300, "height": 400 }, "expected": { "x": -15, "y": -10, "width": 150, "height": 200 } },
+    { "name": "centered negative origin", "view": { "x": -50, "y": -20, "scale": 2 }, "window": { "x": 0, "y": 0, "width": 100, "height": 80 }, "expected": { "x": 100, "y": 40, "width": 200, "height": 160 } },
+    { "name": "old window during reanchor", "view": { "x": 40, "y": 950, "scale": 0.25 }, "window": { "x": 0, "y": 0, "width": 2000, "height": 1600 }, "expected": { "x": -10, "y": -237.5, "width": 500, "height": 400 } },
+    { "name": "new window after reanchor", "view": { "x": 40, "y": 950, "scale": 0.25 }, "window": { "x": 0, "y": 900, "width": 2000, "height": 1600 }, "expected": { "x": -10, "y": -12.5, "width": 500, "height": 400 } },
+    { "name": "fractional units", "view": { "x": 10.5, "y": -2.25, "scale": 0.125 }, "window": { "x": -3.5, "y": 1.75, "width": 0.5, "height": 1.5 }, "expected": { "x": -1.75, "y": 0.5, "width": 0.0625, "height": 0.1875 } },
+    { "name": "maximum coordinates and scale", "view": { "x": -16777216, "y": 16777216, "scale": 64 }, "window": { "x": 16777216, "y": -16777216, "width": 16777216, "height": 16777216 }, "expected": { "x": 2147483648, "y": -2147483648, "width": 1073741824, "height": 1073741824 } }
+  ]
+}

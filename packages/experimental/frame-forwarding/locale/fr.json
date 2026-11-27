@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Transfert d'images",
+    "description": "Affiche dans la fenêtre Desktop les images que rendent les processus natifs des plugins Host, sans copier de pixels."
+  }
+}

@@ -1,7 +1,7 @@
 /** Build and launch the unpackaged Electron shell against the current workspace. */
 
 import { spawn, execFileSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
@@ -11,6 +11,7 @@ import { developmentRuntimeDirectory, resolveDesktopBuildTarget } from './deskto
 import { prepareDevelopmentProject } from './development-project.ts'
 import { prepareDevelopmentApp } from './development-app.ts'
 import { prepareDevelopmentState } from './development-state.ts'
+import { buildNativePackage, nativeBuildEnvironment, nativePackageBuildAt, type NativePackageBuild } from './native-package-builds.mjs'
 import { preparePrimaryRuntime } from './prepare-primary-runtime.ts'
 
 const APP_ROOT = resolve(import.meta.dirname, '..')
@@ -47,6 +48,15 @@ async function run(command: string, args: readonly string[], cwd: string, enviro
       else reject(new Error(`desktop development: ${args.join(' ')} exited with ${String(code ?? signal)}`))
     })
   })
+}
+
+/** Workspace packages declaring `dsh.native`; development loads them in place, so they build in their own directories. */
+function workspaceNativePackages(): NativePackageBuild[] {
+  const packages = join(REPOSITORY_ROOT, 'packages')
+  return readdirSync(packages, { withFileTypes: true }).filter(group => group.isDirectory())
+    .flatMap(group => readdirSync(join(packages, group.name), { withFileTypes: true }).filter(entry => entry.isDirectory())
+      .map(entry => nativePackageBuildAt(join(packages, group.name, entry.name))))
+    .filter(declaration => declaration !== undefined)
 }
 
 async function runPackageScript(script: string, cwd: string): Promise<void> {
@@ -99,6 +109,12 @@ async function main(): Promise<void> {
     if (process.platform === 'darwin' || process.platform === 'win32') await runPackageScript('build:native', APP_ROOT).catch((error: unknown) => {
       console.warn(`desktop development: shared-texture addons not built: ${error instanceof Error ? error.message : String(error)}`)
     })
+    // Packaging's build environment: on Windows, the MSVC developer environment for this architecture.
+    for (const declaration of workspaceNativePackages()) {
+      try { buildNativePackage(declaration, process.arch, nativeBuildEnvironment(process.arch)) } catch (error) {
+        console.warn(`desktop development: ${declaration.name} native addon not built: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
   }
   for (const path of [
     join(APP_ROOT, 'lib', 'main.js'),

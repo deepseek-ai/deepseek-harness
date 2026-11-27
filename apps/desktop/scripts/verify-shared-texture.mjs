@@ -1,4 +1,4 @@
-/** Verify Desktop's shared-texture hop and ingress addons on macOS and Windows. */
+/** Verify Desktop's frame receiver and shared-texture addons on macOS and Windows. */
 import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
@@ -11,7 +11,7 @@ import { matchingArchitecture } from './native-package-builds.mjs'
  * @returns {readonly string[]} Addon basenames without `.node`; empty on unsupported platforms.
  */
 export function sharedTextureAddonNames(platform) {
-  return platform === 'darwin' || platform === 'win32' ? ['shared-texture-hop', 'shared-texture-ingress'] : []
+  return platform === 'darwin' || platform === 'win32' ? ['shared-texture-hop', 'shared-texture-ingress', 'frame-forwarding'] : []
 }
 
 async function verifyAddon(directory, name, target) {

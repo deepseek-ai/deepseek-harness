@@ -76,6 +76,8 @@ describe.skipIf(!existsSync(preload('preload-app')))('built sandboxed Desktop pr
     expect(on.mock.calls.filter(([channel]) => channel === 'dsh-desktop:shared-texture')).toHaveLength(name === 'preload-app' ? 1 : 0)
     if (name === 'preload-app') {
       expect(Object.keys((exposed.get('dshDesktop') as { textures: object }).textures)).toEqual(['onFrame'])
+      // Frame forwarding offers fullscreen to plugins through the document's Fullscreen API; Desktop exposes no window control.
+      expect(exposed.get('dshDesktop')).not.toHaveProperty('window')
       const product = exposed.get('dshDesktop') as { deviceInfo(): Promise<string> }
       invoke.mockResolvedValueOnce('platform=darwin; memory_gib=32.0')
       await expect(product.deviceInfo()).resolves.toBe('platform=darwin; memory_gib=32.0')

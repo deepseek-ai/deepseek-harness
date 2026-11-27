@@ -242,9 +242,10 @@ export class DesktopHostProcess {
 
   /**
    * Start this child once and await its Web application URL.
+   * @param frameReceiverPath - Absolute path of the Desktop-preinstalled receiver, when available.
    * @returns Ready facts supplied by the child after application startup.
    */
-  async start(): Promise<DesktopHostReady> {
+  async start(frameReceiverPath?: string): Promise<DesktopHostReady> {
     if (this.child !== undefined) return this.readyPromise
     const entry = join(this.runtimeDir, 'node_modules', '@deepseek-ai', 'dsh-desktop-host', 'lib', 'index.js')
     const child = spawn(this.node, [
@@ -256,6 +257,7 @@ export class DesktopHostProcess {
       // Empty asks the Host for the payload beside its runtime directory, so that layout has one owner.
       this.primaryRuntime ?? '',
       ...this.packageManager === undefined ? [] : [this.packageManager.pnpm, this.packageManager.nodeBin],
+      ...(frameReceiverPath === undefined ? [] : ['--frame-receiver-path', frameReceiverPath]),
     ], {
       cwd: this.projectDir,
       env: desktopNodeEnvironment(this.node, undefined, this.environment),
