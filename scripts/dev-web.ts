@@ -487,6 +487,7 @@ if (isMain) {
         console.log(`dev-web: client isolation ${options.isolate.map(({ entryId, mode }) => `${entryId}=${mode}`).join(', ')} through ${overlay}`)
       }
       spawnStage(supervisor, 'dsh web', process.execPath, [
+        '--heapsnapshot-near-heap-limit=1', '--report-on-fatalerror',
         '--import', 'tsx/esm', 'apps/cli/src/bin.ts', 'web', ...options.appArgs, ...isolationArgs,
       ], false)
     }

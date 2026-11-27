@@ -21,7 +21,7 @@ describe('dsh SOURCE launcher (node --import tsx/esm)', () => {
     const rootPackage = JSON.parse(await readFile(new URL('../../../package.json', import.meta.url), 'utf8')) as {
       readonly scripts?: Record<string, string>
     }
-    expect(rootPackage.scripts?.dsh).toBe('node --import tsx/esm apps/cli/src/bin.ts')
+    expect(rootPackage.scripts?.dsh).toBe('node --heapsnapshot-near-heap-limit=1 --report-on-fatalerror --import tsx/esm apps/cli/src/bin.ts')
   })
 
   it('boots the source entry and requires a profile', async () => {

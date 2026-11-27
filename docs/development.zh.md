@@ -205,6 +205,8 @@ pnpm run dev:desktop     # build, then launch Desktop
 
 Web 命令后面的参数会传给 `dsh web`，例如 `pnpm run dev:web --no-open --port 3081`；`dev:web` 还接受 `--skip-build` 复用现有产物树，以及 `--no-serve` 只运行重建 watcher、配合别处启动的服务器。要测试 [Client 包隔离](../packages/client/modules/README.zh.md#script-isolated-packages)，每个 Loader 条目传一次 `--isolate <entry-id>[:mode]`。只写条目 id 时使用 `script`；`--isolate=ui-schedule:style` 仅限制样式作用域，`scriptandstyle` 同时启用脚本和样式隔离。临时 overlay 作为最后一个 `--patch` 传入；找不到条目时会记录 `patch: entry "<id>" not found`，不应用该补丁。Web 与 Desktop 命令都使用正常的 Harness home；[Desktop README](../apps/desktop/README.zh.md) 说明 Desktop 何时继续使用本地开发 home。根目录 `Makefile` 以 `make web`、`make dev-web`、`make desktop`、`make dev-desktop` 和 `make build` 命名同一套命令；`ARGS='--no-open'` 用于转发参数。
 
+`pnpm dsh`、`start:web` 和 `dev:web` 以 `--heapsnapshot-near-heap-limit=1` 和 `--report-on-fatalerror` 启动源码启动器。进程耗尽 V8 堆时，会在堆接近上限时写入一个 `Heap.*.heapsnapshot`，并在中止时写入一份 `report.*.json` 诊断报告；两者都位于仓库根目录，并已被 Git 忽略。为数 GB 的堆写入快照会阻塞进程数十秒，需要堆之外的空闲内存，占用的磁盘空间与堆大小相当；可在 Chrome DevTools 的 Memory 面板中打开。两个文件都包含进程内存，其中有 `DEEPSEEK_API_KEY` 等凭据和会话内容，因此只应保存在可信机器上，不要附加到 Issue 或聊天中。
+
 ### TODO 标记
 
 请使用以下三种注释标签之一标记代码中的已知问题，按紧急程度排序：

@@ -52,3 +52,7 @@ native/system/test/bin/
 
 # Generated company-signed CUA release record.
 /packages/experimental/cua-macos/cua-helper.json
+
+# Node heap snapshots and fatal-error reports that the source launchers write to the repository root.
+/Heap.*.heapsnapshot
+/report.*.json
