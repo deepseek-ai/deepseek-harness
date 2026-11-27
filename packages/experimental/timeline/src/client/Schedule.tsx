@@ -105,9 +105,11 @@ export function Schedule({ view, cadence, state, now, update, openReport, t, loc
     const typical = Math.max(MINUTE_MS, target === undefined
       ? durations[Math.floor(durations.length / 2)] ?? span
       : target.end - target.start)
-    const fitted =
-      (viewport * hour) / (typical * (target === undefined ? (durations.length || 3) + 0.5 : 1.25))
-    const readable = target === undefined ? 0 : (fontSize * 8 * hour) / Math.max(1, target.end - target.start)
+    const fitted = (viewport * hour) / (typical * 4)
+    const readable =
+      target === undefined || target.end - target.start >= MINUTE_MS
+        ? 0
+        : (fontSize * 8 * hour) / Math.max(1, target.end - target.start)
     const density = Math.max(
       viewport / (HISTORY_MS / hour),
       Math.min(viewport * 60, Math.max(fitted, readable)),
@@ -339,10 +341,7 @@ export function Schedule({ view, cadence, state, now, update, openReport, t, loc
                           )
                           // Budget whole text lines and pin long-card labels to the visible viewport.
                           const timeHeight = fontSize * 0.8 * 1.4
-                          const lines = Math.min(
-                            4,
-                            Math.floor((visibleSize - 14 - timeHeight - 4) / (fontSize * 1.5)),
-                          )
+                          const lines = Math.floor((visibleSize - 14 - timeHeight - 4) / (fontSize * 1.5))
                           const density =
                             lines > 0 ? 'full' : visibleSize >= fontSize * 1.5 + 4 ? 'compact' : 'bar'
                           const needsFocus =

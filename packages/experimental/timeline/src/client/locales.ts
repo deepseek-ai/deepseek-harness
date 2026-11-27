@@ -205,13 +205,12 @@ export const en = {
   annotationRequest:
     'At a safe checkpoint, address the user’s message. Save the outcome with timeline_reply using the reply reference, then continue ongoing work.',
   taskControls: 'Work controls',
-  taskControlsHint:
-    'Posts a request to the conversation; the agent handles it after its current step. To stop right away, use the Stop button on the composer.',
+  taskControlsHint: 'Handled after the current step.',
   pausePending: 'Pause requested',
   resumePending: 'Continue requested',
   retryPause: 'Request pause again',
   retryResume: 'Request continue again',
-  controlWaitingHint: 'Request saved. Awaiting a recorded plan update.',
+  controlWaitingHint: 'Awaiting plan update.',
   controlUnconfirmedHint:
     'State is not confirmed. Check the conversation and saved reply before sending another request.',
   controlDeliveryUnknown: 'Delivery unconfirmed',
@@ -426,12 +425,12 @@ export const zh: Record<TimelineKey, string> = {
   annotationSaveFailed: '未能确认是否保存，草稿已保留；重试前请先检查讨论列表',
   annotationRequest: '请在安全节点处理用户留言，使用回复引用通过 timeline_reply 保存结果，然后继续当前工作。',
   taskControls: '工作控制',
-  taskControlsHint: '会在对话里发一条请求，智能体做完手头这一步后处理。要马上停下，请用输入框上的停止按钮',
+  taskControlsHint: '智能体完成当前步骤后处理',
   pausePending: '等待暂停确认',
   resumePending: '等待继续确认',
   retryPause: '再次请求暂停',
   retryResume: '再次请求继续',
-  controlWaitingHint: '请求已发出，等智能体处理',
+  controlWaitingHint: '等待计划更新',
   controlUnconfirmedHint: '尚未确认状态。再次请求前，请检查对话与已保存的回复',
   controlDeliveryUnknown: '未确认送达',
   controlRequest: '你的请求',
@@ -648,12 +647,12 @@ export const ja: Record<TimelineKey, string> = {
   annotationRequest:
     '安全な区切りでユーザーのメッセージに対応してください。返信参照を使って timeline_reply で結果を保存し、作業を続けてください。',
   taskControls: '作業の操作',
-  taskControlsHint: '安全な区切りで計画の変更を依頼します。実行の停止には Harness の停止を使います。',
+  taskControlsHint: '現在のステップの後に反映されます。',
   pausePending: '一時停止の確認待ち',
   resumePending: '続行の確認待ち',
   retryPause: '一時停止を再依頼',
   retryResume: '続行を再依頼',
-  controlWaitingHint: '依頼を保存しました。計画の更新を待っています。',
+  controlWaitingHint: '計画の更新を待っています。',
   controlUnconfirmedHint: '状態は未確認です。再依頼する前に会話と保存済みの返信を確認してください。',
   controlDeliveryUnknown: '送信未確認',
   controlRequest: 'あなたの依頼',
@@ -877,13 +876,12 @@ export const es: Record<TimelineKey, string> = {
   annotationRequest:
     'En un punto seguro, atiende el mensaje del usuario. Guarda el resultado con timeline_reply y la referencia de respuesta. Después, continúa el trabajo.',
   taskControls: 'Controles de trabajo',
-  taskControlsHint:
-    'Solicita cambiar el plan en un punto seguro. Usa Detener en Harness para detener la sesión.',
+  taskControlsHint: 'Se aplica tras el paso actual.',
   pausePending: 'Pausa solicitada',
   resumePending: 'Continuación solicitada',
   retryPause: 'Solicitar pausa otra vez',
   retryResume: 'Solicitar continuar otra vez',
-  controlWaitingHint: 'Solicitud guardada. Esperando un cambio registrado en el plan.',
+  controlWaitingHint: 'Esperando actualización del plan.',
   controlUnconfirmedHint:
     'Estado sin confirmar. Revisa la conversación y la respuesta guardada antes de volver a solicitar.',
   controlDeliveryUnknown: 'Entrega sin confirmar',
@@ -1111,13 +1109,12 @@ export const fr: Record<TimelineKey, string> = {
   annotationRequest:
     'À un point sûr, traitez le message de l’utilisateur. Enregistrez le résultat avec timeline_reply et la référence de réponse, puis poursuivez le travail.',
   taskControls: 'Commandes de travail',
-  taskControlsHint:
-    'Demande un changement du plan à un point sûr. Utilisez Arrêter dans Harness pour arrêter la session.',
+  taskControlsHint: 'Pris en compte après l’étape en cours.',
   pausePending: 'Pause demandée',
   resumePending: 'Reprise demandée',
   retryPause: 'Redemander une pause',
   retryResume: 'Redemander la reprise',
-  controlWaitingHint: 'Demande enregistrée. En attente de mise à jour du plan.',
+  controlWaitingHint: 'En attente de mise à jour du plan.',
   controlUnconfirmedHint:
     'État non confirmé. Vérifiez la conversation et la réponse enregistrée avant une nouvelle demande.',
   controlDeliveryUnknown: 'Envoi non confirmé',
@@ -1345,13 +1342,12 @@ export const de: Record<TimelineKey, string> = {
   annotationRequest:
     'Bearbeite die Nachricht des Benutzers an einem sicheren Punkt. Speichere das Ergebnis mit timeline_reply und der Antwortreferenz und setze dann die Arbeit fort.',
   taskControls: 'Arbeitssteuerung',
-  taskControlsHint:
-    'Fordert eine Planänderung an einem sicheren Punkt an. Mit Stopp in Harness beenden Sie die Sitzungsausführung.',
+  taskControlsHint: 'Wird nach dem aktuellen Schritt ausgeführt.',
   pausePending: 'Pause angefragt',
   resumePending: 'Fortsetzen angefragt',
   retryPause: 'Pause erneut anfragen',
   retryResume: 'Fortsetzen erneut anfragen',
-  controlWaitingHint: 'Anfrage gespeichert. Planänderung wird noch erwartet.',
+  controlWaitingHint: 'Warte auf Planaktualisierung.',
   controlUnconfirmedHint:
     'Status nicht bestätigt. Prüfen Sie vor einer neuen Anfrage das Gespräch und die gespeicherte Antwort.',
   controlDeliveryUnknown: 'Zustellung unbestätigt',
@@ -1576,13 +1572,12 @@ export const ru: Record<TimelineKey, string> = {
   annotationRequest:
     'В безопасной точке обработайте сообщение пользователя. Сохраните результат через timeline_reply с указанным идентификатором, затем продолжите работу.',
   taskControls: 'Управление работой',
-  taskControlsHint:
-    'Запрашивает изменение плана в безопасной точке. Для остановки сеанса используйте кнопку остановки Harness.',
+  taskControlsHint: 'Выполняется после текущего шага.',
   pausePending: 'Ожидание паузы',
   resumePending: 'Ожидание продолжения',
   retryPause: 'Повторить запрос паузы',
   retryResume: 'Повторить запрос продолжения',
-  controlWaitingHint: 'Запрос сохранён. Ожидается обновление плана.',
+  controlWaitingHint: 'Ожидается обновление плана.',
   controlUnconfirmedHint: 'Состояние не подтверждено. Перед повтором проверьте беседу и сохранённый ответ.',
   controlDeliveryUnknown: 'Доставка не подтверждена',
   controlRequest: 'Ваш запрос',
@@ -1804,13 +1799,12 @@ export const pt: Record<TimelineKey, string> = {
   annotationRequest:
     'Em um ponto seguro, trate a mensagem do usuário. Salve o resultado com timeline_reply e a referência da resposta. Depois, continue o trabalho.',
   taskControls: 'Controles de trabalho',
-  taskControlsHint:
-    'Solicita uma mudança de plano num ponto seguro. Use Parar no Harness para parar a execução da sessão.',
+  taskControlsHint: 'Aplicado após a etapa atual.',
   pausePending: 'Pausa solicitada',
   resumePending: 'Continuação solicitada',
   retryPause: 'Solicitar pausa novamente',
   retryResume: 'Solicitar continuação novamente',
-  controlWaitingHint: 'Pedido guardado. A aguardar uma atualização do plano.',
+  controlWaitingHint: 'Aguardando atualização do plano.',
   controlUnconfirmedHint:
     'Estado não confirmado. Verifique a conversa e a resposta guardada antes de repetir o pedido.',
   controlDeliveryUnknown: 'Entrega não confirmada',

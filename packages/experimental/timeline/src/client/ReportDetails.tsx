@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Button, IconListPenOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconChevronRightOutlineRegular, IconListPenOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { IntervalReport, TimelineView } from '../records.ts'
 import { formatDuration, formatPeriod, savedPeriod } from '../periods.ts'
@@ -79,25 +79,31 @@ export function ReportDetails({
               ),
             )}
             {report.children.length === 0 ? null : (
-              <details>
+              <details className="timeline-report-children">
                 <summary>
                   {t('children')} · {report.children.length}
                 </summary>
-                {report.children.map((id) => {
-                  const child = view.reports.find(item => item.id === id)
-                  return child === undefined ? null : (
-                    <button
-                      className="timeline-report-link"
-                      data-report-id={id}
-                      key={id}
-                      data-level={child.level}
-                      onClick={() => { openReport(id) }}
-                    >
-                      <span className="timeline-level-dot" />
-                      {child.summary.progress[0]}
-                    </button>
-                  )
-                })}
+                <div className="timeline-report-list">
+                  {report.children.map((id) => {
+                    const child = view.reports.find(item => item.id === id)
+                    return child === undefined ? null : (
+                      <button
+                        className="timeline-report-link"
+                        data-report-id={id}
+                        key={id}
+                        data-level={child.level}
+                        onClick={() => { openReport(id) }}
+                      >
+                        <span className="timeline-level-dot" aria-hidden="true" />
+                        <span className="timeline-report-link-copy">{child.summary.progress[0]}</span>
+                        <time dateTime={`PT${Math.max(0, Math.floor((child.end - child.start) / 1000))}S`}>
+                          {formatDuration(child.end - child.start)}
+                        </time>
+                        <IconChevronRightOutlineRegular size={14} />
+                      </button>
+                    )
+                  })}
+                </div>
               </details>
             )}
             <Annotations

@@ -95,27 +95,33 @@ export function TaskActions({
         : retry
           ? t(action === 'pause' ? 'retryPause' : 'retryResume')
           : t(action === 'pause' ? 'pauseTask' : 'resumeTask')
-  // The whole-tree button keeps short visible text; its accessible name also names the tree.
   const label = wholePlan && requesting ? t(action === 'pause' ? 'pausePlan' : 'resumePlan') : text
   const playbackButton = (
     <Button
       className={wholePlan ? 'timeline-playback' : 'timeline-task-action'}
       data-action={status === 'done' ? 'done' : action}
       data-pending={waiting}
+      data-retry={retry || undefined}
       aria-label={label}
       disabled={busy || !available || waiting}
       onClick={() => {
         void perform(() => request({ action, tree, ...(task === undefined ? {} : { task }) }))
       }}
     >
-      {status === 'done' ? (
+      {wholePlan && waiting ? (
+        <span className="timeline-playback-pending" aria-hidden="true">…</span>
+      ) : status === 'done' ? (
         <IconCheckOutlineRegular size={18} />
       ) : action === 'pause' ? (
         <IconPauseOutlineRegular size={18} />
       ) : (
         <IconPlayOutlineRegular size={18} />
       )}
-      <span>{text}</span>
+      {wholePlan ? (
+        retry && !waiting ? <span className="timeline-playback-retry" aria-hidden="true" /> : null
+      ) : (
+        <span>{text}</span>
+      )}
     </Button>
   )
   const playbackControl = (

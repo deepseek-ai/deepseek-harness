@@ -13,6 +13,7 @@ import type { IntervalReport, TimelineView } from '../src/records.ts'
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
   Button: (props: ButtonHTMLAttributes<HTMLButtonElement>) => <button {...props} />,
   IconChevronLeftOutlineRegular: () => <span />,
+  IconChevronRightOutlineRegular: () => <span />,
   IconListPenOutlineRegular: () => <span />,
   Tag: ({ children }: { children: ReactNode }) => <span>{children}</span>,
 }))
@@ -336,8 +337,7 @@ describe('the column timeline', () => {
     const height = Number.parseFloat(
       container.querySelector<HTMLElement>('.timeline-canvas')?.style.height ?? '',
     )
-    expect((7 * 86400000 * 420) / height).toBeGreaterThan(3 * 900000)
-    expect((7 * 86400000 * 420) / height).toBeLessThan(4 * 900000)
+    expect((7 * 86400000 * 420) / height).toBeCloseTo(4 * 900000)
     fireEvent.click(screen.getByRole('button', { name: 'Back to now' }))
     const history = screen.getByLabelText('History')
     expect(history.scrollTop).toBe(0)
@@ -385,13 +385,22 @@ describe('the column timeline', () => {
     expect(container.querySelector<HTMLElement>('.timeline-canvas')?.style.height).toBe(height)
   })
   it('expands a folded report and fits its column before a second click opens the same report', () => {
+    let resize: () => void = () => undefined
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(callback: () => void) { resize = callback }
+      observe() {}
+      disconnect() {}
+    })
     const open = vi.fn()
     const { container } = render(<Fixture onOpen={open} />)
+    vi.spyOn(screen.getByLabelText(en.history), 'clientHeight', 'get').mockReturnValue(320)
+    act(resize)
     const card = container.querySelector<HTMLButtonElement>('[data-report-id="rollup"]')
     expect(card).toBeTruthy()
     fireEvent.click(card as HTMLButtonElement)
     expect(open).not.toHaveBeenCalled()
     expect(screen.getByLabelText('Column').textContent).toBe('1')
+    expect(Number.parseFloat(card?.style.height ?? '')).toBeCloseTo(80)
     fireEvent.click(card as HTMLButtonElement)
     expect(open).toHaveBeenCalledWith('rollup')
   })
@@ -422,7 +431,7 @@ describe('the column timeline', () => {
     const height = Number.parseFloat(
       container.querySelector<HTMLElement>('.timeline-canvas')?.style.height ?? '',
     )
-    expect((7 * 86400000 * 420) / height).toBeCloseTo(3.5 * 900000)
+    expect((7 * 86400000 * 420) / height).toBeCloseTo(4 * 900000)
     expect(screen.getByRole('button', { name: '15m column' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '1h column' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '4h column' })).toBeTruthy()
@@ -482,7 +491,7 @@ describe('the column timeline', () => {
     fireEvent.scroll(screen.getByLabelText('History'), { target: { scrollTop: 300 } })
     expect(card.getAttribute('data-density')).toBe('full')
     expect(Number.parseFloat(content?.style.top ?? '')).toBeCloseTo(240)
-    expect(card.querySelector<HTMLElement>('.timeline-block-copy')?.style.webkitLineClamp).toBe('4')
+    expect(Number(card.querySelector<HTMLElement>('.timeline-block-copy')?.style.webkitLineClamp)).toBeGreaterThan(4)
   })
   it('expands a header to its interval and opens the same report without switching to a lower level', () => {
     const open = vi.fn()
@@ -703,7 +712,7 @@ describe('the column timeline', () => {
     )
     expect(screen.getByRole('button', { name: /Open report:.*无活动。/ })).toBeTruthy()
     fireEvent.click(
-      within(screen.getByLabelText('Details')).getByRole('button', { name: '无活动。', hidden: true }),
+      within(screen.getByLabelText('Details')).getByRole('button', { name: /^无活动。/, hidden: true }),
     )
     expect(open).toHaveBeenCalledWith('base')
   })
