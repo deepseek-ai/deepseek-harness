@@ -9,11 +9,14 @@ import { globSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve, sep } from 'node:path'
 import ts from 'typescript'
 
-/** The module whose `SlotMap` / standard-kit interfaces every slot owner merges into. */
-const SLOTS_MODULE = '@deepseek-ai/dsh-client-ui-slots'
+/**
+ * The module names under which slot owners merge into the `SlotMap` / standard-kit interfaces: the package root and
+ * its `/client` subpath, which publish one declaration file.
+ */
+const SLOTS_MODULES: ReadonlySet<string> = new Set(['@deepseek-ai/dsh-client-ui-slots', '@deepseek-ai/dsh-client-ui-slots/client'])
 
 /** Cheap textual prefilter for a slot-contract merge, quote-style agnostic. */
-const MERGE_HEAD = /declare module ['"]@deepseek-ai\/dsh-client-ui-slots['"]/
+const MERGE_HEAD = /declare module ['"]@deepseek-ai\/dsh-client-ui-slots(?:\/client)?['"]/
 
 /** Cheap textual prefilter for a Slot or Factory registration call site. */
 const REGISTER_HEAD = /\.(?:register|registerFactory)\(/
@@ -293,7 +296,7 @@ function slotModuleBodies(sf: ts.SourceFile): ts.ModuleBlock[] {
   const bodies: ts.ModuleBlock[] = []
   for (const statement of sf.statements) {
     if (!ts.isModuleDeclaration(statement) || !ts.isStringLiteral(statement.name)) continue
-    if (statement.name.text !== SLOTS_MODULE) continue
+    if (!SLOTS_MODULES.has(statement.name.text)) continue
     if (statement.body !== undefined && ts.isModuleBlock(statement.body)) bodies.push(statement.body)
   }
   return bodies
