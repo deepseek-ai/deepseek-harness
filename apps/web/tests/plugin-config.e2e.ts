@@ -16,7 +16,7 @@ import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
   launchWebScaffold, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { ZH_BROWSER_LOCALE, openSettings, saveFailureShot } from './support.ts'
+import { PLUGIN_TOGGLE_SETTLE_MS, ZH_BROWSER_LOCALE, openSettings, saveFailureShot } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/plugin-config', import.meta.url))
 const OFFICIAL_EXPECTED = join(SNAPSHOT_DIR, 'official.expected.md')
@@ -478,13 +478,15 @@ describe('web e2e: plugin configuration pages', () => {
     // reload; its registration puts the configure control on the row, and
     // its detail contributions on the bundle's page: the action before the
     // page's own switch, the badge beside the title, the section after the rows.
-    await panel.getByRole('switch', { name: '启用 @fixture/live-client' }).click()
+    const toggle = panel.getByRole('switch', { name: '启用 @fixture/live-client' })
+    await toggle.click()
     const configure = panel.getByRole('button', { name: '配置 @fixture/live-client' })
     await configure.waitFor({ timeout: 30_000 })
     await bundlePage.locator('[data-live-section="bundle"]').waitFor({ timeout: 10_000 })
     // The page's own view of the row follows the Host's change event, which
     // can land after the browser half mounted; the golden holds the settled page.
     await row.getByText('运行中', { exact: true }).waitFor({ timeout: 10_000 })
+    await expect.poll(() => toggle.isEnabled(), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe(true)
     expect(await bundlePage.getByRole('button', { name: '夹具操作' }).count()).toBe(1)
     expect(await bundlePage.locator('[data-live-badge="bundle"]').textContent()).toBe('夹具标签')
     expect(await bundlePage.getByRole('region', { name: '夹具区块' }).getByText('来自夹具的区块内容').count()).toBe(1)

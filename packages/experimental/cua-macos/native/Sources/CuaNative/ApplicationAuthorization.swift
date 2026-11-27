@@ -3,15 +3,20 @@ import AppKit
 import CryptoKit
 import Foundation
 
+/// Live LaunchServices metadata for one running process; every field is nil for processes macOS does not report as applications.
+typealias RunningBundle = (identifier: String?, url: URL?, executable: URL?)
+
 enum ApplicationAuthorization {
     // Versions and copies with the same bundle identifier share consent, regardless of signing.
+    // Running applications are checked by the executable URL in their LaunchServices metadata: a process can run from a
+    // code-signing copy (Google Chrome) whose kernel path names the copy. The kernel path checks only processes without that metadata.
     static func describe(_ identity: ProcessIdentity, name: String, expectedExecutablePath: String?,
-                         readBundle: (Int32) -> (identifier: String?, url: URL?) = runningBundle,
+                         readBundle: (Int32) -> RunningBundle = runningBundle,
                          readPath: (Int32) -> Result<String, NativeFailure> = NativePlatform.executablePathResult) throws -> JSONValue {
         try NativePlatform.verify(identity)
         let bundle = readBundle(identity.pid)
         var bundleID = bundle.identifier.flatMap { $0.isEmpty ? nil : $0 }
-        let pathResult = readPath(identity.pid)
+        let pathResult: Result<String, NativeFailure> = bundle.executable.map { .success($0.path) } ?? readPath(identity.pid)
         let path = (try? pathResult.get()).map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path }
         if let path, let expectedExecutablePath, path != URL(fileURLWithPath: expectedExecutablePath).resolvingSymlinksInPath().path {
             throw NativeFailure(code: "STALE_APP", message: "Application executable changed during selection; select the application again")
@@ -25,9 +30,9 @@ enum ApplicationAuthorization {
         return try record(bundleID: bundleID, name: name, executablePath: path)
     }
 
-    static func runningBundle(_ pid: Int32) -> (identifier: String?, url: URL?) {
+    static func runningBundle(_ pid: Int32) -> RunningBundle {
         let application = NSRunningApplication(processIdentifier: pid)
-        return (application?.bundleIdentifier, application?.bundleURL)
+        return (application?.bundleIdentifier, application?.bundleURL, application?.executableURL)
     }
 
     static func describeInstalled(_ app: InstalledApplication) throws -> JSONValue {

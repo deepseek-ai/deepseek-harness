@@ -27,7 +27,7 @@ import Testing
 func liveBundleIdentitySurvivesAnUnavailableExecutablePath(error: Int32) throws {
     let identity = try NativePlatform.identity(getpid())
     let expectedPath = try #require(NativePlatform.executablePath(identity.pid))
-    let bundle: (Int32) -> (identifier: String?, url: URL?) = { _ in ("test.dsh.bundle", nil) }
+    let bundle: (Int32) -> RunningBundle = { _ in ("test.dsh.bundle", nil, nil) }
     let before = try ApplicationAuthorization.describe(identity, name: "Fixture", expectedExecutablePath: expectedPath, readBundle: bundle)
     var queries = 0
     let after = try ApplicationAuthorization.describe(identity, name: "Fixture", expectedExecutablePath: expectedPath,
@@ -45,7 +45,7 @@ func missingBundleAndPathReportsThePathFailureWithoutRetry(error: Int32) throws 
     var queries = 0
     do {
         _ = try ApplicationAuthorization.describe(identity, name: "Fixture", expectedExecutablePath: nil,
-            readBundle: { _ in (nil, nil) }, readPath: { _ in queries += 1; return .failure(NativePlatform.executablePathFailure(error)) })
+            readBundle: { _ in (nil, nil, nil) }, readPath: { _ in queries += 1; return .failure(NativePlatform.executablePathFailure(error)) })
         Issue.record("An application without either identity was accepted")
     } catch let failure as NativeFailure {
         #expect(failure.code == "APP_PATH_UNAVAILABLE")
@@ -60,8 +60,50 @@ func missingBundleAndPathReportsThePathFailureWithoutRetry(error: Int32) throws 
     let identity = try NativePlatform.identity(getpid())
     do {
         _ = try ApplicationAuthorization.describe(identity, name: "Fixture", expectedExecutablePath: "/another/executable",
-            readBundle: { _ in ("test.dsh.bundle", nil) })
+            readBundle: { _ in ("test.dsh.bundle", nil, nil) })
         Issue.record("A mismatched target path was accepted")
+    } catch let failure as NativeFailure { #expect(failure.code == "STALE_APP") }
+}
+
+@Test func applicationMetadataIdentifiesAProcessRunningFromACodeSigningCopy() throws {
+    let identity = try NativePlatform.identity(getpid())
+    let executable = "/Applications/Fixture.app/Contents/MacOS/Fixture"
+    var queries = 0
+    let authorization = try ApplicationAuthorization.describe(identity, name: "Fixture", expectedExecutablePath: executable,
+        readBundle: { _ in ("test.dsh.clone", URL(fileURLWithPath: "/Applications/Fixture.app"), URL(fileURLWithPath: executable)) },
+        readPath: { _ in
+            queries += 1
+            return .success("/private/var/folders/xx/X/test.dsh.clone.code_sign_clone/code_sign_clone.a1b2c3/Fixture.app.bundle/Contents/MacOS/Fixture")
+        })
+    #expect(authorization.object?["executablePath"] == .string(executable))
+    #expect(authorization["persistable"] == .bool(true))
+    #expect(queries == 0)
+}
+
+@Test func changedApplicationMetadataIsStaleEvenWhenTheKernelPathMatchesTheSelection() throws {
+    let identity = try NativePlatform.identity(getpid())
+    let selected = "/Applications/Fixture.app/Contents/MacOS/Fixture"
+    do {
+        _ = try ApplicationAuthorization.describe(identity, name: "Fixture", expectedExecutablePath: selected,
+            readBundle: { _ in ("test.dsh.other", URL(fileURLWithPath: "/Applications/Other.app"),
+                                URL(fileURLWithPath: "/Applications/Other.app/Contents/MacOS/Other")) },
+            readPath: { _ in .success(selected) })
+        Issue.record("A process reporting another application was accepted")
+    } catch let failure as NativeFailure { #expect(failure.code == "STALE_APP") }
+}
+
+@Test func processesWithoutApplicationMetadataAreCheckedByTheirKernelPath() throws {
+    let identity = try NativePlatform.identity(getpid())
+    let selected = "/opt/dsh-test/bin/tool"
+    var queries = 0
+    let accepted = try ApplicationAuthorization.describe(identity, name: "Tool", expectedExecutablePath: selected,
+        readBundle: { _ in (nil, nil, nil) }, readPath: { _ in queries += 1; return .success(selected) })
+    #expect(accepted.object?["executablePath"] == .string(selected))
+    #expect(queries == 1)
+    do {
+        _ = try ApplicationAuthorization.describe(identity, name: "Tool", expectedExecutablePath: selected,
+            readBundle: { _ in (nil, nil, nil) }, readPath: { _ in .success("/opt/dsh-test/bin/other") })
+        Issue.record("A process without application metadata was accepted at another path")
     } catch let failure as NativeFailure { #expect(failure.code == "STALE_APP") }
 }
 
@@ -79,7 +121,7 @@ func missingBundleAndPathReportsThePathFailureWithoutRetry(error: Int32) throws 
     let identity = try NativePlatform.identity(process.processIdentifier)
     do {
         _ = try ApplicationAuthorization.describe(identity, name: "Fixture", expectedExecutablePath: nil,
-            readBundle: { _ in ("test.dsh.bundle", nil) }, readPath: { _ in
+            readBundle: { _ in ("test.dsh.bundle", nil, nil) }, readPath: { _ in
                 process.terminate()
                 process.waitUntilExit()
                 return .failure(NativePlatform.executablePathFailure(ENOENT))
