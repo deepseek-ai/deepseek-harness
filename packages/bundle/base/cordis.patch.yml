@@ -471,6 +471,11 @@
       name: '@deepseek-ai/dsh-repeat-tool-reminder'
       config:
         thresholds: [3, 5, 8]
+        # Bookkeeping updates between repeated calls must not hide a loop.
+        exclude: [todo_write, team_task_update, update_goal]
+        # Waiting for a subagent, a background job, or a user answer changes
+        # state, so a repeat after one is not a loop.
+        restartCountAfter: [wait_agent, job_output, ask_user_question]
         argumentsPreviewChars: 500
 
     # The shared base enables the stable model-facing web_search and web_fetch

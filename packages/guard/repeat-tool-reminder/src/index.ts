@@ -19,7 +19,7 @@ declare module '@deepseek-ai/dsh-llm' {
 
 import type { MessageSource } from '@deepseek-ai/dsh-llm'
 import type { UserMessage } from '@deepseek-ai/dsh-session'
-import type { PostToolDecision, ToolExecution } from '@deepseek-ai/dsh-tools'
+import type { PostToolDecision, ToolExecution, ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 
 export const name = 'repeat-tool-reminder'
 
@@ -27,7 +27,7 @@ export const name = 'repeat-tool-reminder'
  * Plugin config, validated by the same-named schemastery schema plus the
  * load-time checks in `apply` (misconfiguration fails loud: an empty
  * `thresholds` list, a non-integer, a value below 2, or a duplicate throws at
- * plugin load, never a silent fall-back). `include`/`exclude` entries are
+ * plugin load, never a silent fall-back). `include`/`exclude`/`restartCountAfter` entries are
  * `*`-wildcard predicates over tool names at call time, not references to
  * registry entries — a pattern matching no currently registered tool is valid
  * (`exclude: [mcp_*]` must stay legal in a deployment that loads no MCP tools).
@@ -39,6 +39,13 @@ export interface Config {
   include?: string[]
   /** Tool-name patterns transparent to the chain (neither count nor reset). */
   exclude?: string[]
+  /**
+   * Tool-name patterns whose successful calls end the chain without counting,
+   * such as waits and job reads that observe changing state, so repeating them
+   * or repeating a call between them is not reported. Matched before
+   * `include`/`exclude`; a failed call is counted like any other call.
+   */
+  restartCountAfter?: string[]
   /**
    * Maximum characters of canonical arguments quoted in the DETAILED reminder
    * (default 500). Large payloads (a `write` body, a long command) would
@@ -53,6 +60,7 @@ export const Config: z<Config> = z.object({
   thresholds: z.array(z.number()).default([3, 5, 8]),
   include: z.array(z.string()).default([]),
   exclude: z.array(z.string()).default([]),
+  restartCountAfter: z.array(z.string()).default([]),
   argumentsPreviewChars: z.number().default(500),
 })
 
@@ -172,6 +180,7 @@ export function apply(ctx: Context, config: Config): void {
   const thresholdSet = new Set(thresholds)
   const includePatterns = (config.include as string[]).map(wildcardToRegExp)
   const excludePatterns = (config.exclude as string[]).map(wildcardToRegExp)
+  const restartPatterns = (config.restartCountAfter as string[]).map(wildcardToRegExp)
   const argumentsPreviewChars = config.argumentsPreviewChars as number
   if (!Number.isInteger(argumentsPreviewChars) || argumentsPreviewChars < 1) {
     throw new Error(`repeat-tool-reminder: invalid argumentsPreviewChars ${argumentsPreviewChars} — must be an integer >= 1`)
@@ -193,8 +202,12 @@ export function apply(ctx: Context, config: Config): void {
    * same pipeline), and a model hammering a denied call is exactly the loop
    * worth breaking.
    */
-  function observe(exec: ToolExecution): UserMessage | undefined {
+  function observe(exec: ToolExecution, result: Readonly<ToolExecutionResult>): UserMessage | undefined {
     if (!exec.agent || exec.parent !== undefined) return undefined
+    if (!result.isError && restartPatterns.some(pattern => pattern.test(exec.name))) {
+      chains.delete(exec.agent)
+      return undefined
+    }
     if (!tracked(exec.name)) return undefined
     const canonical = canonicalize(exec.arguments)
     const key = JSON.stringify([exec.name, canonical])
@@ -215,8 +228,8 @@ export function apply(ctx: Context, config: Config): void {
   // the downstream outcome), DELEGATE so a later listener can still block or
   // replace, then fold the reminder onto whatever came back — additionalContexts
   // rides both decision variants, so a blocked call still gets the nudge.
-  ctx.on('tools/post-execute', async (exec, _result, next): Promise<PostToolDecision> => {
-    const reminder = observe(exec)
+  ctx.on('tools/post-execute', async (exec, result, next): Promise<PostToolDecision> => {
+    const reminder = observe(exec, result)
     const downstream = await next()
     if (!reminder) return downstream
     return { ...downstream, additionalContexts: prependContext(reminder, downstream.additionalContexts) }

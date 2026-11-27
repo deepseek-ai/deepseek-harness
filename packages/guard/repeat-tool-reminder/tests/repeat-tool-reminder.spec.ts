@@ -25,7 +25,7 @@ const testToolSignal = new AbortController().signal
 
 /**
  * Behavior suite for the repeat-tool-call guard: chain semantics (identical /
- * different-tracked / untracked-transparent / per-agent / resets), threshold
+ * different-tracked / untracked-transparent / restart-count patterns / per-agent / resets), threshold
  * escalation incl. the `thresholds[0]` gentle-text rule, canonicalization,
  * fold-onto-downstream-decision, and fail-loud config validation — all driven
  * through a real agent loop against a scripted mock adapter (no network).
@@ -228,6 +228,40 @@ describe('chain semantics', () => {
     const found = reminders(agent)
     expect(found).toHaveLength(1)
     expect(found[0]!.text).toContain('repeating the exact same tool call')
+  })
+
+  it('restartCountAfter calls end the chain without counting, even when include or exclude skips them', async () => {
+    const ctx = await harness({ include: ['probe'], exclude: ['other'], restartCountAfter: ['oth*'] })
+    const adapter = new MockAdapter([
+      ...Array.from({ length: 5 }, (_, i) => toolCallResponse(`w${i}`, 'other', {})), // repeated waits never count
+      toolCallResponse('c1', 'probe', {}),
+      toolCallResponse('c2', 'probe', {}),
+      toolCallResponse('c3', 'other', {}), // restarts the count
+      toolCallResponse('c4', 'probe', {}),
+      toolCallResponse('c5', 'probe', {}),
+      textResponse('done'),
+    ])
+    ctx.llm.registerAdapter(['mock'], adapter)
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
+    await waitForIdle(ctx, agent)
+
+    expect(reminders(agent)).toEqual([])
+  })
+
+  it('failed restartCountAfter calls count like any other call', async () => {
+    const ctx = await harness({ restartCountAfter: ['failing'] })
+    ctx.tools.register(defineContentToolFixture({ name: 'failing', description: 'f', parameters: {}, async execute() { throw new Error('unknown job') } }))
+    const adapter = new MockAdapter([
+      ...Array.from({ length: 3 }, (_, i) => toolCallResponse(`c${i}`, 'failing', {})),
+      textResponse('done'),
+    ])
+    ctx.llm.registerAdapter(['mock'], adapter)
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
+    await waitForIdle(ctx, agent)
+
+    expect(reminders(agent).map(message => message.source)).toEqual([guardSource('failing', 3)])
   })
 
   it('include patterns track only matching tools (wildcard star)', async () => {

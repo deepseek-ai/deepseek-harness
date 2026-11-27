@@ -41,6 +41,7 @@ When you want to change when reminders fire or which tools they cover, mount the
     thresholds: [3, 5, 8]        # remind at 3, 5, and 8 consecutive repeats
     include: []                  # track every tool; list patterns to track only some
     exclude: [todo_write]        # never track these tools
+    restartCountAfter: [wait_agent] # these calls restart the count without counting
     argumentsPreviewChars: 500   # cap on arguments shown in the detailed reminder
 ```
 
@@ -49,13 +50,14 @@ When you want to change when reminders fire or which tools they cover, mount the
 | `thresholds` | `[3, 5, 8]` | Repeat counts that trigger a reminder |
 | `include` | `[]` | Only these tools are tracked; empty means every tool |
 | `exclude` | `[]` | These tools are never tracked; calls to them neither count nor reset |
+| `restartCountAfter` | `[]` | Successful calls to these tools end the count without counting, while failed calls count as usual; the `dsh` base bundle lists `wait_agent`, `job_output`, and `ask_user_question`, so waiting for a subagent, a background job, or a user answer draws no reminder |
 | `argumentsPreviewChars` | `500` | How many characters of the repeated arguments the detailed reminder shows |
 
 Invalid configuration fails at startup with a clear error — an empty `thresholds` list, a repeat count below 2, or a duplicate — never a silent change of behavior. The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-repeat-tool-reminder) documents every accepted value.
 
 ### What you get
 
-With the defaults, a model that repeats the same call with identical arguments receives a short reminder on the third repeat — to analyze the previous result before calling again — and detailed reminders on the fifth and eighth, naming the tool and the repeated arguments so it can decide whether to change approach, gather more evidence, or finish. Only model-direct calls count, including `run_code`; calls inside a PTC program neither increment nor reset the count. A new user message clears the count, so a fresh instruction is never treated as a loop. Reminders appear in the conversation after the repeated call's result, attributed to the plugin, so the model reads them like any other message.
+With the defaults, a model that repeats the same call with identical arguments receives a short reminder on the third repeat — to analyze the previous result before calling again — and detailed reminders on the fifth and eighth, naming the tool and the repeated arguments so it can decide whether to change approach, gather more evidence, or finish. Only model-direct calls count, including `run_code`; calls inside a PTC program neither increment nor reset the count. A new user message clears the count, so a fresh instruction is never treated as a loop. The `dsh` base bundle also lists `wait_agent`, `job_output`, and `ask_user_question` in `restartCountAfter`, so waiting repeatedly for a subagent, a background job, or a user answer draws no reminder, and lists `todo_write`, `team_task_update`, and `update_goal` in `exclude`, so these updates between repeated calls do not hide a loop. Reminders appear in the conversation after the repeated call's result, attributed to the plugin, so the model reads them like any other message.
 
 -----
 
@@ -80,6 +82,7 @@ The guard is built on four commitments:
 
 Each agent's chain is keyed by `(tool name, canonical arguments)` — two calls with the same tool and canonically identical arguments (property order ignored) count as consecutive, and a different tracked call resets the count to 1. The chain lives in a `WeakMap<Agent, Chain>`.
 
+- **`restartCountAfter` calls end the chain.** A successful call matching `restartCountAfter` deletes the agent's chain before `include`/`exclude` apply and never counts, so `list_agents → wait_agent → list_agents` starts a new count after each wait. A failed or denied call goes through the normal chain, so hammering an unknown job id still draws reminders.
 - **Untracked calls are transparent to the chain.** A call excluded by `include`/`exclude` neither increments nor resets the counter, so `grep X → todo_write → grep X` still counts as two consecutive `grep X` when `todo_write` is excluded — bookkeeping tools interleaved into a loop do not launder it.
 - **Denied calls count.** Detection sits on `tools/post-execute`, which also runs for calls a `tools/pre-execute` listener denied; a model hammering a denied call is exactly the loop worth breaking.
 - **Nested calls and calls without an agent are ignored.** Calls with `exec.parent` neither increment nor reset the chain; calls without an agent have no model to remind or live agent object to key on.
@@ -169,7 +172,8 @@ These limits define when the guard is a poor fit. They are current package const
 - **Compaction does not reset chains** — a chain spanning a compaction checkpoint keeps counting.
 - **Advisory only** — escalating to a blocking form at a high threshold is not implemented, though `PostToolDecision` already supports blocking.
 - **No subagent chain-sharing** — chains stay isolated per agent; a parent and its subagent repeating the same call never combine.
-- **Legitimate idempotent polling still draws nudges** past the thresholds — the pressure valves are the `thresholds`/`exclude` config.
+- **Legitimate idempotent polling still draws nudges** past the thresholds unless its tool is listed in `restartCountAfter` — the pressure valves are the `thresholds`/`exclude`/`restartCountAfter` config.
+- **`restartCountAfter` matches tool names only** — listing `job_output` also stops reminders for repeated non-blocking reads (`wait` unset), which the jobs prompt already discourages.
 - **Past the highest threshold a chain goes silent** — reminders fire only at exact configured counts, never beyond them.
 
 <a id="dev-note"></a>

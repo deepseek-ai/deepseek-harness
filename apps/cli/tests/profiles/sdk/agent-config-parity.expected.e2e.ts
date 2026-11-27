@@ -153,7 +153,7 @@ it('reads the members of a disabled preset group as disabled', async (test) => {
 it('detects SDK rows outside the preset: a host row change and an SDK-only row', async (test) => {
   const differences = await fixture(test)
   const changed = await differences([
-    { id: 'repeat-tool-reminder', config: { thresholds: [3, 5, 9], argumentsPreviewChars: 500 } },
+    { id: 'repeat-tool-reminder', config: { thresholds: [3, 5, 9], exclude: ['todo_write', 'team_task_update', 'update_goal'], restartCountAfter: ['wait_agent', 'job_output', 'ask_user_question'], argumentsPreviewChars: 500 } },
     { insert: [{ id: 'parity-sdk-only', name: '@deepseek-ai/dsh-tool-present' }] },
   ])
   expect(() => { assertParity(['config'], changed) }).toThrow('config repeat-tool-reminder:/config/thresholds/2 (differs)')

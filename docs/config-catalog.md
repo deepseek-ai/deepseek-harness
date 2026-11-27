@@ -3735,7 +3735,7 @@ export interface Config {
  * Plugin config, validated by the same-named schemastery schema plus the
  * load-time checks in `apply` (misconfiguration fails loud: an empty
  * `thresholds` list, a non-integer, a value below 2, or a duplicate throws at
- * plugin load, never a silent fall-back). `include`/`exclude` entries are
+ * plugin load, never a silent fall-back). `include`/`exclude`/`restartCountAfter` entries are
  * `*`-wildcard predicates over tool names at call time, not references to
  * registry entries — a pattern matching no currently registered tool is valid
  * (`exclude: [mcp_*]` must stay legal in a deployment that loads no MCP tools).
@@ -3747,6 +3747,13 @@ export interface Config {
   include?: string[]
   /** Tool-name patterns transparent to the chain (neither count nor reset). */
   exclude?: string[]
+  /**
+   * Tool-name patterns whose successful calls end the chain without counting,
+   * such as waits and job reads that observe changing state, so repeating them
+   * or repeating a call between them is not reported. Matched before
+   * `include`/`exclude`; a failed call is counted like any other call.
+   */
+  restartCountAfter?: string[]
   /**
    * Maximum characters of canonical arguments quoted in the DETAILED reminder
    * (default 500). Large payloads (a `write` body, a long command) would

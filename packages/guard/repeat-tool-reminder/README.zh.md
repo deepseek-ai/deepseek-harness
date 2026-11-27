@@ -41,6 +41,7 @@ kind: "package-reference"
     thresholds: [3, 5, 8]        # remind at 3, 5, and 8 consecutive repeats
     include: []                  # track every tool; list patterns to track only some
     exclude: [todo_write]        # never track these tools
+    restartCountAfter: [wait_agent] # these calls restart the count without counting
     argumentsPreviewChars: 500   # cap on arguments shown in the detailed reminder
 ```
 
@@ -49,13 +50,14 @@ kind: "package-reference"
 | `thresholds` | `[3, 5, 8]` | 触发提醒的重复次数 |
 | `include` | `[]` | 只跟踪这些工具；空表示所有工具 |
 | `exclude` | `[]` | 绝不跟踪这些工具；对它们的调用既不计数也不重置 |
+| `restartCountAfter` | `[]` | 对这些工具的成功调用会结束当前计数且自身不计数，失败的调用照常计数；`dsh` 基础组合包列出 `wait_agent`、`job_output` 和 `ask_user_question`，因此等待 subagent、后台任务或用户回答不会收到提醒 |
 | `argumentsPreviewChars` | `500` | 详细提醒中显示多少字符的重复参数 |
 
 无效配置会在启动时以清晰错误失败——空的 `thresholds` 列表、小于 2 的重复次数或重复值——绝不会静默改变行为。生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-repeat-tool-reminder)记录每个受支持的值。
 
 ### 你会得到什么
 
-按默认值，以相同参数重复同一调用的模型会在第三次重复时收到简短提醒——先分析上一次结果再调用——并在第五次和第八次收到详细提醒，列出工具与重复参数，使其决定改变方法、收集更多证据还是结束任务。只统计模型直接发起的调用，包括 `run_code`；PTC 程序内部的调用既不递增也不重置计数。新的用户消息会清零计数，因此全新指令绝不会被当作循环。提醒出现在重复调用的结果之后、归属于插件，模型像阅读任何其他消息一样阅读它。
+按默认值，以相同参数重复同一调用的模型会在第三次重复时收到简短提醒——先分析上一次结果再调用——并在第五次和第八次收到详细提醒，列出工具与重复参数，使其决定改变方法、收集更多证据还是结束任务。只统计模型直接发起的调用，包括 `run_code`；PTC 程序内部的调用既不递增也不重置计数。新的用户消息会清零计数，因此全新指令绝不会被当作循环。`dsh` 基础组合包还把 `wait_agent`、`job_output` 和 `ask_user_question` 列入 `restartCountAfter`，因此反复等待 subagent、后台任务或用户回答不会收到提醒；并把 `todo_write`、`team_task_update` 和 `update_goal` 列入 `exclude`，因此穿插在重复调用之间的这些更新不会掩盖循环。提醒出现在重复调用的结果之后、归属于插件，模型像阅读任何其他消息一样阅读它。
 
 -----
 
@@ -80,6 +82,7 @@ guard 建立在四项承诺之上：
 
 每个 agent 的链以「`(tool name, canonical arguments)`」为键——同一工具且规范化后参数相同（忽略属性顺序）的两次调用计为连续，换成另一条受跟踪调用则把计数重置为 1。链保存在 `WeakMap<Agent, Chain>` 中。
 
+- **`restartCountAfter` 调用会结束链。** 匹配 `restartCountAfter` 的成功调用会在 `include`／`exclude` 生效前删除该 agent 的链，且自身从不计数，因此 `list_agents → wait_agent → list_agents` 在每次等待后重新计数。失败或被拒绝的调用照常进入链，因此反复读取不存在的 job id 仍会收到提醒。
 - **不受跟踪的调用对链透明。** 被 `include`／`exclude` 排除的调用既不递增也不重置计数器，因此 `grep X → todo_write → grep X` 在 `todo_write` 被排除时仍算作连续两次 `grep X`——穿插进循环的记录类工具不能掩盖循环。
 - **被拒绝的调用也计数。** 检测位于 `tools/post-execute`，被 `tools/pre-execute` 监听器拒绝的调用同样会经过它；模型反复尝试被拒绝的调用，恰恰是需要打破的循环。
 - **忽略内部子调用和没有 agent 的调用。** 带有 `exec.parent` 的调用既不递增也不重置链；没有 agent 的调用没有需要提醒的模型，也没有可作为键的活跃 agent 对象。
@@ -169,7 +172,8 @@ The repeated calls are not making progress. Do not call this tool with these exa
 - **压缩（compaction）不会重置链**——跨越压缩检查点的链会继续计数。
 - **仅提供建议**——尚未实现高阈值时升级为阻止形式，但 `PostToolDecision` 已支持阻止。
 - **subagent 之间不共享链**——链始终按 agent 隔离；父 agent 与其 subagent 重复相同调用也绝不合并。
-- **合理的幂等轮询超过阈值后仍会收到提醒**——可通过 `thresholds`／`exclude` 配置释放压力。
+- **合理的幂等轮询超过阈值后仍会收到提醒**，除非其工具列在 `restartCountAfter` 中——可通过 `thresholds`／`exclude`／`restartCountAfter` 配置释放压力。
+- **`restartCountAfter` 只匹配工具名**——列出 `job_output` 也会停止对重复非阻塞读取（未设置 `wait`）的提醒，jobs 提示词已劝阻这种用法。
 - **超过最高阈值后链不再提醒**——提醒只在精确达到所配置的次数时触发，超过后不会继续发送。
 
 <a id="dev-note"></a>

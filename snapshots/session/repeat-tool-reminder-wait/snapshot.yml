@@ -1,0 +1,10 @@
+version: 1
+scenario: repeat-tool-reminder-wait
+profile: headless
+composition: default
+recording: authored
+header:
+  class: default
+replay:
+  override: true
+platform: posix
