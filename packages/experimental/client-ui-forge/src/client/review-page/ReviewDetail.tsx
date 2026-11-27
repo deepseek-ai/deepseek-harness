@@ -74,6 +74,8 @@ export interface ReviewDetailProps extends ReviewSummaryFace {
   readonly tab: ReviewTab
   /** Show a tab. */
   readonly onTab: (tab: ReviewTab) => void
+  /** Show the changes tab with one commit chosen, named as the activity names it. */
+  readonly onOpenCommit: (sha: string) => void
   /** Whether the list column hides. */
   readonly listHidden: boolean
   /** Hide or show the list column. */
@@ -242,13 +244,16 @@ function LinkActions({ url, forge, actions, onRefresh, t }: {
 }
 
 /** The summary tab: the description and the activity beside the card rows. */
-function Summary({ frame, snapshot, description, readActivity, addComment, onOpenChanges, now, locale, actions, coarsePointer, t }: {
+function Summary({
+  frame, snapshot, description, readActivity, addComment, onOpenChanges, onOpenCommit, now, locale, actions, coarsePointer, t,
+}: {
   readonly frame: ForgeReviewChangeRequest
   readonly snapshot: ChangeRequestSnapshot
   readonly description: ReturnType<typeof useDescription>
   readonly readActivity: ReviewDetailProps['readActivity']
   readonly addComment: ReviewDetailProps['addComment']
   readonly onOpenChanges: () => void
+  readonly onOpenCommit: ReviewDetailProps['onOpenCommit']
   readonly now: number
   readonly locale: string
   readonly actions: ChangeRequestActions
@@ -286,8 +291,8 @@ function Summary({ frame, snapshot, description, readActivity, addComment, onOpe
         </section>
         {/* A submitted review or a new comment changes the activity, and each moves one of the two values. */}
         <ReviewActivity url={frame.url} revision={`${snapshot.updatedAt}\n${frame.reviewRevision}`} forge={frame.forge?.label ?? null}
-          read={readActivity} comment={addComment} onOpenChanges={onOpenChanges} openLink={actions.openLink} now={now} markdown={labels}
-          t={t} />
+          read={readActivity} comment={addComment} onOpenChanges={onOpenChanges} onOpenCommit={onOpenCommit} openLink={actions.openLink}
+          now={now} markdown={labels} t={t} />
       </div>
       <aside className={css.facts} aria-label={t('reviewPage.status')}>
         <ReviewStatus frame={frame} snapshot={snapshot} name={name} now={now} actions={actions} locale={locale}
@@ -303,8 +308,8 @@ function Summary({ frame, snapshot, description, readActivity, addComment, onOpe
  * @returns the detail.
  */
 export function ReviewDetail({
-  url, read, tab, onTab, listHidden, onToggleList, onBack, now, locale, actions, readDescription, readActivity, addComment, onAddHost,
-  renderChanges, renderChat, unseenQuotes, coarsePointer, t,
+  url, read, tab, onTab, onOpenCommit, listHidden, onToggleList, onBack, now, locale, actions, readDescription, readActivity, addComment,
+  onAddHost, renderChanges, renderChat, unseenQuotes, coarsePointer, t,
 }: ReviewDetailProps): ReactNode {
   const frame = read.frame
   const snapshot = frame?.snapshot ?? null
@@ -452,7 +457,8 @@ export function ReviewDetail({
         aria-labelledby={`forge-review-tab-${tab}`}>
         {tab === 'summary' && (
           <Summary frame={frame} snapshot={snapshot} description={description} readActivity={readActivity} addComment={addComment}
-            onOpenChanges={() => { onTab('changes') }} now={now} locale={locale} actions={actions} coarsePointer={coarsePointer} t={t} />
+            onOpenChanges={() => { onTab('changes') }} onOpenCommit={onOpenCommit} now={now} locale={locale} actions={actions}
+            coarsePointer={coarsePointer} t={t} />
         )}
         <div className={css.changes} hidden={tab !== 'changes'}>{renderChanges(frame)}</div>
         {tab === 'chat' && renderChat(frame)}

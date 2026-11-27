@@ -46,6 +46,8 @@ export interface ReviewActivityProps {
   readonly comment: (url: string, body: string) => Promise<RemoteResult<void>>
   /** Show the changes tab. */
   readonly onOpenChanges: () => void
+  /** Show the changes tab with one commit chosen, named as the activity names it. */
+  readonly onOpenCommit: (sha: string) => void
   /** Open a web page in the browser. */
   readonly openLink: (url: string) => void
   /** Current epoch milliseconds for relative times. */
@@ -142,36 +144,39 @@ function sentence(text: string, actor: ForgeCommentAuthor | null, t: Translate):
   return <>{before}<b className={css.activityActor}>{name}</b><span className={css.activityRest}>{after.join('')}</span></>
 }
 
-/** One commit: its title, its time, and the start of its object name. */
-function CommitLine({ commit, nested, now, t }: {
+/** One commit: its title, its time, and the start of its object name. The line opens the changes tab on that commit. */
+function CommitLine({ commit, nested, onOpen, now, t }: {
   readonly commit: ActivityCommit
   readonly nested: boolean
+  readonly onOpen: ReviewActivityProps['onOpenCommit']
   readonly now: number
   readonly t: Translate
 }): ReactNode {
   return (
     <Line glyph={<CommitGlyph />} text={nested ? commit.title : <b className={css.activityActor}>{commit.title}</b>} at={commit.at}
-      nested={nested} end={<span className={css.activitySha}>{commit.sha.slice(0, SHORT_SHA)}</span>} now={now} t={t} />
+      nested={nested} end={<span className={css.activitySha}>{commit.sha.slice(0, SHORT_SHA)}</span>} now={now} t={t}
+      act={{ label: `${commit.title}, ${t('reviewPage.activity.viewInChanges')}`, run: () => { onOpen(commit.sha) } }} />
   )
 }
 
 /** A run of commits: one commit as its own line, several as a line that unfolds them. */
-function Commits({ commits, now, t }: {
+function Commits({ commits, onOpen, now, t }: {
   readonly commits: readonly [ActivityCommit, ...ActivityCommit[]]
+  readonly onOpen: ReviewActivityProps['onOpenCommit']
   readonly now: number
   readonly t: Translate
 }): ReactNode {
   const [open, setOpen] = useState(false)
   const [first, ...later] = commits
   const last = later.at(-1)
-  if (last === undefined) return <CommitLine commit={first} nested={false} now={now} t={t} />
+  if (last === undefined) return <CommitLine commit={first} nested={false} onOpen={onOpen} now={now} t={t} />
   const count = t('reviewPage.activity.commits', { count: commits.length })
   return (
     <>
       <Line glyph={<CommitGlyph />} text={<b className={css.activityActor}>{count}</b>}
         at={last.at} expanded={open} act={{ label: count, run: () => { setOpen(!open) } }} now={now} t={t}
         end={<IconChevronDownOutlineRegular size={12} className={clsx(css.chevron, !open && css.chevronClosed)} />} />
-      {open && commits.map(commit => <CommitLine key={commit.sha} commit={commit} nested now={now} t={t} />)}
+      {open && commits.map(commit => <CommitLine key={commit.sha} commit={commit} nested onOpen={onOpen} now={now} t={t} />)}
     </>
   )
 }
@@ -196,7 +201,7 @@ function CommentCard({ actor, at, body, now, markdown, t }: {
         {actor?.bot === true && <span className={css.activityTag}>{t('thread.bot')}</span>}
         <span className={css.activityTime}>{formatAgo(at, now, t)}</span>
       </div>
-      <div className={clsx(long && !open && css.activityClamp)}>
+      <div className={clsx(css.activityBody, long && !open && css.activityClamp)}>
         <MarkdownText text={text} labels={markdown} variant="compact" omitHtml />
       </div>
       {long && (
@@ -362,7 +367,7 @@ function Composer({ url, forge, comment, onPosted, t }: {
  * @returns the activity section.
  */
 export function ReviewActivity({
-  url, revision, forge, read, comment, onOpenChanges, openLink, now, markdown, t,
+  url, revision, forge, read, comment, onOpenChanges, onOpenCommit, openLink, now, markdown, t,
 }: ReviewActivityProps): ReactNode {
   const { activity, failure, reload } = useActivity(url, revision, read)
   const entries = useMemo(() => activityEntries(activity?.items ?? []), [activity])
@@ -389,7 +394,7 @@ export function ReviewActivity({
             {entries.length === 0 && <p className={css.muted}>{t('reviewPage.activity.empty')}</p>}
             <div className={css.activityLines}>
               {entries.map(entry => entry.kind === 'commits'
-                ? <Commits key={entry.key} commits={entry.commits} now={now} t={t} />
+                ? <Commits key={entry.key} commits={entry.commits} onOpen={onOpenCommit} now={now} t={t} />
                 : <Event key={entry.key} item={entry.item} onOpenChanges={onOpenChanges} now={now} markdown={markdown} t={t} />)}
             </div>
             {activity.viewerCanComment && <Composer url={url} forge={forge} comment={comment} onPosted={reload} t={t} />}

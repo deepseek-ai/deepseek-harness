@@ -65,7 +65,7 @@ function renderDetail(overrides: Partial<ReviewDetailProps> = {}) {
   }
   const read = stream(reviewed(7))
   const props: ReviewDetailProps = {
-    url: URL7, read, tab: 'summary', onTab: vi.fn(), listHidden: false, onToggleList: vi.fn(), onBack: vi.fn(), now: NOW, locale: 'en',
+    url: URL7, read, tab: 'summary', onTab: vi.fn(), onOpenCommit: vi.fn(), listHidden: false, onToggleList: vi.fn(), onBack: vi.fn(), now: NOW, locale: 'en',
     actions, readDescription: vi.fn(async () => ok(description('Body'))), readActivity: vi.fn(async () => ok(null)),
     addComment: vi.fn(async () => ok(undefined)), onAddHost: undefined,
     renderChanges: vi.fn(() => <p>changes body</p>), renderChat: vi.fn(() => <p>chat body</p>), unseenQuotes: 0, coarsePointer: false, t,
@@ -373,6 +373,18 @@ describe('ReviewDetail tabs', () => {
 })
 
 describe('ReviewDetail activity', () => {
+  it('opens one commit of the activity through the detail, without showing the changes tab itself', async () => {
+    const sha = 'a'.repeat(40)
+    const readActivity = vi.fn<ReviewDetailProps['readActivity']>(async () => ok({
+      items: [{ kind: 'commit', at: '2026-10-09T01:00:00Z', actor: null, sha, title: 'Fix the parser' }], truncated: false, viewerCanComment: false,
+    }))
+    const b = renderDetail({ readActivity })
+    await settle()
+    fireEvent.click(b.view.getByRole('button', { name: 'Fix the parser, View in Changes' }))
+    expect(b.props.onOpenCommit).toHaveBeenCalledWith(sha)
+    expect(b.props.onTab).not.toHaveBeenCalled()
+  })
+
   it('shows the activity under the description, reads it again when the change request or its reviews change, and opens the changes tab', async () => {
     const activity: ChangeRequestActivity = {
       items: [{ kind: 'review', at: '2026-10-09T01:00:00Z', actor: { login: 'mona', avatarUrl: null, bot: false }, verdict: 'commented', body: '',

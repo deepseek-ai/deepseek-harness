@@ -16,6 +16,15 @@ export type ReviewTab = 'summary' | 'changes' | 'chat'
 /** How the list column shows its items: two lines each, or one line each with the rest in a hover card. */
 export type ReviewView = 'detailed' | 'compact'
 
+/**
+ * Name the changes view of a change request in the store's `byTab`.
+ * @param url - web URL of the change request.
+ * @returns the tab id the view keeps its choices under.
+ */
+export function changesTabOf(url: string): string {
+  return `review:${url}`
+}
+
 /** The review page's choices, and those of its changes view by change request URL. */
 export interface ReviewPageState extends ChangesState {
   /** Web URL of the change request shown in full, or null. */
@@ -54,6 +63,14 @@ const reviewActions = {
   tabbed: (state: ReviewPageState, tab: ReviewTab) => {
     state.tab = tab
     if (tab === 'chat' && state.selected !== null) state.unseenQuotes[state.selected] = 0
+  },
+  /**
+   * Show the changes tab with one commit chosen in the changes view of a change request, which keeps its choices from
+   * the time the detail first shows.
+   */
+  openedCommit: (state: ReviewPageState, url: string, sha: string) => {
+    changesActions.committed(state, changesTabOf(url), { from: sha, to: sha })
+    state.tab = 'changes'
   },
   viewed: (state: ReviewPageState, view: ReviewView) => { state.view = view },
   quoted: (state: ReviewPageState, url: string) => {

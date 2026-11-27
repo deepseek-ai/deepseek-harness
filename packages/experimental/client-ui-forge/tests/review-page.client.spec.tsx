@@ -25,7 +25,7 @@ import { en } from '../src/client/locales.ts'
 import type { ReviewChatFace } from '../src/client/review-page/ReviewChat.tsx'
 import { ReviewPage, type ReviewChangesFace, type ReviewPageProps } from '../src/client/review-page/ReviewPage.tsx'
 import { ReviewQueue } from '../src/client/review-queue.ts'
-import { createReviewStore } from '../src/client/review-page/review-store.ts'
+import { changesTabOf, createReviewStore } from '../src/client/review-page/review-store.ts'
 import type { ForgeReviewConversationProps } from '../src/client/slots.ts'
 import type { StreamSnapshot } from '../src/client/source.ts'
 import { ViewedFiles } from '../src/client/viewed-files.ts'
@@ -422,6 +422,44 @@ describe('ReviewPage detail', () => {
     expect(lifetime?.aborted).toBe(false)
     fireEvent.click(b.view.getByRole('button', { name: 'Back to list' }))
     expect(lifetime?.aborted).toBe(true)
+  })
+
+  it('shows the changes of one commit from the commit\'s line in the activity', async () => {
+    const b = renderPage()
+    const sha = 'a'.repeat(40)
+    vi.mocked(b.props.readActivity).mockResolvedValue(ok({
+      items: [{ kind: 'commit', at: '2026-10-09T01:00:00Z', actor: null, sha, title: 'Fix the parser' }], truncated: false, viewerCanComment: false,
+    }))
+    await select(b)
+    fireEvent.click(b.view.getByRole('button', { name: 'Fix the parser, View in Changes' }))
+    expect(b.store.getSnapshot().tab).toBe('changes')
+    expect(b.store.getSnapshot().byTab[changesTabOf(URL7)]?.commits).toEqual({ from: sha, to: sha })
+    await settle()
+    // The first read of the changes view is the commit's, not the whole change request's.
+    expect(vi.mocked(b.changes.changeRequestDiff).mock.calls.map(call => call[1])).toEqual([{ from: sha, to: sha }])
+    expect(b.view.getByRole('tab', { name: /^Changes/ }).getAttribute('aria-selected')).toBe('true')
+  })
+
+  it('ranges a Shift click in the commit picker from the commit its line in the activity opened', async () => {
+    const b = renderPage()
+    const first = 'b'.repeat(40)
+    const commit = (sha: string, parent: string | null) =>
+      ({ sha, parent, title: 'Fix the parser', author: 'octo', authoredAt: '2026-10-08T00:00:00Z' })
+    vi.mocked(b.changes.changeRequestCommits)
+      .mockResolvedValue(ok({ headSha: HEAD, truncated: false, commits: [commit(first, null), commit(HEAD, first)] }))
+    vi.mocked(b.props.readActivity).mockResolvedValue(ok({
+      items: [{ kind: 'commit', at: '2026-10-09T01:00:00Z', actor: null, sha: first, title: 'Fix the parser' }], truncated: false, viewerCanComment: false,
+    }))
+    await select(b)
+    fireEvent.click(b.view.getByRole('button', { name: 'Fix the parser, View in Changes' }))
+    await settle()
+    fireEvent.click(b.view.getByRole('button', { name: 'Commits shown: bbbbbbb' }))
+    await settle()
+    fireEvent.click(within(document.body).getByRole('menuitem', { name: /^aaaaaaa/ }), { shiftKey: true })
+    expect(b.store.getSnapshot().byTab[changesTabOf(URL7)]?.commits).toEqual({ from: first, to: HEAD })
+    await settle()
+    expect(vi.mocked(b.changes.changeRequestDiff).mock.calls.map(call => call[1]))
+      .toEqual([{ from: first, to: first }, { from: first, to: HEAD }])
   })
 
   it('starts the conversation in the chat tab, records it for the change request, and forgets it for a new one', async () => {

@@ -1071,6 +1071,15 @@ button.activityLine:focus-visible,
   line-height: 16px;
 }
 
+/* A comment reads as the page's main text: its compact Markdown takes the primary ink, and its links the link color. */
+.activityBody > [data-markdown-variant='compact'] {
+  color: var(--dsw-alias-label-primary);
+}
+
+.activityBody > [data-markdown-variant='compact'] a {
+  color: var(--dsw-alias-link);
+}
+
 /* A long comment starts as its first lines; the control under it shows the rest. */
 .activityClamp {
   max-height: 120px;

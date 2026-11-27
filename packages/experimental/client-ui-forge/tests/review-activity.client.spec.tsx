@@ -62,7 +62,7 @@ async function settle(): Promise<void> {
 async function renderActivity(value: ChangeRequestActivity | null, overrides: Partial<ReviewActivityProps> = {}) {
   const props: ReviewActivityProps = {
     url: URL7, revision: 'r1', forge: 'GitHub', read: vi.fn(async () => ok(value)), comment: vi.fn(async () => ok(undefined)),
-    onOpenChanges: vi.fn(), openLink: vi.fn(), now: NOW, markdown: MARKDOWN, t, ...overrides,
+    onOpenChanges: vi.fn(), onOpenCommit: vi.fn(), openLink: vi.fn(), now: NOW, markdown: MARKDOWN, t, ...overrides,
   }
   const view = render(<ReviewActivity {...props} />)
   await settle()
@@ -137,6 +137,22 @@ describe('ReviewActivity', () => {
     expect(b.lines()).toHaveLength(3)
   })
 
+  it('opens the changes tab on one commit from its line, alone and in an unfolded run', async () => {
+    const b = await renderActivity(activity([
+      commit('a', 'Fix the parser'), { kind: 'reopened', at: at(1), actor: mona }, commit('b', 'Add a test', 2), commit('c', 'Rename it', 3),
+    ]))
+    fireEvent.click(b.view.getByRole('button', { name: 'Fix the parser, View in Changes' }))
+    expect(b.props.onOpenCommit).toHaveBeenLastCalledWith('a'.repeat(40))
+    // The line of a run only folds and unfolds it; each commit under it opens on its own.
+    fireEvent.click(b.view.getByRole('button', { name: 'Commits: 2' }))
+    expect(b.props.onOpenCommit).toHaveBeenCalledTimes(1)
+    const nested = b.view.getByRole('button', { name: 'Rename it, View in Changes' })
+    expect(nested.matches(`.${css.activityNested}`)).toBe(true)
+    fireEvent.click(nested)
+    expect(b.props.onOpenCommit).toHaveBeenLastCalledWith('c'.repeat(40))
+    expect(b.props.onOpenChanges).not.toHaveBeenCalled()
+  })
+
   it('shows each review decision, and opens the changes tab from a review that left inline comments', async () => {
     const review = (verdict: 'approved' | 'changes-requested' | 'commented' | 'dismissed', comments: number, body = ''): ChangeRequestActivityItem =>
       ({ kind: 'review', at: at(), actor: mona, verdict, body, comments, url: null })
@@ -171,13 +187,16 @@ describe('ReviewActivity', () => {
     const [short, cut] = [...b.view.container.querySelectorAll('[data-forge-review-comment]')] as [HTMLElement, HTMLElement]
     expect(short.textContent).toBe('Cci-botbot1 h agoCoverage is 92%')
     expect(short.querySelector('strong')?.textContent).toBe('92%')
+    // The text sits in the element whose style gives compact Markdown the page's main ink, cut short or not.
+    expect(short.querySelector(`.${css.activityBody} > [data-markdown-variant="compact"]`)).not.toBeNull()
     expect(within(short).queryByRole('button')).toBeNull()
     expect(cut.textContent?.startsWith('?Deleted account59 min agoLine 1')).toBe(true)
-    expect(cut.querySelector(`.${css.activityClamp}`)).not.toBeNull()
+    expect(cut.querySelector(`.${css.activityBody}.${css.activityClamp} > [data-markdown-variant="compact"]`)).not.toBeNull()
     const more = within(cut).getByRole('button', { name: 'Expand' })
     expect(more.getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(more)
     expect(cut.querySelector(`.${css.activityClamp}`)).toBeNull()
+    expect(cut.querySelector(`.${css.activityBody} > [data-markdown-variant="compact"]`)).not.toBeNull()
     fireEvent.click(within(cut).getByRole('button', { name: 'Collapse' }))
     expect(cut.querySelector(`.${css.activityClamp}`)).not.toBeNull()
   })

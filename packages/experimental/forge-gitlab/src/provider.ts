@@ -9,7 +9,7 @@ import type {
   ForgeViewerQuery, MergeRequest,
 } from '@deepseek-ai/dsh-experimental-forge'
 import { z } from 'zod'
-import { readActivity } from './activity.ts'
+import { readActivity, withListedCommitNames } from './activity.ts'
 import { GitLabApi } from './api.ts'
 import { readCommits } from './commits.ts'
 import { readDescription } from './description.ts'
@@ -144,13 +144,19 @@ export class GitLabProvider implements ForgeProvider {
   }
 
   /**
-   * Read a merge request's latest notes through GraphQL and its state changes through REST.
+   * Read a merge request's latest notes through GraphQL and its state changes through REST. An activity that names a
+   * commit also reads the commit listing, which gives each commit it lists its full object name; when GitLab does not
+   * answer the listing, the commits keep the abbreviated names of GitLab's notes.
    * @see readActivity
+   * @see withListedCommitNames
    */
   async readActivity(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestActivity | ForgeFailure> {
     const failure = this.hostFailure(ref.repository.host)
     if (failure !== undefined) return failure
-    return await readActivity(this.api, ref, signal)
+    const activity = await readActivity(this.api, ref, signal)
+    if ('code' in activity || !activity.items.some(item => item.kind === 'commit')) return activity
+    const listed = await readCommits(this.api, ref, this.limits.maxCommits, signal)
+    return 'code' in listed ? activity : { ...activity, items: withListedCommitNames(activity.items, listed.commits) }
   }
 
   /**

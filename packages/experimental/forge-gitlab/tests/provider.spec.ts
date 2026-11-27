@@ -717,6 +717,31 @@ describe('GitLab provider viewer lists, descriptions, and activity', () => {
     })
     expect(calls.map(call => pathOf(call.args))).toEqual(['graphql', `${mrPath(6)}/resource_state_events?per_page=100`])
   })
+
+  it('names the commits of an activity in full from the commit listing, and keeps GitLab\'s abbreviations without one', async () => {
+    const pushed = { username: 'lin', avatarUrl: null, bot: false }
+    const notes = json({ data: { project: {
+      id: 'gid://gitlab/Project/278',
+      mergeRequest: { userPermissions: { createNote: false }, notes: { pageInfo: { hasPreviousPage: false }, nodes: [{
+        system: true, body: 'added 2 commits\n\n<ul><li>aaaaaaaa - Fix the parser</li><li>99999999 - Dropped by a later push</li></ul>',
+        createdAt: '2026-11-08T12:00:00Z', url: null, author: pushed, position: null, systemNoteMetadata: { action: 'commit' },
+      }] } },
+    } } })
+    const listing = `HTTP/1.1 200 OK\r\nX-Total: 1\r\n\r\n${JSON.stringify([
+      { id: sha('a'), parent_ids: [sha('b')], title: 'Fix the parser', author_name: 'Lin', authored_date: 'D' },
+    ])}`
+    const read = async (commits: GlabOutput) => {
+      const { subject, calls } = provider(path => path === 'graphql' ? notes : path.includes('/commits?') ? commits : json([]))
+      const activity = await subject.readActivity(merge(6), signal)
+      if ('code' in activity) throw new Error(activity.message)
+      return { names: activity.items.map(item => item.kind === 'commit' ? item.sha : item.kind), paths: calls.map(call => pathOf(call.args)) }
+    }
+    const named = await read(output(listing))
+    expect(named.names).toEqual([sha('a'), '99999999'])
+    expect(named.paths).toEqual(['graphql', `${mrPath(6)}/resource_state_events?per_page=100`, `${mrPath(6)}/commits?per_page=100&page=1`])
+    // A listing GitLab does not answer leaves the activity as its notes name it.
+    expect((await read(json({ message: '500 Internal Server Error' }))).names).toEqual(['aaaaaaaa', '99999999'])
+  })
 })
 
 /** Narrow a fetch result for assertions. */

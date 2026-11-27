@@ -4,7 +4,7 @@
  */
 
 import type {
-  ChangeRequestActivity, ChangeRequestActivityItem, ChangeRequestRef, ForgeCommentAuthor, ForgeFailure, ReviewVerdict,
+  ChangeRequestActivity, ChangeRequestActivityItem, ChangeRequestRef, ForgeCommentAuthor, ForgeCommit, ForgeFailure, ReviewVerdict,
 } from '@deepseek-ai/dsh-experimental-forge'
 import { z } from 'zod'
 import type { GitLabApi } from './api.ts'
@@ -159,6 +159,24 @@ export async function readActivity(
     truncated: cut || items.length > ACTIVITY_PAGE,
     viewerCanComment: merge.userPermissions.createNote,
   }
+}
+
+/**
+ * Name the commits of activity entries in full. GitLab's notes list a pushed commit by an abbreviated object name; an
+ * entry whose abbreviation starts the name of exactly one listed commit takes that name, and any other entry keeps the
+ * name it has, as does one for a commit the merge request no longer lists.
+ * @param items - activity entries.
+ * @param commits - the commits the merge request lists.
+ * @returns the entries in their order.
+ */
+export function withListedCommitNames(
+  items: readonly ChangeRequestActivityItem[], commits: readonly ForgeCommit[],
+): ChangeRequestActivityItem[] {
+  return items.map((item) => {
+    if (item.kind !== 'commit') return item
+    const [only, ...others] = commits.filter(commit => commit.sha.startsWith(item.sha))
+    return only === undefined || others.length > 0 ? item : { ...item, sha: only.sha }
+  })
 }
 
 /**

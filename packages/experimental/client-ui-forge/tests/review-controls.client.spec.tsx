@@ -243,6 +243,32 @@ describe('CommitMenu', () => {
     expect(commitsLabel({ from: sha(1), to: sha(2) }, t)).toBe('1111111…2222222')
   })
 
+  it('starts a Shift run at the one commit shown, also when it was chosen outside the menu', async () => {
+    const shiftTo = async (m: ReturnType<typeof mount>, shown: number, clicked: number): Promise<void> => {
+      fireEvent.click(m.view.getByRole('button', { name: `Commits shown: ${sha(shown).slice(0, 7)}` }))
+      await settle()
+      fireEvent.click(m.row(clicked), { shiftKey: true })
+    }
+    // No commit was clicked in the menu before its owner showed commit 2.
+    const fresh = mount()
+    await settle()
+    fresh.rerender({ chosen: { from: sha(2), to: sha(2) } })
+    await shiftTo(fresh, 2, 3)
+    expect(fresh.choose).toHaveBeenLastCalledWith({ from: sha(2), to: sha(3) })
+    cleanup()
+
+    // Commit 1 was clicked in the menu before its owner showed commit 2.
+    const used = mount()
+    await settle()
+    fireEvent.click(used.view.getByRole('button', { name: 'Commits shown: All commits' }))
+    await settle()
+    fireEvent.click(used.row(1))
+    used.rerender({ chosen: { from: sha(1), to: sha(1) } })
+    used.rerender({ chosen: { from: sha(2), to: sha(2) } })
+    await shiftTo(used, 2, 3)
+    expect(used.choose).toHaveBeenLastCalledWith({ from: sha(2), to: sha(3) })
+  })
+
   it('reads the commits once per version, keeps them across openings, and chooses one or a Shift run of them', async () => {
     const m = mount()
     await settle()

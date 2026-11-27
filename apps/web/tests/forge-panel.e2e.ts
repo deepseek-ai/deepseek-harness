@@ -255,7 +255,7 @@ if (args[0] === 'api' && args[1] === 'graphql') {
       url: 'https://github.com/octo/demo/pull/7#issuecomment-1' })
     process.stdout.write(JSON.stringify({ data: { repository: { isArchived: false, viewerPermission: 'WRITE', pullRequest: {
       locked: false, merged: false, timelineItems: { pageInfo: { hasPreviousPage: false }, nodes: [
-        commit('d', 'Add the panel'), commit('e', 'Fix the build'),
+        commit('1', 'Add the panel'), commit('2', 'Fix the build'),
         { __typename: 'ReviewRequestedEvent', createdAt: '2026-10-08T02:00:00Z', actor: account('octo'), requestedReviewer: { login: 'mona' } },
         { __typename: 'PullRequestReview', createdAt: '2026-10-08T03:00:00Z', submittedAt: '2026-10-08T03:00:00Z', body: '', state: 'APPROVED',
           url: 'https://github.com/octo/demo/pull/7#pullrequestreview-1', author: account('mona'), comments: { totalCount: 0 } },
@@ -921,12 +921,14 @@ it.skipIf(MODE === 'record')('shows the activity of a pull request on the Code r
   const { scaffold, page, root, tripwire } = await launchPanel('web-e2e-forge-review-activity', 'normal', {
     lists: { 'review-requested': [7], 'authored': [], 'involved': [] },
   })
+  await writeReviewFixture(root)
   // The scaffold expects its recorded model call to be consumed, so the borrowed conversation runs first.
   const { settled } = await sendPrompt(page, scaffold)
   await settled
   await page.getByRole('navigation', { name: '全局面板' }).getByRole('button', { name: '代码评审', exact: true }).click()
   await page.locator(`[data-forge-review-item="${PULL}"]`).click()
-  const activity = page.locator(`[data-forge-review-detail="${PULL}"]`).getByRole('region', { name: '动态', exact: true })
+  const detail = page.locator(`[data-forge-review-detail="${PULL}"]`)
+  const activity = detail.getByRole('region', { name: '动态', exact: true })
 
   // Commits fold into one line; the review request, the approval, and the comment follow in the code host's order.
   const lines = async (): Promise<string[]> => await activity.locator('[data-forge-review-line]')
@@ -935,6 +937,11 @@ it.skipIf(MODE === 'record')('shows the activity of a pull request on the Code r
   const comments = activity.locator('[data-forge-review-comment]')
   await expect.poll(async () => await comments.count()).toBe(1)
   expect(await comments.first().locator('strong').textContent()).toBe('good')
+  // A comment's text has the ink of its author's name, not the dimmer ink of its time.
+  const ink = async (selector: string): Promise<string> =>
+    await comments.first().locator(selector).first().evaluate(element => getComputedStyle(element).color)
+  expect(await ink('[data-markdown-variant="compact"] p')).toBe(await ink('b'))
+  expect(await ink('[data-markdown-variant="compact"] strong')).toBe(await ink('b'))
   await activity.getByRole('button', { name: '2 次提交', exact: true }).click()
   await expect.poll(lines).toEqual(['2 次提交', 'Add the panel', 'Fix the build', 'octo 请求 mona 评审', 'mona 批准了这些更改'])
 
@@ -950,6 +957,13 @@ it.skipIf(MODE === 'record')('shows the activity of a pull request on the Code r
   const calls = (await readFile(join(root, 'calls.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as string[])
   expect(calls.filter(call => call[4] === 'POST'))
     .toEqual([['api', '--hostname', 'github.com', '--method', 'POST', 'repos/octo/demo/issues/7/comments', '--input', '-']])
+
+  // A commit's line opens the changes tab with that commit chosen, which shows the commit's files alone.
+  await activity.getByRole('button', { name: 'Fix the build, 在变更中查看', exact: true }).click()
+  await expect.poll(async () => await detail.getByRole('tab', { name: /^变更/ }).getAttribute('aria-selected')).toBe('true')
+  const view = detail.locator('[data-forge-changes="change"]')
+  await view.getByRole('button', { name: '查看的提交：2222222', exact: true }).waitFor()
+  await expect.poll(() => shownPaths(view), { timeout: 20_000 }).toEqual(['locale/zh.json', 'src/panel.spec.ts'])
   expect(tripwire.pageErrors).toEqual([])
   expect(tripwire.warnings).toEqual([])
 })
