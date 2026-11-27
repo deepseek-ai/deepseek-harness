@@ -41,7 +41,7 @@ kind: "package-reference"
 协议所属的客户端包在 `ResourceProtocolMap` 声明其值类型，并以自有 effect 注册一个提供方。`open` 产出 `RemoteResult` 帧：先是当前内容，之后每次变化一帧，失败以 `ok: false` 帧而非抛错表达；必须在 `signal` 中止时停止：
 
 ```ts ignore-check
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface ResourceProtocolMap { note: NoteView }
 }
 

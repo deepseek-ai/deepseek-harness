@@ -22,17 +22,18 @@ Client npm 依赖区段描述安装和开发关系，但不能可靠描述 bundl
 | --- | --- | --- | --- |
 | Web 编译壳 | `apps/web` | 拥有 `index.html`、Vite 配置、dist chunk 和静态资源 | 从已构建 package export 组装最终浏览器产物 |
 | 启动内核 | `packages/client/web` | 拥有纯 DOM 启动页、模块系统接线、Cordis settle 和 renderer handoff | `clientShell` ESM 入口；无 `dsh.client` row |
-| 静态装配库 | Cordis、`ui-primitives`、`ui-slots` | 提供共享模块身份和直接实体 API | Manifest `lib/index.js`，共享 import 由 Vite 组装；不是 Loader entry |
+| 外壳预置模块 | React、Cordis 及选定的第三方库 | 提供共享模块身份 | 由 Vite 打包并预置进模块表；不是 Loader entry |
+| 静态装配库 | `client-store` | 提供共享模块身份和直接实体 API | Manifest `lib/index.js`，共享 import 由 Vite 组装，并预置进模块表；不是 Loader entry |
 | 模块自举包 | `packages/client/modules` | 提供 client 模块表及其 Cordis wrapper | 带一个普通 `lib/client.js` 的动态包；host 提前送达其 factory |
-| 动态 client 包 | connection、`ui-renderer`、主题和功能插件 | 通过 Cordis service、slot 和 effect 参与应用 | 声明 `dsh.client`，产出自注册 `lib/client.js`，并保留 host graph entry |
+| 动态 client 包 | connection、`ui-renderer`、主题、功能插件，以及 `ui-slots`、`ui-primitives`、`ui-dockkit` | 通过 Cordis service、slot 和 effect 参与应用；后三个包的 `/client` 实体导出是会逐步缩减的历史例外 | 声明 `dsh.client`，产出自注册 `lib/client.js`，并保留 host graph entry |
 
-`packages/client/web` 把 Cordis 保持为 matching peer 与开发依赖，并把 modules 和静态 UI 包作为开发期编译输入。`apps/web` 消费已构建 package export，不通过 alias 读取 workspace 源码。
+`packages/client/web` 把 Cordis 保持为 matching peer 与开发依赖，并把 modules 和 `client-store` 作为开发期编译输入。`apps/web` 消费已构建 package export，不通过 alias 读取 workspace 源码。
 
-`staticLinked` 预设把 `lib/index.js` 输出为普通 ESM，保留所有裸 import 与动态 import 交给 Vite 解析、去重和拆分，并增加一个导出 `__$dsh_client_module_manifest`，其 factory 返回库自身的导出。让 factory 推迟执行库本体并没有实际收益：第三方 import 在模块加载时已经求值，外壳也在启动时登记这些库。CSS import 成为延迟求值的元信息资源。[模块元信息决定](2026-11-05-client-module-metadata.zh.md)定义资源所有权；静态库不采用动态插件的私有依赖打包策略。
+`staticLinked` 预设把 `lib/index.js` 输出为普通 ESM，保留所有裸 import 与动态 import 交给 Vite 解析、去重和拆分，并增加一个导出 `__$dsh_client_module_manifest`，其 factory 返回库自身的导出。让 factory 推迟执行库本体并没有实际收益：第三方 import 在模块加载时已经求值，外壳也在启动时登记这些库。CSS import 成为延迟求值的元信息资源。[模块元信息决定](2026-11-05-client-module-metadata.zh.md)定义资源所有权；静态库不采用动态插件的私有依赖打包策略。`client-store` 使用该预设。
 
 ### 共享模块请求
 
-动态浏览器 bundle 会隐式 external 统一基座：`PLATFORM_MODULES` 命名由外壳播种的 React、Cordis、选定的第三方库和静态 UI 身份，`PRELOADED_CLIENT_EXTERNALS` 则为必须先于 shell 启动到达的动态身份预留，当前为空。包只在精确请求基座外实体时使用 `dsh.client.external`。纯类型 import 会被擦除，不产生请求；基座外的第三方实现库保留为 bundle 私有内容。共享第三方库使用外壳声明的版本，不为单个插件协商版本；只有测量确认外壳与随包插件 bundle 的总体积减少，才将库纳入基座。
+动态浏览器 bundle 会隐式 external 统一基座（[共享模块表](../../../../packages/client/web/README.zh.md#the-shared-module-table)）：外壳播种的 React、Cordis、选定的第三方库和 `client-store`，以及 `immediately` row 先于其他插件登记的 `ui-slots`、`ui-primitives`、`ui-dockkit`；`PRELOADED_CLIENT_EXTERNALS` 则为必须先于 shell 启动到达的动态身份预留，当前为空。包只在精确请求基座外实体时使用 `dsh.client.external`。纯类型 import 会被擦除，不产生请求；基座外的第三方实现库保留为 bundle 私有内容。共享第三方库使用外壳声明的版本，不为单个插件协商版本；只有测量确认外壳与随包插件 bundle 的总体积减少，才将库纳入基座。
 
 请求只有两种提供方：
 
@@ -69,7 +70,7 @@ Theme 的 Host 贡献会前置到 index 收集顺序。head 中的 CSS 选择初
 
 ## Alternatives considered
 
-**立即把所有 client 包改为动态插件。** `ui-primitives` 与 `ui-slots` 仍提供同步实体，且没有独立 service 或 slot 生命周期；只加 manifest 声明不会移除这些 import。
+**立即把所有 client 包改为动态插件。** `ui-primitives` 与 `ui-slots` 仍提供同步实体，且没有独立 service 或 slot 生命周期；只加 manifest 声明不会移除这些 import。`ui-slots`、`ui-primitives`、`ui-dockkit` 改为带 `immediately: true` 的动态插件包，它们的实体导出仍然保留，是会逐步缩减的历史例外（[决定](2026-11-27-client-packages-as-immediately-dynamic-plugins.zh.md)）。
 
 **为 modules 生成单独的 `client-static.js`。** 该包仍是动态图 row 和 Cordis 插件，只有 factory 提前到达。第二份产物会把宿主策略编码进文件名，并让同一源码产生两个运行期产品。
 
@@ -87,4 +88,4 @@ Theme 的 Host 贡献会前置到 index 收集顺序。head 中的 CSS 选择初
 
 外壳消费已构建 `lib/` 产品，因此在相关 build 或 watcher 运行前，源码与浏览器产物可能漂移。仅源码 typecheck 通过不能证明实际服务的应用使用同一份代码。
 
-两个静态 UI 库仍是明确例外。把其中任一项转换为动态包时，必须在同一变更中把全部实体消费者迁移到 service 或 slot，并从静态 seed 删除对应身份。
+`client-store` 是静态链接的 Client 库，由外壳播种；store service 将是一个独立的包，而不是对这个包的转换。`ui-slots`、`ui-primitives` 和 `ui-dockkit` 是带 `immediately: true` 的动态插件包（[决定](2026-11-27-client-packages-as-immediately-dynamic-plugins.zh.md)）。

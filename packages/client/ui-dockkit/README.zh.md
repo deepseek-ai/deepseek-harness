@@ -11,7 +11,7 @@ kind: "package-reference"
 
 一套停靠布局套件：由带可逆操作的标签格组成的分裂树，以及渲染并驱动它的组件。Harness Web 客户端是它的第一个嵌入方；这里的代码对此一无所知。
 
-> **内部引擎。** 本包之所以发布，是因为 Sidebar 以静态链接方式使用它，而非作为稳定 API：它的导出——`LayoutState`、`LayoutOp`、各 planner、`DockIntents`、`DockLabels`、`DockMode`——在任何版本都可能变化，并且没有任何一个出现在服务接口里（`ctx.sidebarRight` 只暴露操作，从不暴露布局快照或操作日志）。
+> **内部引擎。** 本包之所以发布，是因为 Sidebar 在运行时需要它，而非作为稳定 API：它的导出——`LayoutState`、`LayoutOp`、各 planner、`DockIntents`、`DockLabels`、`DockMode`——在任何版本都可能变化，并且没有任何一个出现在服务接口里（`ctx.sidebarRight` 只暴露操作，从不暴露布局快照或操作日志）。
 
 ## 目录
 
@@ -90,7 +90,7 @@ Sidebar 使用的 `DockLayout` 在选中项变化、跨格移动与浮动期间�
 <a id="build-shape"></a>
 ## 构建形态
 
-本包静态链接：tsdown 的 `staticLinked` 预设在 `lib/index.js` 产出一个浏览器 ESM bundle（所有裸说明符保持为 import，sourcemap 链回源码），Web 外壳按包名解析并自行打包该产物。预设以 `<hash>_<local>` 形式的类名编译 `dockkit.module.css`，其文本随 bundle 的 `__$dsh_client_module_manifest` 导出交付；renderer 将它安装为一个 style 元素，带 `data-plugin="@deepseek-ai/dsh-client-ui-dockkit"` 和 `data-path="src/client/components/dockkit.module.css"`。
+本包是带 `immediately: true` 的动态插件包，其代码只在浏览器中运行。它的 `/client` 入口 `lib/client.js`（由 `src/client/index.ts` 构建）目前仍导出供其他 bundle require 的实体值，这是会逐步缩减的历史例外（[导出规则](../AGENTS.md#export-discipline-client-plugin-packages)）；浏览器中的 bundle 按包名或 `/client` 子路径取得这些导出，两者指向模块表中的同一行。为兼容仓库外的代码，包根的类型复用 `./client` 的声明，包根运行时 `lib/index.js`（由 `src/index.js` 构建）是只有空 `apply` 的 Host 入口（[包根](../AGENTS.md#hand-written-package-roots)）。因此在 Node 中包根不提供实体值：代码从 `/client` 子路径 import，在浏览器外运行这些值的测试把该子路径解析到源码（[Client 测试运行时](../../test-support/client-runtime/README.zh.md#module-resolution)）；仓库代码只通过 `/client` 引用本包。独立消费方自行提供开发依赖（[依赖规则](../AGENTS.md#dependency-declaration)）。共享的 Client 预设以 `<hash>_<local>` 形式的类名编译 `dockkit.module.css`，其文本随 `lib/client.js` 的登记元信息交付；renderer 将它安装为一个 style 元素，带 `data-plugin="@deepseek-ai/dsh-client-ui-dockkit"` 和 `data-path="src/client/components/dockkit.module.css"`。
 
 <a id="model-experience"></a>
 ## 模型体验

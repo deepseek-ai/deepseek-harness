@@ -22,17 +22,18 @@ Shared UI libraries still expose synchronous TypeScript and React values to many
 | --- | --- | --- | --- |
 | Web compilation shell | `apps/web` | Owns `index.html`, Vite configuration, dist chunks, and static assets | Assembles final browser output from built package exports |
 | Startup kernel | `packages/client/web` | Owns the plain-DOM boot page, module-system wiring, Cordis settlement, and renderer handoff | `clientShell` ESM entries; no `dsh.client` row |
-| Static assembly libraries | Cordis, `ui-primitives`, `ui-slots` | Supply shared module identities and direct value APIs | Manifest `lib/index.js`, shared imports assembled by Vite; not Loader entries |
+| Shell-seeded modules | React, Cordis, and selected third-party libraries | Supply shared module identities | Bundled by Vite and seeded into the module table; not Loader entries |
+| Static assembly library | `client-store` | Supplies a shared module identity and direct value APIs | Manifest `lib/index.js`, shared imports assembled by Vite, seeded into the module table; not a Loader entry |
 | Module bootstrap | `packages/client/modules` | Supplies the client module table and its Cordis wrapper | Dynamic package with one ordinary `lib/client.js`; the host delivers its factory early |
-| Dynamic client packages | connection, `ui-renderer`, theme, and feature plugins | Participate through Cordis services, slots, and effects | Declare `dsh.client`, emit self-registering `lib/client.js`, and remain host-graph entries |
+| Dynamic client packages | connection, `ui-renderer`, theme, feature plugins, `ui-slots`, `ui-primitives`, and `ui-dockkit` | Participate through Cordis services, slots, and effects; the `/client` value exports of the last three are a historical exception that will be reduced over time | Declare `dsh.client`, emit self-registering `lib/client.js`, and remain host-graph entries |
 
-`packages/client/web` keeps Cordis as matching peer and development dependencies and uses modules and static UI packages as development compilation inputs. `apps/web` consumes built package exports rather than aliases into workspace source.
+`packages/client/web` keeps Cordis as matching peer and development dependencies and uses modules and `client-store` as development compilation inputs. `apps/web` consumes built package exports rather than aliases into workspace source.
 
-The `staticLinked` preset emits `lib/index.js` as ordinary ESM that keeps every bare import and dynamic import for Vite to resolve, deduplicate, and split, and adds one export, `__$dsh_client_module_manifest`, whose factory returns the library's own exports. A factory that runs the library body later would defer nothing useful: the third-party imports already evaluate when the module loads, and the shell registers these libraries at startup. CSS imports become deferred metadata resources. The [module metadata decision](2026-11-05-client-module-metadata.md) defines resource ownership; static libraries do not adopt dynamic plugins' private-dependency bundling policy.
+The `staticLinked` preset emits `lib/index.js` as ordinary ESM that keeps every bare import and dynamic import for Vite to resolve, deduplicate, and split, and adds one export, `__$dsh_client_module_manifest`, whose factory returns the library's own exports. A factory that runs the library body later would defer nothing useful: the third-party imports already evaluate when the module loads, and the shell registers these libraries at startup. CSS imports become deferred metadata resources. The [module metadata decision](2026-11-05-client-module-metadata.md) defines resource ownership; static libraries do not adopt dynamic plugins' private-dependency bundling policy. `client-store` uses the preset.
 
 ### Shared module requests
 
-Dynamic browser bundles implicitly externalize the common baseline: `PLATFORM_MODULES` names shell-seeded React, Cordis, selected third-party libraries, and static UI identities, while `PRELOADED_CLIENT_EXTERNALS` is reserved for a dynamic identity that must arrive before shell boot and is currently empty. A package uses `dsh.client.external` only for an exact non-baseline value request. Type-only imports are erased and create no request; non-baseline third-party implementation libraries remain private bundle contents. Shared third-party libraries use the shell's declared versions without per-plugin version negotiation; promotion into the baseline requires a measured reduction across the shell and shipped plugin bundles.
+Dynamic browser bundles implicitly externalize the common baseline ([shared module table](../../../../packages/client/web/README.md#the-shared-module-table)): React, Cordis, selected third-party libraries, and `client-store`, which the shell seeds, and `ui-slots`, `ui-primitives`, and `ui-dockkit`, whose `immediately` rows register before other plugins, while `PRELOADED_CLIENT_EXTERNALS` is reserved for a dynamic identity that must arrive before shell boot and is currently empty. A package uses `dsh.client.external` only for an exact non-baseline value request. Type-only imports are erased and create no request; non-baseline third-party implementation libraries remain private bundle contents. Shared third-party libraries use the shell's declared versions without per-plugin version negotiation; promotion into the baseline requires a measured reduction across the shell and shipped plugin bundles.
 
 A request has exactly two suppliers:
 
@@ -69,7 +70,7 @@ Ordinary installed libraries remain `dependencies`: a dynamic build may bundle a
 
 ## Alternatives considered
 
-**Convert every client package into a dynamic plugin immediately.** `ui-primitives` and `ui-slots` still provide synchronous values without independent service or slot lifecycles; a manifest declaration alone would not remove those imports.
+**Convert every client package into a dynamic plugin immediately.** `ui-primitives` and `ui-slots` still provide synchronous values without independent service or slot lifecycles; a manifest declaration alone would not remove those imports. `ui-slots`, `ui-primitives`, and `ui-dockkit` are dynamic plugin packages with `immediately: true` instead, and their value exports remain, a historical exception that will be reduced over time ([decision](2026-11-27-client-packages-as-immediately-dynamic-plugins.md)).
 
 **Generate a separate `client-static.js` for modules.** The package remains a dynamic graph row and Cordis plugin; only its factory arrival is early. A second artifact would encode host policy in a filename and create two runtime products from one source.
 
@@ -87,4 +88,4 @@ The startup protocol depends on the modules package id, and modules must remain 
 
 The shell consumes built `lib/` products, so source and browser artifacts can drift until the relevant build or watcher runs. Typechecking source alone does not prove the served application uses the same code.
 
-The two static UI libraries remain deliberate exceptions. Converting either one to a dynamic package requires moving all value consumers to services or slots and removing its identity from the static seed in the same change.
+`client-store` is the statically linked Client library, and the shell seeds it; a store service would be a separate package, not a conversion of this one. `ui-slots`, `ui-primitives`, and `ui-dockkit` are dynamic plugin packages with `immediately: true` ([decision](2026-11-27-client-packages-as-immediately-dynamic-plugins.md)).

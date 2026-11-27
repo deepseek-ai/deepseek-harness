@@ -70,10 +70,10 @@ The default Preferences group retains language, appearance, fonts, and additive 
 A custom group declaration-merges its exact item key into `SlotMap`, registers its own component, and declares that item slot at runtime in `children`. The component renders the child outlet through `PropsRenderSlots`; the page supplies the surrounding header and card. Given `ctx` in your plugin’s `apply`, a namespace-bound `t`, and your module-level `AcmeRow` component, register:
 
 ```tsx ignore-check
-import type { PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { SettingsGeneralItemOwnerProps } from '@deepseek-ai/dsh-client-ui-settings/client'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotMap {
     'settings.general.group.acme.item': {
       kind: 'list'; scope: 'root'; owner: SettingsGeneralItemOwnerProps

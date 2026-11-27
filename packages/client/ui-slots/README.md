@@ -1,6 +1,6 @@
 ---
 description: "Slot registry pure core for the dsh web client: ordinary extension slots, reusable Component Factories, derived props types, store seats, and the renderer install contract."
-kind: "package-library"
+kind: "package-reference"
 ---
 
 # @deepseek-ai/dsh-client-ui-slots
@@ -100,6 +100,7 @@ None; this package neither assembles nor sends a provider request.
 These limits define the registry's scaling behavior and accepted type noise; they are current package constraints.
 
 - **`isLive` scans all records linearly** — fine at UI-plugin registration counts (tens); revisit with an entry→record backref if ledgers ever grow hot.
+- **Dynamic plugin package** — the package is a dynamic plugin package with `immediately: true`. Its `/client` entry, `lib/client.js`, built from `src/client/index.ts`, still exports values that other bundles require, a historical exception that will be reduced over time ([export discipline](../AGENTS.md#export-discipline-client-plugin-packages)); browser bundles reach those exports by package name or by the `/client` subpath, which name one module-table row. For compatibility with code outside the repository, the package root's types reuse the `./client` declarations, and its runtime, `lib/index.js` built from `src/index.js`, is the Host entry with an empty `apply` ([package roots](../AGENTS.md#hand-written-package-roots)). In Node the package root therefore provides no values: code imports them from the `/client` subpath, and tests that run them outside the browser resolve that subpath to source ([Client test runtime](../../test-support/client-runtime/README.md#module-resolution)); repository code names the package only through `/client`. Independent consumers supply its development dependencies ([dependency rules](../AGENTS.md#dependency-declaration)).
 - **The `__renders` phantom anchor is visible on `PropsRenderSlots`** — the same accepted noise as the type-chain design's `__accepts`: generic method signatures compare loosely across key unions, so the contravariant marker is what enforces "component key set ⊆ children declaration".
 
 <a id="dev-note"></a>

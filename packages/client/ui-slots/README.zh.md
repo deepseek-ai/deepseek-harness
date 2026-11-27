@@ -1,6 +1,6 @@
 ---
 description: "dsh Web 客户端的 slot 注册表纯核心：普通扩展 slots、可复用 Component Factory、推导 props 类型、store 席位与渲染器安装约定。"
-kind: "package-library"
+kind: "package-reference"
 ---
 
 # @deepseek-ai/dsh-client-ui-slots
@@ -100,6 +100,7 @@ register 调用可以用 `store: defineStore(...)` 声明 store 席位：`init` 
 这些限制定义注册表的规模扩展特性与已接受的类型噪声；它们是当前包约束。
 
 - **`isLive` 会线性扫描所有记录**：在 UI 插件的注册规模（数十项）下没有问题；如果账本变得频繁访问，再使用条目→记录反向引用改进。
+- **动态插件包**——本包是带 `immediately: true` 的动态插件包。它的 `/client` 入口 `lib/client.js`（由 `src/client/index.ts` 构建）目前仍导出供其他 bundle require 的实体值，这是会逐步缩减的历史例外（[导出规则](../AGENTS.md#export-discipline-client-plugin-packages)）；浏览器中的 bundle 按包名或 `/client` 子路径取得这些导出，两者指向模块表中的同一行。为兼容仓库外的代码，包根的类型复用 `./client` 的声明，包根运行时 `lib/index.js`（由 `src/index.js` 构建）是只有空 `apply` 的 Host 入口（[包根](../AGENTS.md#hand-written-package-roots)）。因此在 Node 中包根不提供实体值：代码从 `/client` 子路径 import，在浏览器外运行这些值的测试把该子路径解析到源码（[Client 测试运行时](../../test-support/client-runtime/README.zh.md#module-resolution)）；仓库代码只通过 `/client` 引用本包。独立消费方自行提供开发依赖（[依赖规则](../AGENTS.md#dependency-declaration)）。
 - **`__renders` 幻象锚点在 `PropsRenderSlots` 上可见**：这是与类型链设计的 `__accepts` 相同且已接受的噪声；泛型方法签名在 key 联合之间比较宽松，因此必须依靠逆变标记强制执行「组件 key 集合 ⊆ children 声明」。
 
 <a id="dev-note"></a>

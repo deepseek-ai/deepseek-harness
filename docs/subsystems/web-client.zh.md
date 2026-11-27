@@ -110,7 +110,7 @@ Web 和桌面端共享[代码工作工具偏好](../../packages/client/ui-settin
 
 功能插件包可以通过 `import type` 共享声明；不得运行时导入或转发另一个功能插件的值。跨包行为使用注入的 Cordis service，跨包 UI 使用 Slots。特定 target 的 Conversation Definition、projection helper 与最终 view data 留在所属 target 包中，即使 Chat 和 Trajectory 有意实现平行逻辑。
 
-共享运行时值需要一个职责收窄、没有功能生命周期的静态 owner，例如 `client/store`、`ui-primitives` 或浏览器安全的 util 包。Transport 与生成 API assembly 可以导入运行时 contribution，因为组装同一个 protocol 正是它们的显式职责。功能包可以通过 `dsh.client.external` 请求 `packages/api/` 下某一行的运行时值，但不能请求另一个功能插件的行。
+共享运行时值需要一个职责收窄、没有功能生命周期的静态 owner，例如 `client/store` 或浏览器安全的 util 包。动态插件包 `ui-slots`、`ui-primitives`、`ui-dockkit` 的 `/client` 实体导出由其他 bundle 通过它们在模块表中的行 require，是会逐步缩减的历史例外。Transport 与生成 API assembly 可以导入运行时 contribution，因为组装同一个 protocol 正是它们的显式职责。功能包可以通过 `dsh.client.external` 请求 `packages/api/` 下某一行的运行时值，但不能请求另一个功能插件的行。
 
 根据所添加的扩展查阅四篇详细参考：
 

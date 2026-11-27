@@ -26,11 +26,11 @@ plugins/@deepseek-ai/dsh-client-ui-chat/assets/running-whale%402x-06738fa29b2f.p
 
 路径逐段先用 `encodeURIComponent` 编码，再编码 `!`、`'`、`(`、`)` 和 `*`，因此引用本身也是合法的无引号 CSS `url()`；包名原样输出。URL 和其他应用自有路由一样相对外壳文档，在任意挂载下、以及在注入的 `<style>` 文本中都能正确解析。组件不需要 hook、注入值或 service：URL 就是模块首次运行时算出的常量。
 
-支持的扩展名是 `.svg`、`.png`、`.webp`、`.jpg` 和 `.jpeg`。client-modules 的 [`src/assets.ts`](../../../../packages/client/modules/src/assets.ts) 统一定义类型表、导出键与目标、revision、产出文件名和 URL，预设、路由和门禁都从这里读取。共享的 Client 类型根 [`scripts/types/client-assets`](../../../../scripts/types/client-assets/index.d.ts) 在 [`tsconfig.base.client.json`](../../../../tsconfig.base.client.json) 中登记，把每个扩展名声明为默认导出字符串的模块；有测试保证它与类型表一致。
+支持的扩展名是 `.svg`、`.png`、`.webp`、`.jpg`、`.jpeg`、`.woff2`、`.woff`、`.ttf` 和 `.otf`。client-modules 的 [`src/assets.ts`](../../../../packages/client/modules/src/assets.ts) 统一定义类型表、导出键与目标、revision、产出文件名和 URL，预设、路由和门禁都从这里读取。共享的 Client 类型根 [`scripts/types/client-assets`](../../../../scripts/types/client-assets/index.d.ts) 在 [`tsconfig.base.client.json`](../../../../tsconfig.base.client.json) 中登记，把每个扩展名声明为默认导出字符串的模块；有测试保证它与类型表一致。
 
 ### 构建
 
-动态浏览器 face 的 `dsh-package-asset` 插件按源码位置解析 import。以下情况构建失败：文件真实路径不在本包 `src/client/assets/` 内（他包或依赖里的图片也因此被拒绝）；`exports["./assets/*"]` 不是恰好 `./lib/assets/*`；扩展名不受支持；路径段为 `node_modules` 或含 Host 路由无法提供的 `%`、`#`、`?`、`\` 或 NUL；扩展名不是小写（导入类型只声明小写扩展名）。每个文件每次构建只产出一次，并登记为监听输入。三条 CSS 管线（CSS Modules、全局样式、`?inline`）对本包 `src/` 内的样式表，经 lightningcss visitor 改写相对 `url()`；`data:`、片段、带协议、以 `/` 开头和空的 URL 保持不变，带片段或查询串的相对文件引用会让构建失败，依赖包的样式表不改写。lightningcss 不会在 `image-set()` 内部调用 `Url` visitor，因此由 `Image` visitor 按同样的规则改写这些选项。改写时先写入 lightningcss 从不转义的标识符占位，因此含括号或引号的文件名仍会变成对应的解析调用。双 face 包的 Node Client face 拒绝资源 import。浏览器 face 是 `lib/assets/` 的唯一写入方：一次性构建会删除本次没有产出的文件，watch 重建则保留它们，因为 Host 仍在提供上一代 bundle，运行它的页面会请求那些文件名。
+动态浏览器 face 的 `dsh-package-asset` 插件按源码位置解析 import。以下情况构建失败：文件真实路径不在本包 `src/client/assets/` 内（他包或依赖里的图片也因此被拒绝）；`exports["./assets/*"]` 不是恰好 `./lib/assets/*`；扩展名不受支持；路径段为 `node_modules` 或含 Host 路由无法提供的 `%`、`#`、`?`、`\` 或 NUL；扩展名不是小写（导入类型只声明小写扩展名）。每个文件每次构建只产出一次，并登记为监听输入。三条 CSS 管线（CSS Modules、全局样式、`?inline`）对本包 `src/` 内的样式表，经 lightningcss visitor 改写相对 `url()`；`data:`、片段、带协议、以 `/` 开头和空的 URL 保持不变，带片段或查询串的相对文件引用会让构建失败。属于某个依赖包的样式表——即样式表上方最近的、带 `name` 且不是本包的 `package.json`——同样改写：被引用的文件必须位于该依赖包内，并输出到 `lib/assets/vendor/<依赖包名>/<依赖包内路径>`，每个 `@font-face` 只保留第一个 `url()` 来源。既不属于本包 `src/`、也不属于任何依赖包的样式表不改写。lightningcss 不会在 `image-set()` 内部调用 `Url` visitor，因此由 `Image` visitor 按同样的规则改写这些选项。改写时先写入 lightningcss 从不转义的标识符占位，因此含括号或引号的文件名仍会变成对应的解析调用。双 face 包的 Node Client face 拒绝资源 import。浏览器 face 是 `lib/assets/` 的唯一写入方：一次性构建会删除本次没有产出的文件，watch 重建则保留它们，因为 Host 仍在提供上一代 bundle，运行它的页面会请求那些文件名。
 
 ### Host 路由
 
@@ -48,9 +48,9 @@ plugins/@deepseek-ai/dsh-client-ui-chat/assets/running-whale%402x-06738fa29b2f.p
 
 ### 门禁与迁移
 
-[`check-workspace-constraints`](../../../../scripts/check-workspace-constraints.ts) 要求声明导出时 `files` 含 `lib/assets`。[`verify-client-packages`](../../../../scripts/verify-client-packages.ts) 要求导出目标精确匹配，只允许动态 Web Client 包声明该导出，并要求导出与包内引用（import，以及其 Client 源码所 import 的样式表中的 `url()`）双向一致。[`verify-package-dependencies`](../../../../scripts/verify-package-dependencies.ts) 把 `./assets/*` 视为非代码导出。ui-settings-account 和 ui-chat 已迁移到包资源，ui-chat 的 tsdown 插件已删除。
+[`check-workspace-constraints`](../../../../scripts/check-workspace-constraints.ts) 要求声明导出时 `files` 含 `lib/assets`。[`verify-client-packages`](../../../../scripts/verify-client-packages.ts) 要求导出目标精确匹配，只允许动态 Web Client 包声明该导出，并要求导出与包内引用（import，以及其 Client 源码所 import 的本包与依赖包样式表中的 `url()`）双向一致。[`verify-package-dependencies`](../../../../scripts/verify-package-dependencies.ts) 把 `./assets/*` 视为非代码导出。ui-settings-account 和 ui-chat 已迁移到包资源，ui-chat 的 tsdown 插件已删除。
 
-三方库自己加载的资源（PDF.js 的字体、cmap、wasm 和 worker）、插件元数据图标、详情文档图片，以及 static-linked 包，保留各自的交付方式。
+三方库自己加载的文件（PDF.js 的字体、cmap、wasm 和 worker）、插件元数据图标、详情文档图片，以及 static-linked 包，保留各自的交付方式。
 
 ## Alternatives considered
 

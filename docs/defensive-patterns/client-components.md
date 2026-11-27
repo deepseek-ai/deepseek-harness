@@ -485,7 +485,7 @@ A feature absorbs its requirement in its own package, and how much separation it
 | `ui-primitives`, the catalogued controls | Consume the catalogued control. A new control starts in the feature package and is promoted into the shared catalog only when a second consumer needs it. |
 | `ui-layout` and the shell layout | Consume it; adapt in the feature package with a wrapper, an overridden style, or an added layer. |
 | `ui-renderer` and the other render machinery | No value dependency from business code; extend only through the documented registration seams — slots, provide/inject-bound hooks, declared stores. |
-| Another feature plugin | No runtime import and no re-export of its values. UI crosses through slots and behavior through injected services; shared runtime code lives in a narrow static owner such as `client/store`, `ui-primitives`, or a browser-safe utility package. |
+| Another feature plugin | No runtime import and no re-export of its values. UI crosses through slots and behavior through injected services; shared runtime code lives in a narrow static owner such as `client/store` or a browser-safe utility package, never in the value exports of `ui-slots`, `ui-primitives`, or `ui-dockkit`, which are a historical exception that will be reduced over time. |
 | The data object layer (`client/connection`, `session-controller/client`, `client/store`) | Read through the documented surface; a feature's own concepts do not enter these objects or their stores. |
 | The feature's own package | Unrestricted — the requirement is absorbed here, including its own rows, ordering, and presentation. |
 

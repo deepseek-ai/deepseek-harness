@@ -20,7 +20,7 @@ The [stable Sidebar mounting decision](../architecture/2026-09-20-sidebar-retain
 
 | Package | Kind | Owns |
 |---|---|---|
-| `packages/client/ui-dockkit` | static-linked library, zero DSH dependencies | the layout engine and the React components that render and drive it; consumers compile its sources, and it keeps exactly one stylesheet because a consumer de-duplicates injected sheets by file name |
+| `packages/client/ui-dockkit` | dynamic plugin package with `immediately: true`, zero DSH dependencies | the layout engine and the React components that render and drive it; consumers require it through its `/client` exports, and it keeps exactly one stylesheet because a consumer de-duplicates injected sheets by file name |
 | `packages/client/ui-sidebar-right` | dynamic plugin | the `rightbar` panel seat and the `conversation.session.header.corner` expand button over one store, one surface per session, both presentations, the float host, `ctx.sidebarRight`, `ctx.sidebarRightTabs`, the tab domain (one occurrence per tab record), the three extension seats, the guide tab type, and the `sidebarRight` copy namespace |
 
 The kit is the product's first embedder and knows nothing about it: every string arrives through `DockLabels`, every tab body through a `TabRenderer` dispatching on an opaque `kind`, and every gesture leaves through `DockIntents`. The integration package supplies what the kit refuses to know.

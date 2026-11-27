@@ -44,7 +44,7 @@ import { isSurfaceEligibleType } from '../../core/session/src/surface.ts'
 
 ## 包只有两类，且两类都是动态插件包
 
-新增包要么是 Host 包，要么是 Host + Client 包，两类都是动态插件包；没有第三种形态可选，也没有例外。shell 经 [packages/client/web/src/platform.ts](../../packages/client/web/src/platform.ts) 的 `PLATFORM_MODULES` 播种的静态客户端库——`client-store`、`ui-slots`、`ui-primitives`、`ui-dockkit`——以及 [packages/util/](../../packages/util/) 下的零依赖库先于本条规则存在，且**已关闭**：它们照原样继续工作，新增包永不加入其中。只有真正的双面包才拆编译面，生成物进 `lib`，`include`、`external` 与 roster 清单由扫描 workspace 得出，不手写。手写清单或新造编译面会让构建产物与清单不再一致，此后每个新增包都得各自维护清单。
+新增包要么是 Host 包，要么是 Host + Client 包，两类都是动态插件包；没有第三种形态可选，也没有例外。`ui-slots`、`ui-primitives`、`ui-dockkit` 是带 `immediately: true` 的 Host + Client 包；它们 `/client` 入口的实体导出是会逐步缩减的历史例外，不是先例（[导出规则](../../packages/client/AGENTS.md#export-discipline-client-plugin-packages)）。shell 播种的静态客户端库 `client-store` 以及 [packages/util/](../../packages/util/) 下的零依赖库先于本条规则存在，且**已关闭**：它们照原样继续工作，新增包永不加入其中。只有真正的双面包才拆编译面，生成物进 `lib`，`include`、`external` 与 roster 清单由扫描 workspace 得出，不手写。手写清单或新造编译面会让构建产物与清单不再一致，此后每个新增包都得各自维护清单。
 
 - 判定条件：新增包未按动态插件包形态构建（static link 打包、手写的全 external 清单）；出现第三种 `tsconfig` 变体；手写 `include`、`external` 或 roster 清单。
 - 形态不要照抄数字，就地复算：先列 `packages/*/*` 下的 `tsconfig.json`，再列同时带 `tsconfig.client.json` 与 `tsconfig.host.json` 的包，最后列声明 `dsh.client` 的包。
