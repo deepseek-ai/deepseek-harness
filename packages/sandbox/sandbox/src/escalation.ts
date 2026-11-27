@@ -76,9 +76,6 @@ export const WIDER_MODES: Record<string, readonly SandboxMode[]> = {
  */
 export const ESCALATION_TARGETS: readonly SandboxMode[] = ['workspace-write', 'danger-full-access']
 
-/** Every {@link SandboxMode}, weakest first, for option advertisement and runtime validation of untrusted mode strings. */
-export const SANDBOX_MODES: readonly SandboxMode[] = ['read-only', 'workspace-write', 'danger-full-access']
-
 /**
  * Validate the escalation argument pairing a tool schema cannot express:
  * `sandbox_permissions` and `justification` travel together — an approval
@@ -212,12 +209,11 @@ export interface EscalationRequest {
  */
 export async function approveEscalation<A, C>(request: EscalationRequest, approval: EscalationApproval<A, C>): Promise<SandboxMode> {
   const { requestedMode: mode, effectiveMode, justification, subject } = request
+  if (mode === effectiveMode || (WIDER_MODES[mode] ?? []).includes(effectiveMode)) return effectiveMode
   // Widening is an EXECUTION check against the call's effective mode —
   // deliberately not a schema constraint (the enum is the closed target
   // vocabulary; the effective mode is per-call truth).
   if (!(WIDER_MODES[effectiveMode] ?? []).includes(mode as SandboxMode)) {
-    const known: readonly string[] = SANDBOX_MODES
-    if (known.includes(mode) && known.includes(effectiveMode)) return effectiveMode
     throw new SandboxEscalationError(
       `unsupported sandbox escalation from "${effectiveMode}" to "${mode}"`,
       'SANDBOX_ESCALATION_INVALID_ARGUMENT',

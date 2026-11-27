@@ -34,8 +34,7 @@ import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-working-directory'
 
-export { SANDBOX_MODES } from '@deepseek-ai/dsh-sandbox'
-export { setSandboxMode } from './session-mode.ts'
+export { SANDBOX_MODES, setSandboxMode } from './session-mode.ts'
 
 /** Whether a path is usable as an execution-world grant: absolute and free of NUL bytes. */
 function isExecutionWorldPath(path: string): boolean {

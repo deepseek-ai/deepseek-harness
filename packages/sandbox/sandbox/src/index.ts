@@ -12,7 +12,6 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 export {
   ESCALATION_TARGETS,
   SANDBOX_ESCALATION_ERROR_CODES,
-  SANDBOX_MODES,
   SandboxEscalationError,
   WIDER_MODES,
   approveEscalation,
