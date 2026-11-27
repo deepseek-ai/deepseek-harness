@@ -12,7 +12,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type { NS } from './locales.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotMap {
     /**
      * Sections of the Session panel. `id` addresses the section, `order` sorts

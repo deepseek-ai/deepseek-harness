@@ -39,7 +39,7 @@ export type { BuiltInLocaleId, LocaleId, LocaleSettings } from '../locale-settin
 // TranslateNS<'model'> is the namespace-addressed developer-facing form.
 export type { Translate, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** Shared cross-feature vocabulary, consulted by the lookup chain after the entry's own namespace misses. */
     common: CommonKey

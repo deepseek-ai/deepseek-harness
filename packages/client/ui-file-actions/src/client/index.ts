@@ -12,7 +12,7 @@ export type { FileActions, FileActionSource, FileSaveResult } from '../types.ts'
 declare module '@deepseek-ai/cordis' {
   interface Context { /** Original-file saving and image clipboard commands. */ fileActions: FileActions }
 }
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** Original-file action labels and feedback. */
     fileActions: FileActionKey

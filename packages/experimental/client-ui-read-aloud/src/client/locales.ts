@@ -71,7 +71,7 @@ export const en: Record<ReadAloudKey, string> = {
   'sample.credential': 'The sample could not be played. Check your DeepSeek sign-in, API key, or balance',
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** Experimental read-aloud control, notices, and bundle details. */
     'read-aloud': ReadAloudKey

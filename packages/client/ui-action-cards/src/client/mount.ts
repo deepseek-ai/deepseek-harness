@@ -13,7 +13,7 @@ import { SettingsRow, type CardSettings, type SettingsRowInjected } from './Sett
 import { ActionCardRegistry } from './registry.ts'
 import { de, en, es, fr, ja, pt, ru, zh, type ActionCardKey } from './locales.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap { actionCards: ActionCardKey }
 }
 

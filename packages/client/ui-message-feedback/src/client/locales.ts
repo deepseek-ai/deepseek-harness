@@ -27,7 +27,7 @@ export const zh = {
 /** The feedback namespace key union. */
 export type MessageFeedbackKey = keyof typeof zh
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** The feedback surface's copy: the message controls, the dialog, and the acknowledgement. */
     feedback: MessageFeedbackKey

@@ -11,7 +11,7 @@
 
 import type {} from '@deepseek-ai/dsh-client-ui-slots'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotFactoryMap {
     /**
      * One `settings.section` entry, rendered wherever a surface shows that

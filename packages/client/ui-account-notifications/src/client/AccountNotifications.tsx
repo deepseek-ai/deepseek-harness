@@ -30,7 +30,7 @@ export function AccountNotifications({ active, openAccount, useNotices, shown, c
     onOpenAccount={openAccount} onShown={shown} onCtaClicked={ctaClicked} onDismiss={dismiss} />
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap { 'account.notifications': NotificationKey }
 }
 

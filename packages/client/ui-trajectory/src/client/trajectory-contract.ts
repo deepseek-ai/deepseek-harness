@@ -87,7 +87,7 @@ declare module '@deepseek-ai/dsh-client-ui-conversation/client' {
   }
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SessionStandardProps {
     /** Selector hook over the current Conversation binding's Trajectory target. */
     useTrajectory: UseTrajectory

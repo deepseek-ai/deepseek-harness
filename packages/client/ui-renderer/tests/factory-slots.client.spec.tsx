@@ -17,7 +17,7 @@ interface CounterActions extends ActionsDecl<CounterState> {
 }
 type CounterStore = StoreHandle<CounterState, CounterActions>
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotMap {
     'renderer.factory.child': { kind: 'list'; scope: 'root' }
     'renderer.factory.chain': { kind: 'chain'; scope: 'root'; owner: { enabled: boolean } }

@@ -26,7 +26,7 @@ declare module '@deepseek-ai/dsh-client-ui-session/client' {
   }
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** Approval prompt copy. */
     approval: ApprovalKey

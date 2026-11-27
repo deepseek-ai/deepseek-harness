@@ -79,7 +79,7 @@ export const pt: Record<ConnectorAccountKey, string> = {
   'notice.action-failed': 'A ação não foi concluída. Tente novamente.',
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     connectorAccount: ConnectorAccountKey
   }

@@ -38,7 +38,7 @@ export type { AccountSnapshot } from './AccountSection.tsx'
 export type { AccountKey } from './locales.ts'
 export type { AccountUi, AccountUiState, AccountNotificationsOwnerProps } from './account-ui.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap { 'settings.account': AccountKey }
 }
 

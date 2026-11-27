@@ -31,7 +31,7 @@ import * as viewerPermission from './viewer-permission.tsx'
 import * as viewerSession from './viewer-session-plugin.ts'
 import * as viewerSessionRow from './viewer-session-row.tsx'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     liveshare: LiveshareKey
   }

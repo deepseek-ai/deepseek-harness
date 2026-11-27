@@ -35,7 +35,7 @@ export { ModelDirectoryResolver } from './service.ts'
 export type { ModelLabelOwner, ModelSelectInjected } from './slots.ts'
 export type { ModelKey } from './locales.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** The model selection surfaces' copy (/model popup + composer seat). */
     model: ModelKey

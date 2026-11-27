@@ -19,7 +19,7 @@ import { officeFace } from './face.ts'
 import { createOfficeStore } from './store.ts'
 import type { OfficeLimits } from '../../types.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     sidebarOffice: OfficePreviewKey
   }

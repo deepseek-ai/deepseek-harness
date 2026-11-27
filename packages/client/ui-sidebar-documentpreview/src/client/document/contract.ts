@@ -45,7 +45,7 @@ export interface DocumentBodyOwner {
   readonly scrollportRef: RefCallback<HTMLElement>
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotMap {
     /** Document body selected by a registered implementation id. */
     'sidebar.right.tab.document': {

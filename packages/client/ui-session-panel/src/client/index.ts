@@ -24,7 +24,7 @@ import type { ProjectRowInjected, SessionPanelInjected, SessionPanelToggleInject
 import { SessionPanelState } from './visibility.ts'
 import { de, en, es, fr, ja, NS, pt, ru, zh, type SessionPanelKey } from './locales.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** Session panel copy. */
     sessionPanel: SessionPanelKey

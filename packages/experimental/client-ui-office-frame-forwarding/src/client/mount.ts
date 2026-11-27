@@ -16,7 +16,7 @@ import { Preview } from './Preview.tsx'
 import { RetainedViews } from './RetainedViews.tsx'
 import { zh, en, ja, es, fr, de, ru, pt } from './locales.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** Default Office preview controls. */ desktopOffice: import('./locales.ts').OfficeKey
   }

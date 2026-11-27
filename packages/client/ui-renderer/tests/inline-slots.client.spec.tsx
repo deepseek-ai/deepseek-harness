@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 import type { PropsRenderFactories, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotMap {
     'spec.inline.single': { kind: 'single'; scope: 'root'; inline: true }
     'spec.inline.keyed': { kind: 'keyed'; scope: 'root'; inline: true }

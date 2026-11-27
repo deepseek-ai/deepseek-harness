@@ -10,7 +10,7 @@ import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import { apply, inject } from '../src/client/index.ts'
 
 // The test frame changes a real Session binding without depending on a feature Header.
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotMap {
     'test.sessionLogExport.session': { kind: 'single'; scope: 'session' }
   }

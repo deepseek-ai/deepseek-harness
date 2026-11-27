@@ -19,7 +19,7 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface GlobalStandardProps {
     /**
      * Whether a CSS media query currently matches in the page window; the component rerenders when the answer

@@ -190,7 +190,7 @@ export const zh = {
 /** The performance dictionary key union. */
 export type StatsKey = keyof typeof zh
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** Turn and step Statistics table copy. */
     stats: StatsKey

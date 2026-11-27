@@ -12,7 +12,7 @@ import { LOCALE_SETTINGS_NAMESPACE, LocaleSettingsSchema } from '@deepseek-ai/ds
 import type { SettingsNamespaceView } from '@deepseek-ai/dsh-settings/types'
 import type { SettingsGeneralItemOwnerProps } from '@deepseek-ai/dsh-client-ui-settings/client'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotMap {
     'settings.general.group.custom.item': { kind: 'list'; scope: 'root'; owner: SettingsGeneralItemOwnerProps }
   }

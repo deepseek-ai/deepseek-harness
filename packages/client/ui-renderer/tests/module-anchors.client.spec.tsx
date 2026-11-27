@@ -24,7 +24,7 @@ const panelChildren = { 'module-test.keyed': keyed }
 interface Route { enabled: boolean }
 type LayerMode = 'forward' | 'drop' | 'crash'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotMap {
     'module-test.single': typeof single
     'module-test.keyed': typeof keyed

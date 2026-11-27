@@ -40,7 +40,7 @@ export type { TreeEntry, TreeEntryMeta, TreeEntryKind, TreeDirectoryState, FileT
 export type { FileNavigatorInput } from './FileNavigator.tsx'
 export type { NavigatorToggleInput } from './NavigatorToggle.tsx'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotMap {
     /** Workspace directory actions after the `files` page's reload control. */
     'sidebar.right.tab.files.actions': {

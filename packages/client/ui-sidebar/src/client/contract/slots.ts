@@ -17,7 +17,7 @@ import type { ShortcutCatalogEntry } from '@deepseek-ai/dsh-client-shortcuts/cli
 import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { ProductEventMap } from '@deepseek-ai/dsh-client-product-analytics/client'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotFactoryMap {
     /** Reuse a registered panel icon in navigation rows and menus. */
     'sidebar.panel.icon': {

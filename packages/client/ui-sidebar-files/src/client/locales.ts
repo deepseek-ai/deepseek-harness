@@ -11,7 +11,7 @@
  */
 import type {} from '@deepseek-ai/dsh-client-ui-slots'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** File-tree type name, guide entry, navigator controls, row states, and failure lines. */
     sidebarFiles: SidebarFilesKey

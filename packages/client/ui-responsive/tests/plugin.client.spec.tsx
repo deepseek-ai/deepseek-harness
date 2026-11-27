@@ -11,7 +11,7 @@ import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 import UiResponsiveService from '../src/client/index.ts'
 import { apply as applyHost } from '../src/index.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotMap {
     'ui-responsive.test.probe': { kind: 'list'; scope: 'root'; owner: { query: string } }
   }

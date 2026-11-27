@@ -23,7 +23,7 @@ export type { ShellCardProps } from './ShellCard.tsx'
 export type { ShellCardFace, ShellCardState, ShellSettings } from './shell-card-controller.ts'
 export type { ShellSettingsLocaleKey } from './locales.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** Shell settings page copy. */
     'settings.shell': ShellSettingsLocaleKey

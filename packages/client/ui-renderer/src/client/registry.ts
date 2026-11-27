@@ -25,7 +25,7 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-slots'
 import { SlotAssemblyError } from './errors.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotMap {
     /**
      * The built-in render-tree root hole (seeded by SlotCore): the one slot the

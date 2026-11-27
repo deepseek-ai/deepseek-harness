@@ -15,7 +15,7 @@ export interface SidechatNoticeInjected {
   readonly dismiss: () => void
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotMap {
     /** Replace the embedded child Conversation; receives its Session scope and no owner data. Absence leaves the tab body empty. */
     'sidechat.conversation': { kind: 'single'; scope: 'session' }

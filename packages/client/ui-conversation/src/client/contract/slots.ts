@@ -196,7 +196,7 @@ export type UseConversation = SnapshotSelectorHook<ConversationSnapshot>
 /** Selector hook over the registered Conversation View roster. */
 export type UseConversationViews = SnapshotSelectorHook<readonly ViewTab[]>
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotFactoryMap {
     /** Parse one original text and render its business nodes through the owned keyed Slot. */
     'conversation.user.text': {

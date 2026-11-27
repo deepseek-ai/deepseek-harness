@@ -32,7 +32,7 @@ import type { TabHookContext } from '../tab-info.ts'
 import type { SidebarRightKey } from '../locales.ts'
 import type { SidebarRightNavigationParams, SidebarRightResourceParams, SidebarRightTabParamsFor } from './params.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** Right-Sidebar chrome, docking-kit vocabulary, and guide copy. */
     sidebarRight: SidebarRightKey

@@ -32,7 +32,7 @@ import type { OpenTargetReporter } from './OpenTargetButton.tsx'
 import { en, ja, es, fr, de, ru, pt, NS, zh, type OpenInAppKey } from './locales.ts'
 import { createOpenInAppToastSource, OpenInAppToast } from './open-toast.tsx'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** Native application menu and control copy. */
     'open-in-app': OpenInAppKey

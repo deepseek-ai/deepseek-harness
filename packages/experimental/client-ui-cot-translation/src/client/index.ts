@@ -9,7 +9,7 @@ export type { CotTranslationKey } from './locales.ts'
 export type { TranslationBodyInjected, TranslationBodyProps } from './TranslationBody.tsx'
 export type { TranslationFormInjected, TranslationFormState } from './preferences-form.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap { cotTranslation: import('./locales.ts').CotTranslationKey }
 }
 

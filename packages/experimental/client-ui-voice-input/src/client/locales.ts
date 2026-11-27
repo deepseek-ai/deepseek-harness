@@ -264,7 +264,7 @@ export const en: Record<VoiceKey, string> = {
   'cloudGuideUrl': 'https://api-docs.deepseek.com/guides/asr',
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** Experimental microphone and transcription controls. */
     'voice-input': VoiceKey

@@ -29,7 +29,7 @@ export type {
 } from './web-search-card-controller.ts'
 export type { WebSearchSettingsLocaleKey } from './locales.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** Web search and fetch settings page copy. */
     'settings.webSearch': WebSearchSettingsLocaleKey

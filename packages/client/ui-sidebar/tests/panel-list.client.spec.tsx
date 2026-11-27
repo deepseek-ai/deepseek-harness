@@ -14,7 +14,7 @@ import type { PropsRenderSlots, PropsRuntime, SlotLabel } from '@deepseek-ai/dsh
 import type { TrackProductEvent } from '@deepseek-ai/dsh-client-product-analytics/client'
 import { apply, inject } from '../src/client/index.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     'sidebar-panel-test': 'alpha'
   }

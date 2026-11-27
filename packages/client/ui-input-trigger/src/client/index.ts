@@ -38,7 +38,7 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** The candidate menu's copy: group titles keyed by source name, the pending row, and the listbox aria. */
     'slash.menu': MenuKey

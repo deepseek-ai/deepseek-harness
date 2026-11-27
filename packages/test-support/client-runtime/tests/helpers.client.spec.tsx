@@ -22,7 +22,7 @@ import {
 const originalLanguages = [...navigator.languages]
 const originalLanguage = navigator.language
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotMap {
     'trt.panel-info': { kind: 'keyed'; scope: 'root'; owner: { label: string } }
   }

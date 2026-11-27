@@ -16,7 +16,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session-panel/client'
 import { en, ja, es, fr, de, ru, pt, NS, zh, type JobKey } from './locales.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** Background-job list copy. */
     'job': JobKey

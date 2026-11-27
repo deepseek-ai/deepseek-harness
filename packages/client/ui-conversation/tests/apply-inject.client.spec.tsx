@@ -31,7 +31,7 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { InboxWireState } from '@deepseek-ai/dsh-agent/types'
 import { continuationTurn } from './continuation-fixture.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotMap {
     'quote-probe': { kind: 'single'; scope: 'session' }
   }

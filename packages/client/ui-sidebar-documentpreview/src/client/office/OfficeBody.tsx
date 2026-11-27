@@ -25,7 +25,7 @@ export interface OfficeNativeOwner extends Pick<DocumentBodyOwner, 'resourceAddr
   readonly onNativeUnavailable: () => void
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotMap {
     /** Native controls alongside the shared document reload action. */
     'sidebar.right.tab.document.office.native.action': {

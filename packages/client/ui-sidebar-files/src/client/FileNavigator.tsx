@@ -40,7 +40,7 @@ export interface FileNavigatorInput {
   readonly onOpen: (address: string) => void
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotFactoryMap {
     /**
      * One pane's workspace tree with its width and show/hide state. The host renders it as a direct child of

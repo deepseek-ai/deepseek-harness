@@ -51,7 +51,7 @@ export interface ConnectorAccountFactoryInput {
   readonly presentation: 'section' | 'status'
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotFactoryMap {
     /** One registered account by key, for a surface outside the account's bundle page; nothing before the Host lists it. */
     'connector.account': { scope: 'root'; props: ConnectorAccountFactoryInput; locale: 'connectorAccount'; inject: ConnectorAccountFace }

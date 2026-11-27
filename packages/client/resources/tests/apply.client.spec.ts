@@ -14,7 +14,7 @@ import { apply as hostApply } from '../src/index.ts'
 import { ResourceRegistry } from '../src/client/resources.ts'
 import type { ResourceProvider } from '../src/client/contract.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotMap {
     'resources.probe': { kind: 'single'; scope: 'root' }
     'resources.sessionProbe': { kind: 'single'; scope: 'session' }

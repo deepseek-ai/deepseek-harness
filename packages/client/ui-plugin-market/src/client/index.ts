@@ -18,7 +18,7 @@ import { DiscoverController } from './market-store.ts'
 export type { DiscoverFace, DiscoverState } from './market-store.ts'
 export type { PluginMarketLocaleKey } from './locales.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** Discover tab copy. */
     'pluginMarket': PluginMarketLocaleKey

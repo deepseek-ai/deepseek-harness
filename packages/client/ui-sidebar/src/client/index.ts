@@ -30,7 +30,7 @@ const SIDEBAR_SECTION_INJECT: SidebarSectionInjected = {
   hooks: { sectionScroller: (_standard, { useSectionScroller }) => useSectionScroller },
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** Sidebar controls and global panel copy. */
     sidebar: SidebarKey

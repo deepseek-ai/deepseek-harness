@@ -13,7 +13,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-slots'
 import { createSlotRenderer } from '../src/client/scoped-slots.tsx'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotMap {
     'spec.hoc': { kind: 'hoc'; scope: 'root'; owner: { tone: string } }
     'spec.hoc.maybe': { kind: 'hoc'; scope: 'session-maybe' }

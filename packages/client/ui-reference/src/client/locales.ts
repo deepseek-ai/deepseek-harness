@@ -35,7 +35,7 @@ export const zh = {
 /** The reference namespace key union. */
 export type ReferenceKey = keyof typeof zh
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** Reference menu and per-file navigation feedback. */
     reference: ReferenceKey

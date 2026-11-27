@@ -27,7 +27,7 @@ export { createMenuStore } from './store.ts'
 declare module '@deepseek-ai/cordis' {
   interface Context { /** Extensible context menus for explicit clicked objects. */ contextMenus: ContextMenus }
 }
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface GlobalStandardProps {
     /** Menu bindings for explicit objects, available in every Slot scope. */
     useContextMenu: UseContextMenu

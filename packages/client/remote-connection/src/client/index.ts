@@ -21,7 +21,7 @@ import { en, zh, ja, es, fr, de, ru, pt, type RemoteConnectionLocaleKey } from '
 export type { RemoteConnectionContentProps, RemoteConnectionExtensionProps } from './slots.ts'
 export type { RemoteConnectionState } from './remote-connection-controller.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** Remote connection settings copy. */
     remoteConnection: RemoteConnectionLocaleKey

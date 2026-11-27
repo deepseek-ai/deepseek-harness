@@ -30,7 +30,7 @@ export interface UiRendererService {
   mount: (container: HTMLElement) => () => void
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface GlobalStandardProps {
     /** @returns A stable portal component for this application mount. Its native keydown handlers listen on the document. */
     useDocumentPortal: () => FC<DocumentPortalProps>

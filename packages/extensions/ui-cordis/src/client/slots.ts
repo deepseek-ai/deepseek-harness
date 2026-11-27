@@ -20,7 +20,7 @@ export interface CordisToolViewOwnerProps {
   readonly pluginRunId: CordisDynamicPluginRunId
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotMap {
     /**
      * Interactive Package-owned region rendered inside the latest eligible

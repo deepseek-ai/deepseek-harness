@@ -11,7 +11,7 @@ import { ShortcutReference, ShortcutsRow } from './Reference.tsx'
 import { en, ja, es, fr, de, ru, pt, zh } from './locales.ts'
 import { fixedCommands } from './fixed.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** Shortcut reference and settings entry copy. */
     shortcuts: keyof typeof zh

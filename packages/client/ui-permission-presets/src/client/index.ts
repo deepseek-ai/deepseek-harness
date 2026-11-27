@@ -62,7 +62,7 @@ export const inject = [
   'configForms', 'settingsSchema',
 ]
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** Current-session permission picker and confirmation copy. */
     'permission.access': keyof typeof accessEn

@@ -111,7 +111,7 @@ export interface FileTreeInput {
   readonly rowTriggerProps?: ((entry: TreeEntry, kind: 'file' | 'directory') => ContextMenuTriggerProps) | undefined
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotFactoryMap {
     /** A controlled file tree over caller-supplied entries; the caller decides what a click does. */
     'sidebar.files.tree': {

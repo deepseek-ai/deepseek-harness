@@ -21,7 +21,7 @@ export interface NavigatorToggleInput {
   readonly useTabInfo: UseSidebarRightTabInfo
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotFactoryMap {
     /** Show or hide the pane's workspace tree; absent without a working directory. */
     'sidebar.files.navigator.toggle': {

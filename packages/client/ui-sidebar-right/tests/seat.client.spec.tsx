@@ -33,7 +33,7 @@ declare module '../src/client/contract/params.ts' {
   }
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotMap {
     /** A Conversation-column stand-in rendered before the seat, opening a resource as soon as a seat is mounted. */
     'sidebar-right.test.opener': { kind: 'single'; scope: 'session'; owner: { armed: boolean } }

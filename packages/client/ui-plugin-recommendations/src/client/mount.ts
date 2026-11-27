@@ -10,7 +10,7 @@ import type {} from '@deepseek-ai/dsh-plugin-recommendations/remote'
 import { PluginCardBody, type CatalogDetails, type PluginCardServices } from './Card.tsx'
 import { de, en, es, fr, ja, pt, ru, zh, type RecommendationKey } from './locales.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap { pluginRecommendations: RecommendationKey }
 }
 

@@ -8,7 +8,7 @@ import { UploadPreference, type UploadSettings } from './upload-preference.ts'
 import { UploadRow, UploadToast, type UploadInjected } from './UploadRow.tsx'
 import { en, ja, es, fr, de, ru, pt, zh } from './locales.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** API Session-log preference copy. */
     'settings.sessionLog': keyof typeof en

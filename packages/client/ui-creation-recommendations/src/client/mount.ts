@@ -7,7 +7,7 @@ import { PageCardBody } from './Card.tsx'
 import { de, en, es, fr, ja, pt, ru, zh, type RecommendationKey } from './locales.ts'
 import { createCreationInfoStore } from './info-store.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap { creationRecommendations: RecommendationKey }
 }
 

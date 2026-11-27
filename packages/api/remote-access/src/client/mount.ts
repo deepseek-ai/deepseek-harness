@@ -73,7 +73,7 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface GlobalStandardProps {
     /** Whether the current Peer may call `action` on the global resource. */
     useRemoteAccess: (action: RemoteEndpoint) => boolean

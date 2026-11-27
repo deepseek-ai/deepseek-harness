@@ -132,7 +132,7 @@ class PendingInteractionDomain<T extends SessionPendingInteractionBase> {
   }
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotScopeTargetMap {
     session: SessionReference
   }

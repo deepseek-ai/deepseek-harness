@@ -32,7 +32,7 @@ export type SessionStatusSnapshot = ReadonlyMap<SessionId, SessionStatus>
 /** Selector hook over the unified Session UI status snapshot. */
 export type UseSessionStatus = SnapshotSelectorHook<SessionStatusSnapshot>
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface GlobalStandardProps {
     useSessionStatus: UseSessionStatus
   }

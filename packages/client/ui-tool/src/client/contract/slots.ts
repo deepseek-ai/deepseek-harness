@@ -12,7 +12,7 @@ import type { AskUserQuestionAnswerItem, AskUserQuestionItem } from '@deepseek-a
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type { ToolFileInjected } from '../tool/file-menu.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotMap {
     /**
      * Key by wire name, including custom tools; a typo never renders. Unclaimed keys use the generic row.

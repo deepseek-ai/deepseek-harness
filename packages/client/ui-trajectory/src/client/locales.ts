@@ -219,7 +219,7 @@ export const zh = {
 /** The trajectory dictionary key union. */
 export type TrajectoryKey = keyof typeof zh
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** The complete trajectory ledger, timeline, inspector, and toolbar copy. */
     trajectory: TrajectoryKey

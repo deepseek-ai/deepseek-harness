@@ -29,7 +29,7 @@ import { en, ja, es, fr, de, ru, pt, zh, type PlanKey } from './locales.ts'
 
 export type { PlanKey } from './locales.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** The composer plan chip's copy. */
     plan: PlanKey

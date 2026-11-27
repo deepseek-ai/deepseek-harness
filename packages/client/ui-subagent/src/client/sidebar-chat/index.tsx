@@ -35,7 +35,7 @@ declare module '@deepseek-ai/dsh-api-session-controller/client' {
   }
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface ResourceProtocolMap {
     subagentchat: SubagentChatResource
   }

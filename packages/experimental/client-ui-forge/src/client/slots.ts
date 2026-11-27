@@ -74,7 +74,7 @@ export interface ForgeReviewConversationProps {
   readonly onWorkspaceSelected: WorkspaceSelectedHandler
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotMap {
     /** The review page's conversation about one change request, in the Session its chat tab shows. */
     'forge.review.conversation': { kind: 'single'; scope: 'session'; owner: ForgeReviewConversationProps }
