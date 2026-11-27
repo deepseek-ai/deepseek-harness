@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Vista previa nativa de Office",
+    "description": "Muestra en Desktop vistas previas de solo lectura de archivos locales de Word, Excel y PowerPoint tal como los renderiza LibreOffice mediante el reenvío de fotogramas."
+  }
+}

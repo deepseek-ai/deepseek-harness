@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Visualização nativa do Office",
+    "description": "Mostra no Desktop visualizações somente leitura de arquivos locais do Word, Excel e PowerPoint como o LibreOffice os renderiza por meio do encaminhamento de quadros."
+  }
+}

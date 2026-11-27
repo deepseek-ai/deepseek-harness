@@ -2,7 +2,8 @@
 
 import { describe, expect, it } from 'vitest'
 import {
-  CONNECTOR_BUNDLES, OFFICIAL_CONNECTOR_CATALOG, OFFICIAL_ON_DEMAND_CATALOG, ON_DEMAND_BUNDLES, PROFILE_TEMPLATES,
+  CONNECTOR_BUNDLES, EXPERIMENTAL_BUNDLES, HIDDEN_BUNDLES, MORE_BUNDLES, OFFICIAL_CONNECTOR_CATALOG,
+  OFFICIAL_ON_DEMAND_CATALOG, ON_DEMAND_BUNDLES, OPTIONAL_BUNDLES, PROFILE_TEMPLATES,
 } from '../src/index.ts'
 
 describe('Official catalogs', () => {
@@ -22,6 +23,19 @@ describe('Official catalogs', () => {
         expect(text.zh).toMatch(/\S/)
       }
       expect(entry).not.toHaveProperty('version')
+    }
+  })
+})
+
+describe('Optional Office bundle', () => {
+  it('ships disabled by default and appears in More with the Experimental badge', () => {
+    const office = '@deepseek-ai/dsh-office-frame-forwarding-bundle'
+    expect(OPTIONAL_BUNDLES).toContain(office)
+    expect(MORE_BUNDLES).toContain(office)
+    expect(EXPERIMENTAL_BUNDLES.has(office)).toBe(true)
+    expect(HIDDEN_BUNDLES.has(office)).toBe(false)
+    for (const template of Object.values(PROFILE_TEMPLATES)) {
+      expect(template.bundles).not.toContain(office)
     }
   })
 })

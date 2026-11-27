@@ -198,8 +198,8 @@ export default class FrameForwarding extends TypertRemoteService implements Fram
   }
 
   /**
-   * Keep the renderer's physical viewport for a channel and apply it to the current producer connection; later
-   * connections receive it before their frames are delivered.
+   * Keep the renderer's physical viewport for a channel and apply it to the channel's producer connection; if submitted
+   * before the producer connects, it is applied on connection before its frames are delivered.
    * @param rx - A channel the renderer consumes.
    * @param viewport - Physical pixel size, scale, and visibility with a strictly increasing version.
    * @returns The acknowledging connection, the Host's retained version for a stale submission, or why no producer acknowledged it.

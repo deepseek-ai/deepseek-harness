@@ -78,7 +78,7 @@
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-api-remotes": "workspace:*",
     "@deepseek-ai/dsh-shared-texture": "workspace:*",
-    "@deepseek-ai/libreoffice-kit": "0.2.3",
+    "@deepseek-ai/libreoffice-kit": "0.2.4",
     "node-api-headers": "1.9.0"
   }
 }

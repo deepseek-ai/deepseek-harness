@@ -1,41 +1,50 @@
 import type { FrameForwardingViewport } from '../types.ts'
-import type { FrameForwardingFrame, FrameFullscreenState, FrameRxEvent } from './api.ts'
+import type { FrameContentWindow, FrameForwardingFrame, FrameRxEvent } from './api.ts'
 import type { ContentState } from './content.ts'
 import { FrameDiscardedError, FrameFailureError } from './errors.ts'
 import { createMediaPresenter, type MediaPresenter } from './presenters.ts'
 
 interface MountOwner {
-  fullscreen(): FrameFullscreenState
   content(): ContentState | undefined
   viewport(value: Omit<FrameForwardingViewport, 'version'>, completion: Promise<FrameForwardingViewport>): Promise<FrameForwardingViewport>
   report(event: FrameRxEvent): void
   failure(error: Error): void
 }
 
-/** Mount-owned display resources, observed through FrameRx's existing stream and fullscreen state. */
+/** Mount-owned display resources, observed through FrameRx's stream and explicit visibility. */
 export interface ElementMount {
+  readonly submittedWindow: FrameContentWindow | undefined
   present(frame: FrameForwardingFrame): void | Promise<void>
   dirty(): void
+  /** Update the caller-declared visibility of this mount and schedule a viewport refresh. */
+  setVisible(visible: boolean): void
   /** Push the current content snapshot synchronously, before submitting its viewport. */
   pushContent(): void
   /** Queue a window change behind the in-flight viewport.
    * @returns The latest-only acknowledgement shared by unsent requests; rejects when this display ends.
    */
   requestViewport(): Promise<FrameForwardingViewport>
-  dispose(): void
+  /**
+   * Stop the display's observers and media track.
+   * @param reason - Why the display ended; viewport requests not yet acknowledged reject with it, or with
+   *   {@link FrameDiscardedError} `cancelled` when it is omitted.
+   */
+  dispose(reason?: Error): void
 }
 
 /** Mount a channel without taking ownership of the channel itself.
  * @param element - Container for the video.
  * @param owner - Channel-owned viewport, state and error callbacks.
- * @returns A display whose disposal cancels observers, stops the media track.
+ * @param initialVisible - Initial caller-declared visibility; defaults to `true`.
+ * @returns A display whose disposal cancels observers and stops the media track.
  */
-export function mountElement(element: HTMLElement, owner: MountOwner): ElementMount {
+export function mountElement(element: HTMLElement, owner: MountOwner, initialVisible = true): ElementMount {
   const document = element.ownerDocument
   const view = document.defaultView
   if (view === null) throw new FrameFailureError('presentation', 'The frame mount needs a live document.')
   if (element.hasAttribute('data-dsh-frame-mount')) throw new Error('Native element already has a frame consumer.')
   let disposed = false
+  let explicitVisible = initialVisible
   let raf: number | undefined
   let intersecting = false
   let media: MediaPresenter | undefined
@@ -52,50 +61,30 @@ export function mountElement(element: HTMLElement, owner: MountOwner): ElementMo
   const dirty = (): void => {
     if (!disposed && raf === undefined) raf = view.requestAnimationFrame(flush)
   }
+  const setVisible = (visible: boolean): void => {
+    if (explicitVisible === visible) return
+    explicitVisible = visible
+    dirty()
+  }
   const resize = new ResizeObserver(dirty)
   const intersection = new IntersectionObserver((entries) => {
     for (const entry of entries) if (entry.target === element) intersecting = entry.isIntersecting
     dirty()
   })
-  // IntersectionObserver tracks geometry but not CSS visibility. Observe the mount's ancestor
-  // chain for tab hiding and producer trimming, including a docked tab reparented into a float.
-  let chain: Element[] = []
-  const visibilityObserver = new MutationObserver((records) => {
-    if (records.some(record => record.type === 'attributes'
-      || [...record.removedNodes].some(node => chain.includes(node as Element)))) dirty()
-  })
-  const shownInLayout = (): boolean => {
-    const next: Element[] = []
-    let shown = true
-    for (let node: Element | null = element; node !== null; node = node.parentElement) {
-      next.push(node)
-      const style = getComputedStyle(node)
-      shown &&= style.display !== 'none' && style.visibility !== 'hidden' && style.visibility !== 'collapse'
-    }
-    if (next.length !== chain.length || next.some((node, index) => node !== chain[index])) {
-      visibilityObserver.disconnect()
-      for (const node of next) visibilityObserver.observe(node, {
-        attributeFilter: ['class', 'style', 'hidden'], childList: true,
-      })
-      chain = next
-    }
-    return shown
-  }
   const restore = (property: string, value: string, priority: string): void => {
     if (value === '') element.style.removeProperty(property)
     else element.style.setProperty(property, value, priority)
   }
-  const dispose = (): void => {
+  const dispose = (reason?: Error): void => {
     if (disposed) return
     disposed = true
-    const ended = new FrameDiscardedError('producer-changed')
+    const ended = reason ?? new FrameDiscardedError('cancelled')
     requestedViewport?.reject(ended)
     requestedViewport = undefined
     viewportPending?.reject(ended)
     if (raf !== undefined) view.cancelAnimationFrame(raf)
     resize.disconnect()
     intersection.disconnect()
-    visibilityObserver.disconnect()
     document.removeEventListener('visibilitychange', visibilityChanged)
     view.removeEventListener('resize', dirty)
     media?.dispose()
@@ -107,8 +96,9 @@ export function mountElement(element: HTMLElement, owner: MountOwner): ElementMo
   }
   const fail = (error: unknown): void => {
     if (disposed) return
-    try { dispose() } catch (cleanupError) { console.error('Frame mount cleanup failed', cleanupError) }
-    owner.failure(error instanceof Error ? error : new FrameFailureError('presentation', String(error)))
+    const failure = error instanceof Error ? error : new FrameFailureError('presentation', String(error))
+    try { dispose(failure) } catch (cleanupError) { console.error('Frame mount cleanup failed', cleanupError) }
+    owner.failure(failure)
   }
   const sendViewport = (): boolean => {
     if (disposed || viewportPending !== undefined || latestViewport === undefined) return false
@@ -119,10 +109,7 @@ export function mountElement(element: HTMLElement, owner: MountOwner): ElementMo
     requestedViewport = undefined
     viewportKey = key
     viewportPending = completion
-    void completion.promise.catch((error: unknown) => {
-      // Producer handoff retains the viewport in Host and is not a mount failure.
-      if (!(error instanceof FrameDiscardedError && error.reason === 'producer-changed')) fail(error)
-    }).finally(() => {
+    void completion.promise.catch((error: unknown) => { fail(error) }).finally(() => {
       viewportPending = undefined
       if (disposed) return
       if (requestedViewport !== undefined || document.visibilityState === 'hidden') sendViewport()
@@ -134,7 +121,7 @@ export function mountElement(element: HTMLElement, owner: MountOwner): ElementMo
   }
   const pushContent = (): void => { media?.setContent(owner.content()) }
   const requestViewport = (): Promise<FrameForwardingViewport> => {
-    if (disposed) return Promise.reject(new FrameDiscardedError('producer-changed'))
+    if (disposed) return Promise.reject(new FrameDiscardedError('cancelled'))
     const completion = requestedViewport ??= Promise.withResolvers<FrameForwardingViewport>()
     try { synchronize() } catch (error) { completion.reject(error); fail(error) }
     return completion.promise
@@ -144,10 +131,9 @@ export function mountElement(element: HTMLElement, owner: MountOwner): ElementMo
     media ??= createMediaPresenter(element, fail, (submittedGeneration) => { owner.report({ kind: 'content', submittedGeneration }) })
     const rect = element.getBoundingClientRect()
     const deviceScaleFactor = view.devicePixelRatio
-    const fullscreen = owner.fullscreen()
-    const shown = shownInLayout()
-    const visible = shown && element.isConnected && intersecting && document.visibilityState === 'visible'
-      && (!fullscreen.active || fullscreen.holder) && rect.width > 0 && rect.height > 0
+    const visible = explicitVisible && element.isConnected && intersecting && document.visibilityState === 'visible'
+      && rect.width > 0 && rect.height > 0
+    if (visible) media.resume()
     latestViewport = { width: Math.max(1, Math.round(rect.width * deviceScaleFactor)),
       height: Math.max(1, Math.round(rect.height * deviceScaleFactor)), deviceScaleFactor, visible }
     if (!sendViewport()) pushContent()
@@ -175,5 +161,8 @@ export function mountElement(element: HTMLElement, owner: MountOwner): ElementMo
     view.addEventListener('resize', dirty)
     dirty()
   } catch (error) { dispose(); throw error }
-  return { present: frame => media?.present(frame), dirty, pushContent, requestViewport, dispose }
+  return {
+    get submittedWindow() { return media?.submittedWindow },
+    present: frame => media?.present(frame), dirty, setVisible, pushContent, requestViewport, dispose,
+  }
 }

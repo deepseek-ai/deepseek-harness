@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Aperçu Office en lecture seule",
+    "description": "Aperçu Office natif expérimental en lecture seule. Désactivé par défaut ; le rendu n'a lieu que dans Desktop."
+  }
+}

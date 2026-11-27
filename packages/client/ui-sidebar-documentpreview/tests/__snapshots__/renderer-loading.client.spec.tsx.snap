@@ -1,0 +1,7 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`presents Office-owned docx fallback bytes in the existing format view > docx 1`] = `"<p data-test-pdf="true" data-fallback="pdf">PDF v1</p>"`;
+
+exports[`presents Office-owned pptx fallback bytes in the existing format view > pptx 1`] = `"<p data-test-pdf="true" data-fallback="pdf">PDF v1</p>"`;
+
+exports[`presents Office-owned xlsx fallback bytes in the existing format view > xlsx 1`] = `"<p data-test-pdf="true" data-fallback="spreadsheet">PDF v1</p>"`;

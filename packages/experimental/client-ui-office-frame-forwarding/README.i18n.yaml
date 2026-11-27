@@ -1,0 +1,34 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/client-ui-office-frame-forwarding/README.md
+/:
+  en: d3b93f05f6d7d1b5
+  zh: 5c37bde73b233feb
+/deepseek-ai-dsh-client-ui-office-frame-forwarding:
+  en: a45f08983e45d482
+  zh: 5084ad1cd1baf20e
+/deepseek-ai-dsh-client-ui-office-frame-forwarding/summary:
+  en: 2c52aee931c23a36
+  zh: 58c210c597c8b24e
+/deepseek-ai-dsh-client-ui-office-frame-forwarding/table-of-contents:
+  en: 76368b6b1da79c80
+  zh: 7ed15dcf86e90183
+/deepseek-ai-dsh-client-ui-office-frame-forwarding/use-this-package:
+  en: a6f5fd66f5fcc1b2
+  zh: d309f7381afc2aef
+/deepseek-ai-dsh-client-ui-office-frame-forwarding/understand-the-implementation:
+  en: 015c1df52787d8e1
+  zh: 9057ca0abc08f48d
+/deepseek-ai-dsh-client-ui-office-frame-forwarding/model-experience:
+  en: f83d480911872322
+  zh: 20f790fd15ce537a
+/deepseek-ai-dsh-client-ui-office-frame-forwarding/model-experience/kv-cache-effect:
+  en: 4f0eadf94828e66e
+  zh: 97d3eb3e79199354
+/deepseek-ai-dsh-client-ui-office-frame-forwarding/known-limitations-and-deferred-work:
+  en: 797db4885606fd21
+  zh: f980ea18900e73de
+/deepseek-ai-dsh-client-ui-office-frame-forwarding/known-limitations-and-deferred-work/dev-note:
+  en: 28e5914fbf82f620
+  zh: 2b6a52f82abafb0e

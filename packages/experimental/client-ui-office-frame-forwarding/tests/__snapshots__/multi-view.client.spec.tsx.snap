@@ -1,0 +1,19 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`docx crash after first paint reports once and displays its format fallback > format fallback 1`] = `"<p data-office-fallback="pdf">PDF preview</p>"`;
+
+exports[`docx render after first paint reports once and displays its format fallback > format fallback 1`] = `"<p data-office-fallback="pdf">PDF preview</p>"`;
+
+exports[`docx unavailable after first paint reports once and displays its format fallback > format fallback 1`] = `"<p data-office-fallback="pdf">PDF preview</p>"`;
+
+exports[`pptx crash after first paint reports once and displays its format fallback > format fallback 1`] = `"<p data-office-fallback="pdf">PDF preview</p>"`;
+
+exports[`pptx render after first paint reports once and displays its format fallback > format fallback 1`] = `"<p data-office-fallback="pdf">PDF preview</p>"`;
+
+exports[`pptx unavailable after first paint reports once and displays its format fallback > format fallback 1`] = `"<p data-office-fallback="pdf">PDF preview</p>"`;
+
+exports[`xlsx crash after first paint reports once and displays its format fallback > format fallback 1`] = `"<p data-office-fallback="spreadsheet">Browser spreadsheet</p>"`;
+
+exports[`xlsx render after first paint reports once and displays its format fallback > format fallback 1`] = `"<p data-office-fallback="spreadsheet">Browser spreadsheet</p>"`;
+
+exports[`xlsx unavailable after first paint reports once and displays its format fallback > format fallback 1`] = `"<p data-office-fallback="spreadsheet">Browser spreadsheet</p>"`;

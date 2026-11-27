@@ -15,10 +15,14 @@ export function apply(ctx: Context, limits: ExcelLimits): void {
   ctx.effect(() => ctx.locale.register('sidebarExcel', { zh, en, ja, es, fr, de, ru, pt }))
   const t = ctx.locale.bind('sidebarExcel')
   ctx.effect(() => ctx.documentPreviews.register({
-    id, extensions: ['xlsx', 'xls', 'csv', 'tsv'], binaryExtensions: ['xlsx', 'xls'], priority: 'builtin',
+    id, extensions: ['csv', 'tsv'], binaryExtensions: [], priority: 'builtin',
     title: () => t('title'), loading: 'bytes-complete', wrap: false,
   }))
   ctx.effect(() => ctx.slots.inject('sidebar.right.tab.document', () => ctx.slots.register({
     name: 'sidebar.right.tab.document', key: id, locale: 'sidebarExcel', inject: () => ({ limits }),
+  }, LazyExcelBody)))
+  ctx.effect(() => ctx.slots.inject('sidebar.right.tab.document.office.spreadsheet', () => ctx.slots.register({
+    name: 'sidebar.right.tab.document.office.spreadsheet', key: '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/office',
+    locale: 'sidebarExcel', inject: () => ({ limits }),
   }, LazyExcelBody)))
 }

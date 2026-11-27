@@ -1,6 +1,6 @@
 /**
  * Renderer half of one receive channel: viewport ordering, the newest-first stream,
- * readiness after producer switches, every frame's release, and the channel's fullscreen.
+ * readiness, mounted video presentation, and every frame's release.
  */
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { validateView, validateWindow } from './content.ts'
@@ -11,7 +11,7 @@ import { FrameDiscardedError, FrameFailureError } from './errors.ts'
 import type { FrameChannelCloseCause, FrameChannelState, FrameConnectionId, FrameForwardingViewport, FrameRxId } from '../types.ts'
 import type {
   FrameContentView, FrameContentWindow, FrameForwardingBridge, FrameForwardingFrame, FrameForwardingFrameLease,
-  FrameFullscreenState, FrameRxEvent,
+  FrameMountOptions, FrameRxEvent,
 } from './api.ts'
 
 interface FrameStream {
@@ -32,19 +32,15 @@ function errorOf(error: unknown): Error {
 }
 
 /**
- * Renderer ownership of one Host-opened channel across its producer connections. Every frame it holds is an
+ * Renderer ownership of one Host-opened channel and its single producer connection. Every frame it holds is an
  * unreleased Host delivery, so the Host's per-channel frame limit bounds it; a frame is released once its consumer
  * callback settles or as soon as nothing waits for it.
  */
 export class FrameRx {
-  private readonly detach: () => Promise<void>
+  private readonly detach: () => void
   private failure: Error | undefined
   private channel: FrameChannelState | undefined
-  /** Highest connection this channel reported; frames of later connections wait until their state arrives. */
-  private knownConnection = 0
   private readonly readyWaiters = new Set<ReadyWaiter>()
-  /** Frames of a connection whose connected state has not arrived yet; the Host's frame limit bounds them. */
-  private readonly unconfirmed: FrameForwardingFrameLease[] = []
   private closing: Promise<void> | undefined
   private viewportVersion = 0
   private viewportState: FrameForwardingViewport | undefined
@@ -56,11 +52,9 @@ export class FrameRx {
   private submittedGeneration: number | undefined
   private mountStop: ((error?: Error) => void) | undefined
   private mounted: ElementMount | undefined
-  private synchronizeMount: (() => void) | undefined
   private stream: FrameStream | undefined
   private streamPending: FrameForwardingFrameLease | undefined
   private streamDrain: Promise<void> | undefined
-  private fullscreenState: FrameFullscreenState = { active: false, holder: false }
   private readonly eventListeners = new Set<(event: FrameRxEvent) => void>()
   private readonly eventTasks: (() => void)[] = []
   private deliveringEvents = false
@@ -91,13 +85,13 @@ export class FrameRx {
   }
 
   /**
-   * Invalidate frames of older versions, then send a new viewport; the Host keeps it for later connections.
+   * Invalidate frames of older versions, then send a new viewport; the Host applies it once the producer connects.
    * @param viewport - Strictly newer viewport version; rejected while mount owns the viewport.
    * @returns Completion once the connected producer acknowledged it or, without one, once the Host kept it. Rejects
-   *   with {@link FrameDiscardedError} `producer-changed` when the connection that received it ended first, or
-   *   `closed` when this receive channel closed before sending it; with an Error naming the version the Host kept when
-   *   this version does not exceed it, as on a channel connected again after a renderer reload; or with the Host's
-   *   error when the producer refuses it or does not acknowledge it in time. Later viewports are still sent.
+   *   with {@link FrameDiscardedError} `closed` when this receive channel closed before sending it; with an Error naming
+   *   the version the Host kept when this version does not exceed it, as on a channel connected again after a renderer
+   *   reload; or with the Host's error when the producer refuses it or does not acknowledge it in time. Later viewports
+   *   are still sent.
    */
   setViewport(viewport: FrameForwardingViewport): Promise<void> {
     this.assertOpen()
@@ -105,8 +99,21 @@ export class FrameRx {
     return this.updateViewport(viewport).then(() => {})
   }
 
+  /** Content window of the frame last written to the mounted video track, or undefined in fill mode or without a submitted image. */
+  get submittedWindow(): FrameContentWindow | undefined { return this.mounted?.submittedWindow }
+
   /** Latest viewport submitted by mount or setViewport; its version is the generation to request from the producer. */
   get viewport(): FrameForwardingViewport | undefined { return this.viewportState }
+
+  /**
+   * Update the explicit visibility of the active mount.
+   * @param visible - Whether the mounted view is currently visible to the user.
+   * @throws Error outside a mount.
+   */
+  setVisible(visible: boolean): void {
+    if (this.mounted === undefined) throw new Error('Frame visibility requires mount.')
+    this.mounted.setVisible(visible)
+  }
 
   /**
    * Set the latest content origin and scale; geometry flushes coalesce changes. Undefined restores fill mode.
@@ -114,10 +121,10 @@ export class FrameRx {
    * @throws TypeError for non-finite or out-of-range values; Error outside a mount. Invalid values send nothing.
    */
   setContentView(view: FrameContentView | undefined): void {
-    if (this.mountStop === undefined) throw new Error('Frame content requires mount.')
+    if (this.mounted === undefined) throw new Error('Frame content requires mount.')
     if (view !== undefined) validateView(view)
     this.contentView = view === undefined ? undefined : { ...view }
-    this.mounted?.dirty()
+    this.mounted.dirty()
   }
 
   /**
@@ -127,15 +134,16 @@ export class FrameRx {
    * The window snapshot reaches the mounted presenter before its viewport reaches Host.
    * @param window - Content rectangle; coordinates within ±2^24, extents in (0, 2^24].
    * @returns The acknowledged viewport to use as paint generation, or the current acknowledged viewport for an
-   *   unchanged window. Rejections match mount viewport updates; a draining display rejects with producer-changed.
+   *   unchanged window. Rejections match mount viewport updates; when the mount ends before the Host acknowledges,
+   *   the request rejects with the error that ended the mount, such as {@link FrameDiscardedError} `lost` for a lost
+   *   channel, or with `cancelled` when the consumer unmounted.
    * @throws TypeError for invalid numeric values, synchronously without messages; Error outside a mount.
    */
   setContentWindow(window: FrameContentWindow): Promise<FrameForwardingViewport> {
-    if (this.mountStop === undefined) throw new Error('Frame content requires mount.')
+    if (this.mounted === undefined) throw new Error('Frame content requires mount.')
     validateWindow(window)
     if (sameWindow(this.contentWindow, window) && this.contentRequest !== undefined) return this.contentRequest
     const desired = this.contentWindow = { ...window }
-    if (this.mounted === undefined) return Promise.reject(new FrameDiscardedError('producer-changed'))
     const request = this.mounted.requestViewport()
     if (this.contentWindow === desired) this.contentRequest = request
     return request
@@ -199,7 +207,6 @@ export class FrameRx {
         result = await this.bridge.setViewport(this.rx, viewport)
       }
       if (!result.applied && result.reason === 'stale-viewport') throw new Error(`Native viewport version must increase past ${result.currentVersion}.`)
-      if (!result.applied && result.reason === 'producer-changed') throw new FrameDiscardedError('producer-changed')
       return viewport
     })
     // Viewports reach the Host in order; a rejection fails only its own call, and the Host keeps the channel open.
@@ -209,7 +216,7 @@ export class FrameRx {
   }
 
   /**
-   * Wait until a producer is connected and has acknowledged this channel's latest viewport.
+   * Wait until the producer is connected and has acknowledged this channel's latest viewport.
    * @param signal - Cancels the wait.
    * @returns The ready connection. Rejects with {@link FrameDiscardedError} on cancellation or close, or with the
    *   channel's failure.
@@ -234,9 +241,9 @@ export class FrameRx {
   }
 
   /**
-   * Present the channel's continuous frames newest first across producer switches: while `present` runs, only the
-   * newest arrived frame waits, and a newer arrival releases the waiting one unpresented. Depending on the Host, a
-   * continuous frame may be lossily encoded.
+   * Present the channel's continuous frames newest first: while `present` runs, only the newest arrived frame waits,
+   * and a newer arrival releases the waiting one unpresented. Depending on the Host, a continuous frame may be lossily
+   * encoded.
    * @param present - Draws one frame; the frame is released after `present` returns or its promise settles.
    * @param failure - Receives frame failures of the connected producer, the channel's failure or closure, or an error
    *   `present` raised; the stream stays subscribed.
@@ -264,77 +271,52 @@ export class FrameRx {
 
   /**
    * Display this channel in a video element.
-   * Producer draining clears the mounted display; a new connection recreates it, including snapshot-only handoffs.
    * Individual frame failures reach onEvent without ending the mount.
    * Mounted display and continuous consumption are mutually exclusive.
    * @param element - The video container.
    * @param failure - Receives a failure after mount resources are stopped, including channel closure or loss.
+   * @param options - Optional mount settings; `visible` defaults to `true`.
    * @returns Idempotent unmount. It releases the display and queues an invisible viewport for the open channel.
    */
-  mount(element: HTMLElement, failure: (error: Error) => void): () => void {
+  mount(element: HTMLElement, failure: (error: Error) => void, options?: FrameMountOptions): () => void {
     this.assertOpen()
     if (this.stream !== undefined) {
       throw new Error('Native channel already has a frame consumer.')
     }
-    if (element.hasAttribute('data-dsh-frame-mount')) throw new Error('Native element already has a frame consumer.')
     let display: ElementMount | undefined
     const stopStream = this.startStream(frame => display?.present(frame), (error) => { stop(error) })
     const stop = (error?: Error): boolean => {
       if (this.mountStop !== stop) return false
       this.mountStop = undefined
       this.mounted = undefined
-      this.synchronizeMount = undefined
       this.contentView = undefined
       this.contentWindow = undefined
       this.contentWindows = []
       this.contentRequest = undefined
       stopStream()
-      if (display === undefined) element.removeAttribute('data-dsh-frame-mount')
-      try { display?.dispose() } catch (cleanupError) { console.error('Frame mount cleanup failed', cleanupError) }
+      try { display?.dispose(error) } catch (cleanupError) { console.error('Frame mount cleanup failed', cleanupError) }
       if (error !== undefined) {
         try { failure(error) } catch (listenerError) { console.error('Native frame failure listener failed', listenerError) }
       }
       return true
     }
     this.mountStop = stop
-    let draining = this.channel?.state === 'draining'
-    let mountedConnection = this.connectionId
-    const synchronize = (): void => {
-      const connection = this.connectionId
-      const changed = connection !== undefined && mountedConnection !== undefined && connection !== mountedConnection
-      if (this.channel?.state === 'draining' || changed) {
-        draining = this.channel?.state === 'draining'
-        // Detach synchronously: a hidden document may never run another rAF, and pending video writes hold drain credit.
-        const previous = display
-        display = undefined
-        this.mounted = undefined
-        this.contentRequest = undefined
-        previous?.dispose()
-        // Reserve the element across the producer handoff.
-        element.setAttribute('data-dsh-frame-mount', 'pending')
-      } else if (this.channel?.state === 'connected') draining = false
-      if (connection !== undefined) mountedConnection = connection
-      if (draining || display !== undefined) return
-      element.removeAttribute('data-dsh-frame-mount')
+    try {
       display = mountElement(element, {
-        fullscreen: () => this.fullscreenState,
         content: () => this.contentSnapshot(),
         viewport: (viewport, completion) => this.mountViewport(viewport, completion),
-        report: (event) => { this.channelEvent(event) }, failure: (error) => { stop(error) },
-      })
+        report: (event) => { this.channelEvent(event) },
+        failure: (error) => { stop(error) },
+      }, options?.visible ?? true)
       this.mounted = display
-    }
-    this.synchronizeMount = () => {
-      try { synchronize() } catch (error) { stop(errorOf(error)) }
-    }
-    try { synchronize() } catch (error) { stop(); throw error }
+    } catch (error) { stop(); throw error }
     return () => {
       const viewport = this.viewportState
       if (!stop()) return
       // Disposal may notify a consumer that closes the channel or submits a newer viewport.
       if (viewport?.visible && !this.eventsEnded && this.viewportState === viewport) {
         void this.automaticViewport({ ...viewport, visible: false }).catch((error: unknown) => {
-          if (!(error instanceof FrameDiscardedError && (error.reason === 'producer-changed' || error.reason === 'closed'))) {
+          if (!(error instanceof FrameDiscardedError && error.reason === 'closed')) {
             console.error('Frame unmount viewport failed', error)
           }
         })
@@ -342,62 +324,35 @@ export class FrameRx {
     }
   }
 
-  /** The document's latest fullscreen state as this channel sees it. */
-  get fullscreen(): FrameFullscreenState { return this.fullscreenState }
-
-  /**
-   * Show `element` fullscreen for this channel; while it is fullscreen, every other receive channel of the document
-   * reports itself covered. Chromium grants fullscreen only while the document handles a user gesture, so call this
-   * before the gesture's handler awaits anything.
-   * @param element - The consumer's view, typically its root element.
-   * @returns Completion of the entry. Rejects when the channel is closed or failed, when another channel holds
-   *   fullscreen, or when the document refuses fullscreen.
-   */
-  async requestFullscreen(element: Element): Promise<void> {
-    this.assertOpen()
-    await this.bridge.requestFullscreen(this.rx, element)
-  }
-
-  /**
-   * Leave the fullscreen this channel holds; {@link close} does so too.
-   * @returns Completion of the exit; resolves at once when this channel holds no fullscreen.
-   */
-  exitFullscreen(): Promise<void> {
-    return this.bridge.exitFullscreen(this.rx)
-  }
-
   /**
    * Observe every channel event in arrival order. Subscription first replays the known channel state, latest viewport,
-   * fullscreen state and latest generation submitted to the video track, in that order.
+   * and latest generation submitted to the video track, in that order.
    * Listener exceptions are contained. Local close, Host closure or loss, termination of the Client's channel-event
    * stream, and Client disposal deliver one final closed-state or failure event; subscriptions after termination
    * receive nothing. Reentrant subscriptions replay after the event currently being delivered.
-   * @param listener - Receives channel state, frame errors, routing failure, fullscreen and content events.
+   * @param listener - Receives channel state, frame errors, routing failure, viewport, and content events.
    * @returns Idempotent disposer; removing one subscription does not affect another, even with the same listener.
    */
   onEvent(listener: (event: FrameRxEvent) => void): () => void {
-    return this.subscribeEvents(listener, true)
-  }
-
-  /**
-   * Observe changes of {@link fullscreen}: an active state without `holder` means another element covers this
-   * channel's view, so the consumer sends an invisible viewport until it ends; `holder` with `active: false` means the
-   * fullscreen this channel held ended, for example on Escape.
-   * @param listener - Receives each new state; unlike onEvent, this subscription does not replay the current state.
-   * @returns Disposer for this listener.
-   */
-  onFullscreen(listener: (state: FrameFullscreenState) => void): () => void {
-    return this.subscribeEvents((event) => {
-      if (event.kind !== 'fullscreen') return
-      try { listener({ active: event.active, holder: event.holder }) } catch (error) {
-        console.error('Native fullscreen listener failed', error)
+    if (this.eventsEnded) return () => {}
+    const subscription = (event: FrameRxEvent): void => { listener(event) }
+    this.eventListeners.add(subscription)
+    this.queueEvents(() => {
+      const snapshot: FrameRxEvent[] = [
+        ...this.channel === undefined ? [] : [{ kind: 'state' as const, channel: this.channel }],
+        ...this.viewportState === undefined ? [] : [{ kind: 'viewport' as const, viewport: this.viewportState }],
+        { kind: 'content', submittedGeneration: this.submittedGeneration },
+      ]
+      for (const event of snapshot) {
+        if (this.eventsEnded) break
+        this.notifyEvent(subscription, event)
       }
-    }, false)
+    })
+    return () => { this.eventListeners.delete(subscription) }
   }
 
   /**
-   * Stop this channel's consumers and frame routing, and leave the fullscreen it holds; the Host plugin that opened
-   * the channel owns its lifetime.
+   * Stop this channel's consumers and frame routing; the Host plugin that opened the channel owns its lifetime.
    * @returns Completion after routing stopped and every lent frame's callback settled and its frame was released;
    *   repeated calls share that completion.
    */
@@ -413,7 +368,7 @@ export class FrameRx {
   private async closeChannel(): Promise<void> {
     const notify = !this.eventsEnded
     this.eventsEnded = true
-    const detached = this.detach()
+    this.detach()
     this.mountStop?.(new FrameDiscardedError('closed'))
     this.stream = undefined
     this.discardPending()
@@ -424,7 +379,7 @@ export class FrameRx {
       this.channel = channel
       this.deliverEvent({ kind: 'state', channel }, false, true)
     }
-    await Promise.all([detached, this.streamDrain])
+    await this.streamDrain
   }
 
   private async drainStream(): Promise<void> {
@@ -463,25 +418,6 @@ export class FrameRx {
     return this.viewportVersion === 0 || channel.viewportVersion === this.viewportVersion ? channel.connectionId : undefined
   }
 
-  private subscribeEvents(listener: (event: FrameRxEvent) => void, replay: boolean): () => void {
-    if (this.eventsEnded) return () => {}
-    const subscription = (event: FrameRxEvent): void => { listener(event) }
-    this.eventListeners.add(subscription)
-    if (replay) this.queueEvents(() => {
-      const snapshot: FrameRxEvent[] = [
-        ...this.channel === undefined ? [] : [{ kind: 'state' as const, channel: this.channel }],
-        ...this.viewportState === undefined ? [] : [{ kind: 'viewport' as const, viewport: this.viewportState }],
-        { kind: 'fullscreen', ...this.fullscreenState },
-        { kind: 'content', submittedGeneration: this.submittedGeneration },
-      ]
-      for (const event of snapshot) {
-        if (this.eventsEnded) break
-        this.notifyEvent(subscription, event)
-      }
-    })
-    return () => { this.eventListeners.delete(subscription) }
-  }
-
   /** Reentrant callbacks append work rather than overtaking another subscriber's current event. */
   private queueEvents(task: () => void): void {
     this.eventTasks.push(task)
@@ -500,7 +436,7 @@ export class FrameRx {
   private deliverEvent(event: FrameRxEvent, apply: boolean, terminal: boolean): void {
     const listeners = [...this.eventListeners]
     this.queueEvents(() => {
-      if (event.kind === 'content' && event.submittedGeneration === this.submittedGeneration) return
+      if (event.kind === 'content' && event.submittedGeneration === undefined && this.submittedGeneration === undefined) return
       if (apply) this.applyEvent(event)
       for (const listener of listeners) this.notifyEvent(listener, event)
       if (terminal) this.eventListeners.clear()
@@ -520,7 +456,7 @@ export class FrameRx {
         this.applyState(event.channel)
         return
       case 'error': {
-        // Only failures of the current producer reach its stream.
+        // Only failures of the connected producer reach its stream.
         if (event.connectionId !== this.connectionId) return
         // Individual frame failures remain observable through onEvent without ending a mounted display.
         if (this.mountStop === undefined) this.reportStreamFailure(new FrameFailureError(event.source, event.error))
@@ -535,12 +471,6 @@ export class FrameRx {
       case 'content':
         this.submittedGeneration = event.submittedGeneration
         return
-      case 'fullscreen': {
-        const state = { active: event.active, holder: event.holder }
-        this.fullscreenState = state
-        this.mounted?.dirty()
-        return
-      }
       /* v8 ignore next -- The bridge event union is exhausted above. */
       default: return assertNever(event)
     }
@@ -554,11 +484,6 @@ export class FrameRx {
       this.terminate(cause === 'failed' ? new Error(state.reason) : new FrameDiscardedError(cause), cause)
       return
     }
-    this.synchronizeMount?.()
-    if (state.state !== 'idle') this.knownConnection = Math.max(this.knownConnection, state.connectionId)
-    // The Host merges an unread `connected` into its successor state, so a connection may first appear as `draining`;
-    // its frames are released here, or its drain never completes.
-    for (const lease of this.unconfirmed.splice(0)) this.arrive(lease)
     const ready = this.readyConnection()
     if (ready === undefined) return
     const waiters = [...this.readyWaiters]
@@ -584,14 +509,8 @@ export class FrameRx {
   private arrive(lease: FrameForwardingFrameLease): void {
     const metadata = lease.metadata
     if (this.closing !== undefined || this.failure !== undefined || metadata.rx !== this.rx
-      || !this.acceptsGeneration(metadata.generation)) {
+      || metadata.connectionId !== this.connectionId || !this.acceptsGeneration(metadata.generation)) {
       lease.release()
-      return
-    }
-    if (metadata.connectionId !== this.connectionId) {
-      // The frame's texture can overtake the state announcing its connection; an older connection's frame is stale.
-      if (metadata.connectionId > this.knownConnection) this.unconfirmed.push(lease)
-      else lease.release()
       return
     }
     if (this.stream !== undefined) {
@@ -602,15 +521,10 @@ export class FrameRx {
   }
 
   private discardPending(preserveContent = false): void {
-    const keep = (lease: FrameForwardingFrameLease): boolean => preserveContent && this.contentSnapshot() !== undefined
-      && this.acceptsGeneration(lease.metadata.generation)
-    if (this.streamPending !== undefined && !keep(this.streamPending)) {
-      this.streamPending.release()
-      this.streamPending = undefined
-    }
-    for (const lease of this.unconfirmed.splice(0)) {
-      if (keep(lease)) this.unconfirmed.push(lease)
-      else lease.release()
-    }
+    const pending = this.streamPending
+    if (pending === undefined) return
+    if (preserveContent && this.contentSnapshot() !== undefined && this.acceptsGeneration(pending.metadata.generation)) return
+    pending.release()
+    this.streamPending = undefined
   }
 }

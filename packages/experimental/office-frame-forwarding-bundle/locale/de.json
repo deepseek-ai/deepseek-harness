@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Schreibgeschützte Office-Vorschau",
+    "description": "Experimentelle native schreibgeschützte Office-Vorschau. Standardmäßig deaktiviert; rendert nur in Desktop."
+  }
+}

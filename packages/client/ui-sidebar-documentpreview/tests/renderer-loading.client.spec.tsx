@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /** Renderer-owned loads retain displayed versions and retire work on reload, replacement, and close. */
-import { useEffect, useState, useSyncExternalStore } from 'react'
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from 'vitest'
 import { makeTranslate, RemoteError, responsiveHooks } from '@deepseek-ai/dsh-client-test-runtime'
@@ -89,8 +89,11 @@ const result = (version = 'v1', missingFonts: readonly string[] = []): Result =>
   offset: 0, eof: true, missingFonts, generation: 'engine' as OfficeKitGeneration,
 } })
 
-function setup() {
+type NativeOwner = OwnerOf<'sidebar.right.tab.document.office.native'>
+
+function setup(fileName?: string, native?: (owner: NativeOwner) => ReactNode) {
   const h = harness()
+  const tab = { visible: true }
   const office = createOfficeStore().create()
   const pending: { signal: AbortSignal; deferred: ReturnType<typeof Promise.withResolvers<Result>> }[] = []
   const read = vi.fn<ReadOfficeDocument>().mockImplementation((_file, signal) => {
@@ -114,17 +117,23 @@ function setup() {
   const slots: TextPreviewProps['renderSlot'] = (key: string, input: unknown, options?: { hookContext?: unknown }) => {
     if (key === 'sidebar.right.tab.document.action') {
       return <OfficeFontAction {...{ ...input as OwnerOf<'sidebar.right.tab.document.action'>, useTabInfo: options?.hookContext, useStore: useOffice,
-        actions: office.actions, t: makeTranslate(en), ...responsiveHooks() } as OfficeFontActionProps} />
+        actions: office.actions, t: makeTranslate(en), renderSlot: () => null, ...responsiveHooks() } as OfficeFontActionProps} />
     }
     if (key !== 'sidebar.right.tab.document') return null
     const owner = input as OwnerOf<'sidebar.right.tab.document'>
     if (owner.content.kind !== 'renderer') return <p>Raw bytes</p>
     request = owner.content
     // The component fixture supplies the standard seats used by Office; the real slot binding is exercised by the browser scenario.
-    const props = { ...h.props(), ...owner, useTabInfo: options?.hookContext, useStore: useOffice,
-      actions: office.actions, ...injected, retainTab,
-      t: makeTranslate(en), renderSlot: (_name: string, child: { content: DocumentContent }) => (
-        <p data-test-pdf>{child.content.kind === 'bytes' ? new TextDecoder().decode(child.content.data) : ''}</p>
+    const props = { ...h.props(), ...owner,
+      resourceAddress: fileName === undefined ? owner.resourceAddress : `dsh-resource://file/session/s1/${fileName}`,
+      useTabInfo: () => {
+        const info = (options?.hookContext as OfficeBodyProps['useTabInfo'])()
+        return { ...info, tab: { ...info.tab, visible: tab.visible } }
+      },
+      useStore: useOffice, actions: office.actions, ...injected, retainTab,
+      t: makeTranslate(en), renderSlot: (name: string, child: { content: DocumentContent }, options?: { fallback?: ReactNode }) => (
+        name === 'sidebar.right.tab.document.office.native' ? native?.(child as NativeOwner) ?? options?.fallback
+          : <p data-test-pdf data-fallback={name.endsWith('.spreadsheet') ? 'spreadsheet' : 'pdf'}>{child.content.kind === 'bytes' ? new TextDecoder().decode(child.content.data) : ''}</p>
       ),
     } as OfficeBodyProps
     return <OfficeBody {...props} />
@@ -138,7 +147,7 @@ function setup() {
     for (const { deferred } of pending) deferred.resolve(result())
     await Promise.allSettled(pending.map(item => item.deferred.promise))
   })
-  return { h, office, pending, read, View, request: () => request! }
+  return { h, office, pending, read, View, tab, request: () => request! }
 }
 
 it('retains renderer content across remounts and waits for reload when automatic refresh is paused', async () => {
@@ -251,6 +260,7 @@ it('starts no conversion when a body receives ordinary shared content', () => {
   const props = { ...h.h.props(), content: { kind: 'bytes', data: new Uint8Array() },
     resourceAddress: ADDRESS, wrap: false, scrollportRef: vi.fn(),
     addResource: vi.fn(), setResources: vi.fn(),
+    renderSlot: (_name: string, _owner: unknown, options?: { fallback?: ReactNode }) => options?.fallback,
     useStore: () => undefined, actions: h.office.actions, load: vi.fn(), retainTab: vi.fn(), t: makeTranslate(en),
   } as OfficeBodyProps
   const view = render(<OfficeBody {...props} />)
@@ -321,4 +331,180 @@ it('keeps a pending conversion when metadata changes while automatic refresh is 
   await act(async () => { h.pending[0]!.deferred.resolve(result('v1')) })
   expect(screen.getByText('PDF v1')).toBeTruthy()
   expect(screen.getByText('changed')).toBeTruthy()
+})
+
+
+it.each(['xlsx', 'docx', 'pptx'])('presents Office-owned %s fallback bytes in the existing format view', async (extension) => {
+  const h = setup(`book.${extension}`)
+  const view = render(<h.View />)
+  expect(h.read).toHaveBeenCalledOnce()
+  expect(h.read.mock.calls[0]![0].path).toBe(`book.${extension}`)
+  await act(async () => { h.pending[0]!.deferred.resolve(result()) })
+  expect(view.container.querySelector('[data-fallback]')?.outerHTML).toMatchSnapshot(extension)
+})
+
+function NativeBody({ owner }: { readonly owner: NativeOwner }) {
+  const revision = owner.content.kind === 'renderer' ? owner.content.revision : 0
+  return <div data-native>Native {revision}
+    <button onClick={owner.onNativeUnavailable}>Native failure</button></div>
+}
+
+function nativeSetup(extension = 'docx', fileName = `book.${extension}`) {
+  const owners: NativeOwner[] = []
+  const h = setup(fileName, (owner) => { owners.push(owner); return <NativeBody owner={owner} /> })
+  return { ...h, owners }
+}
+
+it.each(['docx', 'xlsx', 'pptx'])('renders the native %s preview without starting the format fallback', (extension) => {
+  const h = nativeSetup(extension)
+  render(<h.View />)
+  expect(screen.getByText('Native 1')).toBeTruthy()
+  expect(h.read).not.toHaveBeenCalled()
+  expect(h.owners.at(-1)!.resourceAddress).toBe(`dsh-resource://file/session/s1/book.${extension}`)
+})
+
+it.each([
+  ['an encoded file name', 'report%20v1.docx', true],
+  ['an address query and hash', 'report.docx?view=preview#page-1', true],
+  ['a query naming a supported extension', 'report.doc?as=.docx', false],
+])('selects native rendering for %s from the decoded path extension', (_case, fileName, native) => {
+  const h = nativeSetup('docx', fileName)
+  render(<h.View />)
+  expect(h.owners.length > 0).toBe(native)
+  expect(h.read).toHaveBeenCalledTimes(native ? 0 : 1)
+})
+
+it('replaces an unavailable native preview with the format fallback and keeps it for the same revision', async () => {
+  const h = nativeSetup()
+  const view = render(<h.View />)
+  fireEvent.click(screen.getByRole('button', { name: 'Native failure' }))
+  expect(screen.queryByText('Native 1')).toBeNull()
+  expect(h.read).toHaveBeenCalledOnce()
+  await act(async () => { h.pending[0]!.deferred.resolve(result()) })
+  expect(screen.getByText('PDF v1')).toBeTruthy()
+  const rendered = h.owners.length
+  view.rerender(<h.View />)
+  expect(h.owners).toHaveLength(rendered)
+  expect(screen.getByText('PDF v1')).toBeTruthy()
+})
+
+it('keeps one stable native unavailability callback per tab and revision', () => {
+  const h = nativeSetup()
+  const view = render(<h.View />)
+  view.rerender(<h.View />)
+  expect(h.owners.length).toBeGreaterThan(1)
+  expect(new Set(h.owners.map(owner => owner.onNativeUnavailable)).size).toBe(1)
+})
+
+it.each(['reload', 'file change'] as const)('attempts native rendering again after %s', async (trigger) => {
+  const h = nativeSetup()
+  render(<h.View />)
+  fireEvent.click(screen.getByRole('button', { name: 'Native failure' }))
+  await act(async () => { h.pending[0]!.deferred.resolve(result()) })
+  expect(screen.getByText('PDF v1')).toBeTruthy()
+  if (trigger === 'reload') fireEvent.click(screen.getByRole('button', { name: 'reload' }))
+  else act(() => { h.h.setVersion('v2'); h.h.instance.actions.resourceChanged(TAB_ID) })
+  expect(screen.getByText('Native 2')).toBeTruthy()
+  expect(screen.queryByText('PDF v1')).toBeNull()
+})
+
+it('ignores an unavailability report from a superseded revision', () => {
+  const h = nativeSetup()
+  render(<h.View />)
+  const previous = h.owners.at(-1)!
+  fireEvent.click(screen.getByRole('button', { name: 'reload' }))
+  expect(screen.getByText('Native 2')).toBeTruthy()
+  act(() => { previous.onNativeUnavailable() })
+  expect(screen.getByText('Native 2')).toBeTruthy()
+  expect(h.read).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button', { name: 'Native failure' }))
+  act(() => { previous.onNativeUnavailable() })
+  expect(screen.queryByText('Native 2')).toBeNull()
+  expect(h.read).toHaveBeenCalledOnce()
+})
+
+it('keeps native unavailability across a body remount', async () => {
+  const h = nativeSetup()
+  const mounted = render(<h.View />)
+  fireEvent.click(screen.getByRole('button', { name: 'Native failure' }))
+  await act(async () => { h.pending[0]!.deferred.resolve(result()) })
+  mounted.unmount()
+  const rendered = h.owners.length
+  render(<h.View />)
+  expect(screen.getByText('PDF v1')).toBeTruthy()
+  expect(h.owners).toHaveLength(rendered)
+})
+
+it.each(['docx', 'xlsx'])('keeps the %s fallback in a mounted hidden tab and reuses it when shown', async (extension) => {
+  const h = nativeSetup(extension)
+  h.tab.visible = false
+  const view = render(<h.View />)
+  fireEvent.click(screen.getByRole('button', { name: 'Native failure' }))
+  expect(screen.queryByText('Native 1')).toBeNull()
+  expect(h.read).toHaveBeenCalledOnce()
+  await act(async () => { h.pending[0]!.deferred.resolve(result()) })
+  const fallback = view.container.querySelector('[data-fallback]')
+  expect(fallback?.getAttribute('data-fallback')).toBe(extension === 'xlsx' ? 'spreadsheet' : 'pdf')
+  h.tab.visible = true
+  view.rerender(<h.View />)
+  expect(view.container.querySelector('[data-fallback]')).toBe(fallback)
+  expect(h.read).toHaveBeenCalledOnce()
+})
+
+it('forgets native unavailability when its tab closes and ignores later reports', () => {
+  const h = nativeSetup()
+  render(<h.View />)
+  const owner = h.owners.at(-1)!
+  fireEvent.click(screen.getByRole('button', { name: 'Native failure' }))
+  expect(h.office.getSnapshot().nativeUnavailable[TAB_ID]).toBe(1)
+  act(() => { h.h.controller.abort() })
+  expect(h.office.getSnapshot().nativeUnavailable[TAB_ID]).toBeUndefined()
+  act(() => { owner.onNativeUnavailable() })
+  expect(h.office.getSnapshot().nativeUnavailable[TAB_ID]).toBeUndefined()
+})
+
+it.each(['doc', 'ppt', 'xls'])('renders the %s format fallback without offering native rendering', (extension) => {
+  const h = nativeSetup(extension)
+  render(<h.View />)
+  expect(h.owners).toEqual([])
+  expect(h.read).toHaveBeenCalledOnce()
+})
+
+it('renders the format fallback when no native preview is registered', () => {
+  const h = setup('book.docx')
+  render(<h.View />)
+  expect(h.read).toHaveBeenCalledOnce()
+})
+
+it('offers native rendering for ordinary shared content without recording unavailability', () => {
+  const h = setup()
+  const owners: NativeOwner[] = []
+  const props = { ...h.h.props(), content: { kind: 'bytes', data: new Uint8Array() },
+    resourceAddress: 'dsh-resource://file/session/s1/book.docx', wrap: false, scrollportRef: vi.fn(),
+    addResource: vi.fn(), setResources: vi.fn(),
+    renderSlot: (_name: string, owner: NativeOwner) => { owners.push(owner); return <p>Native bytes</p> },
+    useStore: (selector: (state: OfficeState) => unknown) => selector(h.office.getSnapshot()),
+    actions: h.office.actions, load: vi.fn(), retainTab: vi.fn(), t: makeTranslate(en),
+  } as OfficeBodyProps
+  render(<OfficeBody {...props} />)
+  expect(screen.getByText('Native bytes')).toBeTruthy()
+  act(() => { owners[0]!.onNativeUnavailable() })
+  expect(h.office.getSnapshot().nativeUnavailable).toEqual({})
+})
+
+
+it.each(['docx', 'pptx', 'xlsx'])('replaces a displayed native %s document after a late failure with its format view', async (extension) => {
+  const h = nativeSetup(extension)
+  const view = render(<h.View />)
+  const owner = h.owners.at(-1)!
+  act(() => { if (owner.content.kind === 'renderer') owner.content.loaded('v1') })
+  expect(screen.getByText('Native 1')).toBeTruthy()
+  expect(h.h.instance.getSnapshot().byTab[TAB_ID]?.version).toBe('v1')
+  act(() => { owner.onNativeUnavailable(); owner.onNativeUnavailable() })
+  expect(screen.queryByText('Native 1')).toBeNull()
+  expect(h.read).toHaveBeenCalledOnce()
+  await act(async () => { h.pending[0]!.deferred.resolve(result()) })
+  expect(view.container.querySelector('[data-fallback]')?.getAttribute('data-fallback'))
+    .toBe(extension === 'xlsx' ? 'spreadsheet' : 'pdf')
+  expect(screen.getByText('PDF v1')).toBeTruthy()
 })

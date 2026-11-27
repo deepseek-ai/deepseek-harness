@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Нативный предпросмотр Office",
+    "description": "Показывает в Desktop локальные файлы Word, Excel и PowerPoint только для чтения так, как их отрисовывает LibreOffice через пересылку кадров."
+  }
+}

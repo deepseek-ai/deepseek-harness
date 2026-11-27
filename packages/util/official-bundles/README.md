@@ -37,7 +37,7 @@ Edit this package when the installation's bundle selection or the plugin manager
 <a id="plugin-manager-lists"></a>
 ### Plugin manager lists
 
-`PROTECTED_PLUGINS` names the plugin packages the [plugin manager](../../boot/plugin-manager/README.md) keeps read-only because management needs them; a bundle that contains one is a management bundle. Removing a name drops only this `management-required` refusal; the manager's own entry, installation-carried bundles, and unaddressable rows stay protected by their own rules. The [Web plugin page](../../client/ui-plugin-manager/README.md) hides the `HIDDEN_BUNDLES`, ranks the `EXTENSION_BUNDLES` first in their order, keeps the `MORE_BUNDLES` off its main list until the profile enables them, and marks the `EXPERIMENTAL_BUNDLES` with the Experimental badge.
+`PROTECTED_PLUGINS` names the plugin packages the [plugin manager](../../boot/plugin-manager/README.md) keeps read-only because management needs them; a bundle that contains one is a management bundle. Removing a name drops only this `management-required` refusal; the manager's own entry, installation-carried bundles, and unaddressable rows stay protected by their own rules. The [Web plugin page](../../client/ui-plugin-manager/README.md) hides the `HIDDEN_BUNDLES`, lists `DESKTOP_ONLY_BUNDLES` only in the Desktop renderer, ranks the `EXTENSION_BUNDLES` first in their order, keeps the `MORE_BUNDLES` off its main list until the profile enables them, and marks the `EXPERIMENTAL_BUNDLES` with the Experimental badge.
 
 ### On-demand bundles
 

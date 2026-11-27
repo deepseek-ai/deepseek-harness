@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Native Office preview",
+    "description": "Shows read-only previews of local Word, Excel, and PowerPoint files in Desktop as LibreOffice renders them through frame forwarding."
+  }
+}

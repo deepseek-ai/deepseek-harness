@@ -1,0 +1,4 @@
+.input { position: absolute; z-index: 2; width: 2px; min-height: 18px; border: 0; resize: none; outline: none; padding: 0; opacity: .01; background: transparent; color: transparent; pointer-events: none; }
+.selectionLayer { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 2; }
+.selection { position: absolute; z-index: 2; background: var(--dsw-alias-bg-document-selection); pointer-events: none; }
+.selectionOutline { position: absolute; box-sizing: border-box; border: 1px solid var(--dsw-alias-state-business-primary); }

@@ -10,7 +10,7 @@ import type {} from '@deepseek-ai/dsh-shared-texture/client'
 import type { FrameForwardingClient } from './api.ts'
 import { FrameForwardingClientService } from './service.ts'
 
-export type { FrameForwardingClient, FrameForwardingFrame, FrameFullscreenState } from './api.ts'
+export type { FrameForwardingClient, FrameForwardingFrame, FrameMountOptions } from './api.ts'
 export type { FrameRx } from './rx.ts'
 export type { FrameDiscardedError, FrameFailureError } from './errors.ts'
 

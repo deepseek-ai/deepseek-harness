@@ -1,12 +1,14 @@
 /** Video presentation. Every write retains the borrowed frame until completion; teardown stops owned media tracks. */
-import type { FrameForwardingFrame } from './api.ts'
+import type { FrameContentWindow, FrameForwardingFrame } from './api.ts'
 import type { ContentState } from './content.ts'
 import { contentFrame } from './content.ts'
 import { FrameFailureError } from './errors.ts'
 
 /** One mounted media backend's resources. */
 export interface MediaPresenter {
+  readonly submittedWindow: FrameContentWindow | undefined
   present(frame: FrameForwardingFrame): void | Promise<void>
+  resume(): void
   setContent(content: ContentState | undefined): void
   dispose(): void
 }
@@ -46,27 +48,50 @@ export function createMediaPresenter(
     container.remove()
     void writer.abort().catch((error: unknown) => { console.error('Frame video writer teardown failed', error) })
   }
+  const resume = (): void => {
+    if (!video.paused || !video.isConnected) return
+    void video.play().catch((error: unknown) => {
+      // Removing a tab's DOM can interrupt play before the first frame arrives.
+      if (!disposed && !(error instanceof DOMException && error.name === 'AbortError'))
+        failure(new FrameFailureError('presentation', error instanceof Error ? error.message : String(error)))
+    })
+  }
   try {
     video.srcObject = new MediaStream([track])
     container.append(video); element.prepend(container)
-    void video.play().catch((error: unknown) => {
-      if (!disposed) failure(new FrameFailureError('presentation', error instanceof Error ? error.message : String(error)))
-    })
+    resume()
   } catch (error) { dispose(); throw error }
+  let content: ContentState | undefined
+  let submittedWindow: FrameContentWindow | undefined
+  const place = (): void => {
+    const window = submittedWindow ?? content?.windows.at(-1)
+    const frame = window === undefined || content === undefined ? undefined : contentFrame(window, content.view)
+    video.style.width = frame === undefined ? '100%' : `${frame.width}px`
+    video.style.height = frame === undefined ? '100%' : `${frame.height}px`
+    video.style.transform = frame === undefined ? '' : `translate(${frame.x}px, ${frame.y}px)`
+    // Chromium can still display the preceding image after a track write completes.
+    video.style.objectFit = frame === undefined ? 'fill' : 'contain'
+    video.style.objectPosition = 'top left'
+  }
   return {
-    setContent(content) {
-      const window = content?.windows.at(-1)
-      const frame = window === undefined || content === undefined ? undefined : contentFrame(window, content.view)
-      video.style.width = frame === undefined ? '100%' : `${frame.width}px`
-      video.style.height = frame === undefined ? '100%' : `${frame.height}px`
-      video.style.transform = frame === undefined ? '' : `translate(${frame.x}px, ${frame.y}px)`
+    get submittedWindow() { return submittedWindow },
+    resume,
+    setContent(next) {
+      content = next
+      if (next === undefined) submittedWindow = undefined
+      place()
     },
     async present({ image, metadata }) {
+      const window = content?.windows.find(candidate => candidate.generation === metadata.generation)
       // The generator consumes its input. A clone leaves the lease's original close with FrameRx.
       const copy = image.clone()
       try {
         await writer.write(copy)
-        if (!disposed) submitted(metadata.generation)
+        if (!disposed) {
+          submittedWindow = content === undefined ? undefined : window
+          place()
+          submitted(metadata.generation)
+        }
       } catch (error) {
         // Disposal cancels outstanding writes.
         if (!disposed) throw error

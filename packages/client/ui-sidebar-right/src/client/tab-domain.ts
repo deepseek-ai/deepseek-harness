@@ -161,6 +161,7 @@ export class TabDomain {
 
   private hold(sessionId: SessionId, tabId: TabId, navigation: SidebarRightTabNavigation): Held {
     const controller = new AbortController()
+    const bindings = new Map<() => void, SidebarRightTabCommands>()
     const { navigator } = this
     // Where an open from this tab lands, read at call time because the tab may
     // have been dragged since: `replaceTab: true` names this tab; otherwise the
@@ -186,11 +187,13 @@ export class TabDomain {
       tabActions: {
         bindCommands: (commands) => {
           if (controller.signal.aborted) return () => {}
-          held.commands = commands
           const release = (): void => {
-            if (held.commands === commands) held.commands = {}
+            if (!bindings.delete(release)) return
+            held.commands = [...bindings.values()].at(-1) ?? {}
             controller.signal.removeEventListener('abort', release)
           }
+          bindings.set(release, commands)
+          held.commands = commands
           controller.signal.addEventListener('abort', release, { once: true })
           return release
         },

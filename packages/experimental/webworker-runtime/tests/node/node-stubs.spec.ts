@@ -24,6 +24,7 @@ import * as repl from '../../src/node/builtin_modules/mock/repl.ts'
 import * as workerThreads from '../../src/node/builtin_modules/mock/worker_threads.ts'
 import * as nodePty from '../../src/node/external_packages/node-pty.ts'
 import * as libreofficeKit from '../../src/node/external_packages/libreoffice-kit.ts'
+import * as libreofficeEditor from '../../src/node/external_packages/libreoffice-kit-editor.ts'
 import * as execa from '../../src/node/external_packages/execa.ts'
 import * as got from '../../src/node/external_packages/got.ts'
 import * as piAi from '../../src/node/external_packages/pi-ai.ts'
@@ -31,6 +32,8 @@ import * as piCodingAgent from '../../src/node/external_packages/pi-coding-agent
 import * as ripgrep from '../../src/node/external_packages/ripgrep.ts'
 import * as ws from '../../src/node/external_packages/ws.ts'
 import { REPLACED_EXTERNAL_PACKAGES } from '../../src/node/external_packages/replaced-externals.ts'
+import { MODULE_PROXIES } from '../../src/module-proxies.ts'
+import { createNodeBuiltins } from '../../src/node/builtins.ts'
 import * as os from '../../src/node/builtin_modules/implemented/os.ts'
 import * as perfHooks from '../../src/node/builtin_modules/implemented/perf_hooks.ts'
 import { DSH_HOME, DSH_TMP } from '../../src/storage/paths.ts'
@@ -164,6 +167,27 @@ describe('replaced external packages', () => {
     await expect(libreofficeKit.createConverter()).rejects.toMatchObject({
       code: 'unavailable',
       message: 'web-preview: @deepseek-ai/libreoffice-kit.createConverter is not available in the worker host',
+    })
+  })
+
+  it('reports a missing Office runtime as the kit\'s unavailable ConversionError', async () => {
+    quiet()
+    const failure = libreofficeKit.discoverRuntime()
+    await expect(failure).rejects.toBeInstanceOf(libreofficeKit.ConversionError)
+    await expect(failure).rejects.toMatchObject({
+      code: 'unavailable',
+      message: 'web-preview: @deepseek-ai/libreoffice-kit.discoverRuntime is not available in the worker host',
+    })
+  })
+
+  it('resolves native Office session creation to the unavailable browser capability', async () => {
+    quiet()
+    expect(REPLACED_EXTERNAL_PACKAGES).toContain('@deepseek-ai/libreoffice-kit/editor')
+    expect(MODULE_PROXIES['@deepseek-ai/libreoffice-kit/editor']).toBe('./node/external_packages/libreoffice-kit-editor.ts')
+    expect(createNodeBuiltins()['@deepseek-ai/libreoffice-kit/editor']!()).toBe(libreofficeEditor)
+    await expect(libreofficeEditor.openDocument()).rejects.toMatchObject({
+      code: 'unavailable',
+      message: 'web-preview: @deepseek-ai/libreoffice-kit/editor.openDocument is not available in the worker host',
     })
   })
 

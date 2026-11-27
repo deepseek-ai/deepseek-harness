@@ -283,6 +283,7 @@ flowchart TD
   end
   subgraph group_experimental["packages/experimental"]
     pkg_client_ui_connectors["client-ui-connectors"]
+    pkg_client_ui_office_frame_forwarding["client-ui-office-frame-forwarding"]
     pkg_client_ui_read_aloud["client-ui-read-aloud"]
     pkg_client_ui_sidechat["client-ui-sidechat"]
     pkg_cua["cua"]
@@ -344,6 +345,7 @@ flowchart TD
     pkg_im_bundle["im-bundle"]
     pkg_im_session_commands["im-session-commands"]
     pkg_llm_mock["llm-mock"]
+    pkg_office_frame_forwarding_bundle["office-frame-forwarding-bundle"]
     pkg_read_aloud["read-aloud"]
     pkg_read_aloud_bundle["read-aloud-bundle"]
     pkg_sandbox_policy_git["sandbox-policy-git"]
@@ -1836,6 +1838,7 @@ flowchart TD
 | [`notion`](../packages/connector/notion) | `connector` | — |
 | [`tencent-docs`](../packages/connector/tencent-docs) | `connector` | — |
 | [`office-kit`](../packages/document/office-kit) | `document` | — |
+| [`client-ui-office-frame-forwarding`](../packages/experimental/client-ui-office-frame-forwarding) | `experimental` | — |
 | [`client-ui-read-aloud`](../packages/experimental/client-ui-read-aloud) | `experimental` | — |
 | [`client-ui-sidechat`](../packages/experimental/client-ui-sidechat) | `experimental` | — |
 | [`cua-bundle`](../packages/experimental/cua-bundle) | `experimental` | — |
@@ -1859,6 +1862,7 @@ flowchart TD
 | [`experimental-webworker-packer`](../packages/experimental/webworker-packer) | `experimental` | — |
 | [`frame-forwarding`](../packages/experimental/frame-forwarding) | `experimental` | — |
 | [`im-bundle`](../packages/experimental/im-bundle) | `experimental` | — |
+| [`office-frame-forwarding-bundle`](../packages/experimental/office-frame-forwarding-bundle) | `experimental` | — |
 | [`read-aloud-bundle`](../packages/experimental/read-aloud-bundle) | `experimental` | — |
 | [`client-ui-cordis`](../packages/extensions/ui-cordis) | `extensions` | — |
 | [`cordis-client-runner`](../packages/extensions/cordis-client-runner) | `extensions` | — |

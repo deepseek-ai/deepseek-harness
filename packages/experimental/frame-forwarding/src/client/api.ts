@@ -29,14 +29,10 @@ export interface FrameForwardingFrameLease {
   release(): void
 }
 
-/**
- * The document's fullscreen state as one receive channel sees it. `active`: an element of the document is fullscreen.
- * `holder`: this channel requested the fullscreen element; with `active: false`, the fullscreen it held just ended.
- * While another element is fullscreen, the channel's view is covered.
- */
-export interface FrameFullscreenState {
-  readonly active: boolean
-  readonly holder: boolean
+/** Options for {@link FrameRx.mount}. */
+export interface FrameMountOptions {
+  /** Initial explicit visibility of the mounted view; defaults to `true`. */
+  readonly visible?: boolean
 }
 
 /** Content coordinate at the mount's top-left corner and CSS pixels per content unit; scale is in (0, 64]. */
@@ -55,10 +51,10 @@ export interface FrameContentWindow {
 }
 
 /**
- * What one receive channel learns besides frames: its latest Host state, a frame failure of one connection, a
+ * What one receive channel learns besides frames: its latest Host state, a frame failure of its connection, a
  * renderer-side failure that ends the channel's frame routing (including termination of the Client's channel-event
- * stream and Client disposal), fullscreen state, or mounted presentation state.
- * FrameRx.onEvent replays state, viewport, fullscreen, and submitted generation on subscription.
+ * stream and Client disposal), or mounted presentation state.
+ * FrameRx.onEvent replays state, viewport, and submitted generation on subscription.
  */
 export type FrameRxEvent =
   | { readonly kind: 'state'; readonly channel: FrameChannelState }
@@ -72,8 +68,7 @@ export type FrameRxEvent =
     readonly error: string
   }
   | { readonly kind: 'failure'; readonly error: string }
-  | ({ readonly kind: 'fullscreen' } & FrameFullscreenState)
-  /** Latest generation written to the video track; submission does not establish scanout. */
+  /** Emitted for each video track write, including same-generation repaints, and once when submitted content clears. */
   | { readonly kind: 'content'; readonly submittedGeneration: number | undefined }
 
 /** The frame and event callbacks of one attached receive channel. */
@@ -84,31 +79,17 @@ export interface FrameChannelReceiver {
 
 /** Channel-scoped frame transport over the textures the Host forwards and the Host's `frameForwarding` Remote. */
 export interface FrameForwardingBridge {
-  /** Send a viewport to the Host, which keeps it for the channel and applies it to the current connection. */
+  /** Send a viewport to the Host, which keeps it for the channel and applies it to the producer connection. */
   setViewport(rx: FrameRxId, viewport: FrameForwardingViewport): Promise<FrameViewportResult>
   /**
-   * Attach one receiver and synchronously replay its known channel and active fullscreen states.
-   * @param rx - Channel receiving frames and events across producer connections.
+   * Attach one receiver and synchronously replay its known channel state.
+   * @param rx - Channel receiving frames and events from its producer connection.
    * @param receiver - Owns each delivered lease. A throwing frame callback loses its lease and registration.
-   * @returns Detach this registration immediately and await its fullscreen exit. Delivered leases stay with their holders.
+   * @returns Detach this registration immediately. Delivered leases stay with their holders.
    */
-  attach(rx: FrameRxId, receiver: FrameChannelReceiver): () => Promise<void>
+  attach(rx: FrameRxId, receiver: FrameChannelReceiver): () => void
   /** Apply one item of the Host's event stream; a snapshot replaces every known state. Ignored after `fail`. */
   apply(event: FrameForwardingEvent): void
-  /**
-   * Make `element` the document's fullscreen element on behalf of a channel. Chromium grants fullscreen only while the
-   * document handles a user gesture, so call it before the gesture's handler awaits anything.
-   * @param rx - Channel that holds fullscreen until it ends.
-   * @param element - Element to show fullscreen.
-   * @returns Completion of the entry; rejects when another channel holds fullscreen or the document refuses it.
-   */
-  requestFullscreen(rx: FrameRxId, element: Element): Promise<void>
-  /**
-   * Leave the fullscreen a channel holds; an entry still pending completes first.
-   * @param rx - Channel that requested fullscreen.
-   * @returns Completion of the exit; resolves at once when the channel holds no fullscreen.
-   */
-  exitFullscreen(rx: FrameRxId): Promise<void>
   /**
    * Report failure to every known channel; later subscriptions receive the failure at once. Afterwards the bridge
    * forgets every channel state, releases arriving textures, ignores Host events, and rejects viewports. Repeated
@@ -116,15 +97,15 @@ export interface FrameForwardingBridge {
    * @param message - Failure text every channel receives.
    */
   fail(message: string): void
-  /** Stop texture delivery and fullscreen observation for every channel, and leave the fullscreen a channel holds. */
+  /** Stop texture delivery for every channel. */
   dispose(): void
 }
 
 /** Renderer-side frame forwarding; consumers connect to channels their Host plugin opened. */
 export interface FrameForwardingClient {
   /**
-   * Connect the renderer to a Host-opened channel; the returned receive channel serves every producer connection the
-   * channel has, and the Host's per-channel frame limit bounds every frame it holds.
+   * Connect the renderer to a Host-opened channel; the returned receive channel serves that channel's producer
+   * connection, and the Host's per-channel frame limit bounds every frame it holds.
    * @param rx - Channel the consumer's Host plugin opened.
    * @returns The receive channel, which the consumer closes.
    */

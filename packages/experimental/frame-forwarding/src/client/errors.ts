@@ -5,12 +5,11 @@ import type { FrameFailureSource } from '../types.ts'
 export class FrameDiscardedError extends Error {
   /**
    * @param reason - Lifecycle event making the frame unnecessary: cancellation, the receive channel
-   *   closing, the producer connection the request was bound to ending, or Desktop losing the channel's frames.
+   *   closing, or Desktop losing the channel's frames.
    */
-  constructor(readonly reason: 'cancelled' | 'closed' | 'producer-changed' | 'lost') {
+  constructor(readonly reason: 'cancelled' | 'closed' | 'lost') {
     super(reason === 'closed' ? 'Native channel closed.'
-      : reason === 'producer-changed' ? 'Native producer changed.' : reason === 'lost' ? 'Native channel lost.'
-        : 'Native frame wait cancelled.')
+      : reason === 'lost' ? 'Native channel lost.' : 'Native frame wait cancelled.')
     this.name = 'FrameDiscardedError'
   }
 }

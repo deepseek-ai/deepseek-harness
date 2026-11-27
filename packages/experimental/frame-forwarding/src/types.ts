@@ -2,10 +2,10 @@
 import type { Branded, BrandedNumber } from '@deepseek-ai/dsh-brand'
 import type {} from '@deepseek-ai/dsh-typert-protocol'
 
-/** Host-issued identity of one receive channel; it survives producer switches and is invalid after the channel closes. */
+/** Host-issued identity of one receive channel; valid until the channel closes. */
 export type FrameRxId = Branded<'FrameRxId'>
 
-/** Increasing identity of one producer connection within its channel; a channel never reuses one. */
+/** Identity of a channel's producer connection. */
 export type FrameConnectionId = BrandedNumber<'FrameConnectionId'>
 
 /** Physical size and display state of one viewport version; frames of another `version` are discarded. */
@@ -43,23 +43,23 @@ export interface FrameForwardingCapabilities {
 }
 
 /**
- * Why a channel closed. `closed`: its owner closed it. `lost`: Desktop could no longer account for a frame it
- * presented, after a committed navigation, a renderer or GPU process exit, window closure, or the loss of Desktop's
- * channel, so the channel stopped before its producer could write that frame again; the owner opens a new channel to
- * continue. `failed`: its receiver stopped accepting producers.
+ * Why a channel closed. `closed`: its owner closed it, or its producer disconnected with a goodbye. `lost`: Desktop
+ * could no longer account for a frame it presented, after a committed navigation, a renderer or GPU process exit,
+ * window closure, or the loss of Desktop's channel, so the channel stopped before its producer could write that frame
+ * again; the owner opens a new channel to continue. `failed`: its receiver stopped accepting producers, or its producer
+ * connection ended without a goodbye, for example because the producer process exited, the producer violated the
+ * protocol, or a frame outlived its delivery deadline.
  */
 export type FrameChannelCloseCause = 'closed' | 'lost' | 'failed'
 
 /**
- * Producer state of one channel. `idle`: no producer is connected. `connected`: connection `connectionId` serves the
- * channel, and `viewportVersion` is the newest channel viewport it acknowledged. `draining`: that connection ended and
- * its frames are being released; a successor connects only afterwards, and `blocked` reports GPU work of unknown
- * completion that holds the drain. `closed`: terminal, with its cause.
+ * Producer state of one channel. `idle`: no producer has connected yet. `connected`: connection `connectionId` serves
+ * the channel, and `viewportVersion` is the newest channel viewport it acknowledged. `closed`: terminal, with its
+ * cause; disconnecting the producer closes the channel permanently.
  */
 export type FrameChannelState =
   | { readonly state: 'idle' }
   | { readonly state: 'connected'; readonly connectionId: FrameConnectionId; readonly viewportVersion?: number }
-  | { readonly state: 'draining'; readonly connectionId: FrameConnectionId; readonly blocked?: string }
   | { readonly state: 'closed'; readonly cause: FrameChannelCloseCause; readonly reason: string }
 
 /**
@@ -100,9 +100,9 @@ export type FrameForwardingEvent =
 
 /**
  * Outcome of one renderer viewport. A stale submission leaves the Host's retained viewport intact and returns its
- * version. For a newer submission the Host keeps the viewport even if the producer changes before acknowledging it.
+ * version. A newer submission sent before the channel's producer connects is retained and applied once it connects.
  */
 export type FrameViewportResult =
   | { readonly applied: true; readonly connectionId: FrameConnectionId }
-  | { readonly applied: false; readonly reason: 'no-producer' | 'producer-changed' }
+  | { readonly applied: false; readonly reason: 'no-producer' }
   | { readonly applied: false; readonly reason: 'stale-viewport'; readonly currentVersion: number }

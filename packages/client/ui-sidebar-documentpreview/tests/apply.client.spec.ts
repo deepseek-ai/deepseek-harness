@@ -108,6 +108,7 @@ describe('ui-sidebar-documentpreview apply', () => {
       ['sidebar.right.tab.document', '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/office', 'sidebarOffice', OfficeBody],
       ['sidebar.right.tab.document.office.pdf', '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/office', 'sidebarPdf', LazyPdfBody],
       ['sidebar.right.tab.document', '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/excel', 'sidebarExcel', LazyExcelBody],
+      ['sidebar.right.tab.document.office.spreadsheet', '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/office', 'sidebarExcel', LazyExcelBody],
       ['sidebar.right.tab.document', '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/code', 'sidebarCodePreview', CodeBody],
       ['sidebar.right.pane.tab', '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/compaction', 'documentMarkdown', SummaryPreview],
       ['sidebar.right.pane.tab.title', '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/compaction', 'documentMarkdown', SummaryTitle],

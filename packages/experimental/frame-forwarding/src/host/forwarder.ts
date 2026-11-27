@@ -47,14 +47,6 @@ export interface FrameForwarderListeners {
   warn(message: string): void
 }
 
-/** The connection that received a control request ended before acknowledging it. */
-class ProducerChangedError extends Error {
-  constructor() {
-    super('Native producer changed before acknowledging the request')
-    this.name = 'ProducerChangedError'
-  }
-}
-
 interface Pending {
   resolve(): void
   reject(error: Error): void
@@ -66,16 +58,15 @@ interface Connection {
   confirmed: number | undefined
   /** Viewport requests sent to this connection and awaiting acknowledgement, by request identifier. */
   readonly pending: Map<string, Pending>
-  ended: boolean
 }
 interface Channel {
   readonly rx: FrameRxId
   readonly receiver: FrameForwardingReceiver
   state: FrameChannelState
   sequence: number
-  /** The connected or draining connection. */
+  /** The channel's single producer connection, once connected. */
   connection: Connection | undefined
-  /** Latest renderer viewport; every new connection receives it before its frames are delivered. */
+  /** Latest renderer viewport; applied on initial connection if submitted while idle. */
   viewport: FrameForwardingViewport | undefined
   closing: Promise<void> | undefined
 }
@@ -274,7 +265,7 @@ export class FrameForwarder {
   }
 
   /**
-   * Keep a renderer viewport for the channel and apply it to the current connection.
+   * Keep a renderer viewport for the channel and apply it to the channel's producer connection.
    * @param rx - Open channel.
    * @param value - Untrusted viewport from the renderer, validated here.
    * @returns The retained version for a stale submission, or the outcome of delivering a newer one. Producer refusal
@@ -288,13 +279,8 @@ export class FrameForwarder {
     channel.viewport = viewport
     this.updateDeliverable(channel)
     const connection = channel.connection
-    if (connection === undefined || connection.ended) return { applied: false, reason: 'no-producer' }
-    try {
-      await this.track(this.applyViewport(channel, connection, viewport))
-    } catch (error) {
-      if (error instanceof ProducerChangedError) return { applied: false, reason: 'producer-changed' }
-      throw error
-    }
+    if (connection === undefined) return { applied: false, reason: 'no-producer' }
+    await this.track(this.applyViewport(channel, connection, viewport))
     return { applied: true, connectionId: connection.id }
   }
 
@@ -340,7 +326,7 @@ export class FrameForwarder {
         // The addon refuses sends once the connection ended, before its disconnect event reaches this thread.
         clearTimeout(timer)
         connection.pending.delete(requestId)
-        reject(new ProducerChangedError())
+        reject(new Error('Native channel is closed'))
       }
     })
   }
@@ -356,7 +342,6 @@ export class FrameForwarder {
   }
 
   private end(connection: Connection, error: () => Error): void {
-    connection.ended = true
     for (const pending of connection.pending.values()) {
       clearTimeout(pending.timer)
       pending.reject(error())
@@ -364,18 +349,28 @@ export class FrameForwarder {
     connection.pending.clear()
   }
 
+  private closeOnEvent(channel: Channel, cause: FrameChannelCloseCause, reason: string): void {
+    void this.closeChannel(channel, cause, reason).catch((error: unknown) => {
+      console.error('Native receiver teardown failed', error)
+    })
+  }
+
   private receive(channel: Channel, event: FrameForwardingReceiverEvent): void {
     switch (event.type) {
       case 'connected': {
         if (channel.closing !== undefined) return
-        const connection: Connection = { id: event.connectionId, confirmed: undefined, pending: new Map(), ended: false }
+        if (channel.connection !== undefined) {
+          this.closeOnEvent(channel, 'failed', 'Native channel received an unexpected second producer')
+          return
+        }
+        const connection: Connection = { id: event.connectionId, confirmed: undefined, pending: new Map() }
         channel.connection = connection
         this.updateDeliverable(channel)
         this.publishConnected(channel, connection)
         const viewport = channel.viewport
         if (viewport !== undefined) {
           void this.track(this.applyViewport(channel, connection, viewport)).catch((error: unknown) => {
-            if (!(error instanceof ProducerChangedError)) this.warn(`Native viewport replay failed: ${errorOf(error).message}`)
+            if (channel.closing === undefined) this.warn(`Native initial viewport apply failed: ${errorOf(error).message}`)
           })
         }
         return
@@ -395,45 +390,36 @@ export class FrameForwarder {
         })
         return
       case 'presentation-invalidated':
-        this.invalidate(channel)
+        this.closeOnEvent(channel, 'lost', 'Desktop invalidated a presented frame')
         return
       case 'disconnected': {
-        const connection = channel.connection
-        if (connection?.id !== event.connectionId) return
-        this.end(connection, () => new ProducerChangedError())
-        this.updateDeliverable(channel)
+        if (channel.closing !== undefined || channel.connection?.id !== event.connectionId) return
         if (event.text !== undefined) this.warn(`Native producer ${String(event.connectionId)} disconnected: ${event.text}`)
-        if (channel.closing === undefined) this.publish(channel, { state: 'draining', connectionId: event.connectionId })
+        const cause: FrameChannelCloseCause = event.text === undefined ? 'closed' : 'failed'
+        const reason = event.text === undefined ? 'Native producer disconnected' : `Native producer disconnected: ${event.text}`
+        this.closeOnEvent(channel, cause, reason)
         return
       }
       case 'drained':
-        if (channel.connection?.id !== event.connectionId) return
-        channel.connection = undefined
-        this.updateDeliverable(channel)
-        if (channel.closing === undefined) this.publish(channel, { state: 'idle' })
         return
       case 'drain-blocked':
         this.warn(`Native producer ${String(event.connectionId)} drain is blocked: ${event.text}`)
-        if (channel.connection?.id === event.connectionId && channel.closing === undefined)
-          this.publish(channel, { state: 'draining', connectionId: event.connectionId, blocked: event.text })
         return
       case 'rejected':
         this.warn(`Native producer refused: ${event.text}`)
         return
       case 'failed':
-        void this.closeChannel(channel, 'failed', `Native channel failed: ${event.text}`).catch((error: unknown) => {
-          console.error('Native receiver teardown failed', error)
-        })
+        this.closeOnEvent(channel, 'failed', `Native channel failed: ${event.text}`)
         return
       /* v8 ignore next -- The addon event union is exhausted above. */
       default: return assertNever(event)
     }
   }
 
-  /** Control messages only affect the connection that sent them while it is current. */
+  /** Control messages only affect the channel's single connection while open. */
   private message(channel: Channel, connectionId: FrameConnectionId, json: string): void {
     const connection = channel.connection
-    if (connection?.id !== connectionId || connection.ended) return
+    if (channel.closing !== undefined || connection?.id !== connectionId) return
     let message: Record<string, unknown>
     try {
       message = object(JSON.parse(json))
@@ -463,7 +449,7 @@ export class FrameForwarder {
   }
 
   /**
-   * Push the receiver's presentation gate: frames of the current, unended connection while the latest viewport is
+   * Push the receiver's presentation gate: frames of the channel's connection while the latest viewport is
    * visible, up to that viewport's version. The gate moves before the viewport is sent, so it admits a frame of the
    * new generation even when that frame reaches the receiver before JavaScript handles the acknowledgement. Earlier
    * generations pass because frames still in flight can follow a newer viewport; Desktop Main and the receive channel
@@ -471,16 +457,9 @@ export class FrameForwarder {
    */
   private updateDeliverable(channel: Channel): void {
     const { connection, viewport } = channel
-    channel.receiver.setDeliverable(channel.closing === undefined && connection !== undefined && !connection.ended
-      && viewport !== undefined
+    channel.receiver.setDeliverable(channel.closing === undefined && connection !== undefined && viewport !== undefined
       ? { connectionId: connection.id, visible: viewport.visible, maxGeneration: viewport.version }
       : null)
-  }
-
-  private invalidate(channel: Channel): void {
-    void this.closeChannel(channel, 'lost', 'Desktop invalidated a presented frame').catch((error: unknown) => {
-      console.error('Native receiver teardown failed', error)
-    })
   }
 
   /** The receiver stops before the first await, so a frame released after this call returns no credit. */

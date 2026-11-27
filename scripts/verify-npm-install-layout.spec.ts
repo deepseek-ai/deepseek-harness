@@ -266,6 +266,11 @@ describe('resolution work budget', () => {
       .toBe(units)
   })
 
+  it('accepts the measured Office install graph', () => {
+    expect(assertResolutionWorkBudget({ dshPackagesPerVersion: 317, checkedDshEdges: 2800 }))
+      .toBe(887_600)
+  })
+
   it('accepts a graph exactly at the budget and rejects one internal edge above it', () => {
     const packages = 341
     const edgesAtBudget = Math.floor(MAX_RESOLUTION_WORK_UNITS / packages)

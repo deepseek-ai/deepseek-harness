@@ -35,6 +35,8 @@ kind: "package-reference"
 | `renderImages()` | 把选定的页、幻灯片或工作表区域渲染为 PNG | 按文档顺序排列的图片及其页码、工作表或区域，以及文档页数、DPI 和实际使用的渲染后端 |
 | `convertTo()` | 转换为 `format` 指定的格式；CSV 需要 `sheet` | 已保存文件的 Host 路径、大小和 PDF 页数 |
 | `recalculate()` | 把 XLS、XLSX 或 ODS 重算为 XLSX 或 ODS | 已保存工作簿的 Host 路径和大小 |
+| `discoverRuntime()` | 不启动引擎即探测已安装 Kit 的运行时元数据 | `RuntimeInfo`，不可用时返回 `undefined` |
+| `openDocument()` | 在转换队列与缓存之外打开交互式原生文档 | 调用方拥有的 `EditorDocument`（由调用方调用 `close()`） |
 
 `renderImages()` 要求提供 `maxImages`、`maxPixels`、`maxDimension` 和 `maxBytes`。图片数超过 `maxImages`，或单张图片超过像素或尺寸上限时，引擎拒绝该选择；图片 PNG 总字节数超过 `maxBytes` 时，提供方在读取前和读取过程中以 `output-too-large` 拒绝。引擎拒绝的页、工作表、区域、分辨率或格式选择以 `invalid-request` 失败，并附带引擎的说明。转换和重算的文件受 `maxOutputBytes` 限制。提供方从不写入工作区：它把每个输出保存在 `outputDirectory` 下各自仅属主可访问的目录中，按请求的 `output.owner`（`document_convert` 和 `document_recalculate` 传入调用方 subagent 树的根 Session）分组，并返回绝对 Host 路径。文件在 `outputRetentionMs` 到期、较新的输出需要 `maxOutputStoreBytes` 内的空间（最旧的先删）、id 等于 owner 的 Session 卸载或提供方卸载时删除；单个文件超过 `maxOutputStoreBytes` 时以 `output-too-large` 失败。文件在删除成功之前一直计入 `maxOutputStoreBytes`；删除失败时记录日志，并在之后的淘汰、释放和卸载时重试，腾不出足够空间的保存以 `unavailable` 失败。卸载会等待进行中的删除结束。启动时还会删除之前进程留下的、超过保留期的输出目录，但只处理名字符合提供方生成格式的真实目录，不处理链接或 junction：`outputDirectory` 下一级为 `session-` 加 24 位小写十六进制数字，其下为小写 UUID v4 的输出目录。其他条目保持不动。服务公开 `outputDirectory`，供消费方检查其执行环境能否读取。
 
@@ -71,6 +73,8 @@ Kit 缺失时提供方照常注册，例如未下载 Office sidecar 就启动的
 准入在调用源读取前限制排队元数据、未完成读取方、活动源字节预留和转换。未知源大小预留 `maxInputBytes`；已知大小预留 stat 字节数。读取收到该容量，最多额外读取一个超限哨兵字节。`maxSourceBytes` 必须覆盖 `maxInputBytes`。最后一个读取方额度预留给前台。`maxBackgroundConversions` 设为零时，拒绝后台读取方加入排队或运行中的工作；仍可命中已完成的别名缓存。只要仍有前台任务排队，后台任务就继续等待，包括前台正在等待源容量的情况。前台加入会提升排队预热；最后一个前台读取方离开后，排队任务恢复后台优先级，符合条件的工作可立即开始。前台准入也可移除排队推测工作。总并发大于一时，后台并发为前台保留一个槽位。正在运行的预热即使被提权，也保留后台准入槽位直至结束。最后一个读取方取消共享工作。移除排队的前台阻塞任务后，其他符合条件的工作立即准入；实际读取、转换和清理完成前仍保留活动预留容量。
 
 默认保留 8 个输出、128 MiB 和 64 个源别名，准入 32 个读取方与 8 个排队任务，最多预留 100 MiB 源字节，并允许一个后台转换。这些限制约束拥有的请求和二进制载荷，不约束引擎 RSS、multipart 封装、调用方保留的结果或 PDF.js 页面渲染。
+
+`discoverRuntime()` 与 `openDocument()` 在转换队列、转换器槽位和缓存之外运行，因此长生命周期的交互会话不会阻塞批处理转换。提供方已卸载、Kit 缺失或无法加载、或 Kit 报告运行时不可用时，`discoverRuntime()` 返回 `undefined`（对每种不同失败只记录一次告警），其余意外探测错误原样抛出。`openDocument()` 延迟加载 Kit 的编辑器入口，将提供方配置的字体和归档设置与调用方覆盖项合并，传入提供方的引擎包解析器，并返回由调用方拥有的 `EditorDocument`。
 
 -----
 

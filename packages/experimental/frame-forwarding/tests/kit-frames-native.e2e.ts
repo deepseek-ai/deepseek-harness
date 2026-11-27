@@ -201,44 +201,42 @@ describe.skipIf(!available)('LibreOffice Kit frames through the built receiver a
     expect(failures()).toEqual([])
   }, 60_000)
 
-  it('hands the channel to a replacement engine after the previous engine\'s frames are released, normally and after a crash', async () => {
+  it('closes the old channel on detach or crash and serves a replacement engine on a fresh channel', async () => {
     const info = await document.getInfo()
     const area = { x: 0, y: 0, width: info.width, height: info.height }
     await document.renderSurface(area, 320, 240, { requestId: 'held', generation: 2 })
     await vi.waitFor(() => { expect(host.held).toHaveLength(1) })
-    // Normal handoff: the old engine closes its connection; its frame stays valid while Desktop holds it.
+    // Normal detach closes the channel while the held frame stays valid until Desktop releases it.
     await document.detachSurfaceTransport()
-    await vi.waitFor(() => { expect(state()).toEqual({ state: 'draining', connectionId: 1 }) })
-    const replacement = await open()
-    let attached = false
-    const attaching = replacement.attachSurfaceTransport(channel.tx, { timeoutMs: 10_000 }).then(() => { attached = true })
-    await new Promise(resolve => setTimeout(resolve, 500))
-    expect(attached).toBe(false)
+    await vi.waitFor(() => { expect(state()).toMatchObject({ state: 'closed', cause: 'closed' }) })
     expect(host.held[0]!.pixel).toBe(BLUE)
     host.held[0]!.release()
-    await attaching
     await document.close()
+    const replacement = await open()
+    channel = await forwarder.channel()
+    await replacement.attachSurfaceTransport(channel.tx, { timeoutMs: 10_000 })
     document = replacement
-    // The channel replays its latest viewport, so the replacement renders generation 2 without a renderer request.
-    await vi.waitFor(() => { expect(state()).toEqual({ state: 'connected', connectionId: 2, viewportVersion: 2 }) })
-    await document.renderSurface(area, 320, 240, { requestId: 'after-handoff', generation: 2 })
-    await vi.waitFor(() => { expect(host.held.map(entry => entry.metadata.requestId)).toEqual(['after-handoff']) })
-    expect(host.held[0]!.metadata).toMatchObject({ connectionId: 2, generation: 2 })
-    // Crash takeover: the engine process dies while Desktop holds its frame; no reauthorization is needed.
+    await vi.waitFor(() => { expect(state()).toEqual({ state: 'connected', connectionId: 1 }) })
+    await forwarder.setViewport(channel.rx, { version: 2, width: 320, height: 240, deviceScaleFactor: 1, visible: true })
+    await document.renderSurface(area, 320, 240, { requestId: 'after-replace', generation: 2 })
+    await vi.waitFor(() => { expect(host.held.map(entry => entry.metadata.requestId)).toEqual(['after-replace']) })
+    expect(host.held[0]!.metadata).toMatchObject({ connectionId: 1, generation: 2 })
+    // Crash closes the channel as failed; a successor connects to a new channel.
     const crashed = document
     const failed = new Promise<void>((resolve) => { crashed.onEvent((event) => { if (event.kind === 'failure') resolve() }) })
     process.kill(crashed.processId, 'SIGKILL')
     await failed
-    await vi.waitFor(() => { expect(state()).toMatchObject({ state: 'draining', connectionId: 2 }) })
-    const successor = await open()
-    const taking = successor.attachSurfaceTransport(channel.tx, { timeoutMs: 10_000 })
+    await vi.waitFor(() => { expect(state()).toMatchObject({ state: 'closed', cause: 'failed' }) })
     host.held[0]!.release()
-    await taking
     await crashed.close().catch(() => {})
+    const successor = await open()
+    channel = await forwarder.channel()
+    await successor.attachSurfaceTransport(channel.tx, { timeoutMs: 10_000 })
     document = successor
-    await vi.waitFor(() => { expect(state()).toEqual({ state: 'connected', connectionId: 3, viewportVersion: 2 }) })
+    await vi.waitFor(() => { expect(state()).toEqual({ state: 'connected', connectionId: 1 }) })
+    await forwarder.setViewport(channel.rx, { version: 2, width: 320, height: 240, deviceScaleFactor: 1, visible: true })
     await document.renderSurface(area, 320, 240, { requestId: 'after-crash', generation: 2 })
-    await vi.waitFor(() => { expect(host.held.map(entry => entry.metadata.connectionId)).toEqual([3]) })
+    await vi.waitFor(() => { expect(host.held.map(entry => entry.metadata.requestId)).toEqual(['after-crash']) })
     host.held[0]!.release()
     expect(failures()).toEqual([])
   }, 90_000)

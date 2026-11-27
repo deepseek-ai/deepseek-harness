@@ -196,7 +196,7 @@ describe.skipIf(process.platform !== 'darwin')('malicious producer over the rece
       expect(fakes.presented(fake.native)).toEqual([]); expect(forwarder.isOpen(channel.rx)).toBe(true)
       expect(events.some(event => event.type === 'frame')).toBe(false)
       await producer.stop()
-      await expect.poll(() => forwarder.snapshot()[0]?.channel.state).toBe('idle')
+      await expect.poll(() => forwarder.isOpen(channel.rx)).toBe(false)
     } finally { await producer.stop(); await forwarder.closeAll() }
   })
 })

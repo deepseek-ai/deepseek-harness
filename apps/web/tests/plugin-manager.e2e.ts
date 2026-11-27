@@ -762,7 +762,7 @@ describe('web e2e: plugin manager', () => {
       .toMatchObject({ enabled: true, installed: false, removable: true, error: { code: 'operation-error' }, rows: [] })
     await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'missing-bundle.expected.md'),
       await captureStableAria(page, '[data-plugin-panel]', scaffold.workspaceCwd, {
-        replacements: [[scaffold.harnessHome, '{{home}}']],
+        replacements: [[JSON.stringify(join(scaffold.harnessHome, 'profiles', 'scaffold')).slice(1, -1), '{{home}}/profiles/scaffold']],
       }), MODE)
     await toggle.click()
     await expect.poll(async () => (JSON.parse(await homeFile('profiles', 'scaffold', 'package.json')) as {
@@ -854,12 +854,12 @@ describe('web e2e: plugin manager', () => {
     await compareOrRefreshGolden(TERMINAL_EXPECTED, await captureStableAria(
       page, '[data-plugin-group="more"] [data-plugin-package="@deepseek-ai/dsh-experimental-terminal-bundle"]', scaffold.workspaceCwd,
     ), MODE)
-    // The More list also omits LiveShare until its rows run, so the offered count is one lower than
-    // the eligible installed optional-bundle list.
+    // Web omits Desktop Office preview even when its Host ships the bundle.
+    expect(await panel.locator('[data-plugin-package="@deepseek-ai/dsh-office-frame-forwarding-bundle"]').count()).toBe(0)
     expect(await panel.locator('[data-plugin-group="more"] [data-plugin-package="@deepseek-ai/dsh-experimental-liveshare"]').count()).toBe(0)
     expect(await panel.locator('[data-plugin-group="more"] [data-plugin-package]').count())
       .toBe(bundles.filter(bundle => !HIDDEN_BUNDLES.has(bundle.name)
-        && bundle.name !== '@deepseek-ai/dsh-experimental-liveshare'
+        && bundle.name !== '@deepseek-ai/dsh-experimental-liveshare' && bundle.name !== '@deepseek-ai/dsh-office-frame-forwarding-bundle'
         && bundle.official && (bundle.listedByDefault !== false || bundle.enabled || bundle.installed)).length)
     // Computer Use ships with the installation and is listed only on the macOS Hosts it supports.
     const cuaSupported = process.platform === 'darwin' || process.platform === 'win32'

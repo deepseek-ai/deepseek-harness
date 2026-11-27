@@ -150,3 +150,5 @@ export function apply(ctx: ClientContext, config: SyncedConfig<DocumentPreviewCo
     name: 'sidebar.right.pane.tab.title', key: summaryId, locale: 'documentMarkdown',
   }, SummaryTitle)), 'ui-sidebar-documentpreview: summary title')
 }
+
+export type { OfficeBodyProps } from './office/OfficeBody.tsx'

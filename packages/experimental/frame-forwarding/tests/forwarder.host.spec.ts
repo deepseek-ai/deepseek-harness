@@ -288,7 +288,7 @@ describe('channel creation', () => {
 })
 
 describe('producer connections', () => {
-  it('replays the kept viewport to a new connection and publishes the version it acknowledged', async () => {
+  it('applies a viewport submitted while idle once the producer connects and publishes the version it acknowledged', async () => {
     const rx = await open()
     expect(await forwarder.setViewport(rx, viewport(1))).toEqual({ applied: false, reason: 'no-producer' })
     const stale = { applied: false, reason: 'stale-viewport', currentVersion: 1 }
@@ -303,37 +303,38 @@ describe('producer connections', () => {
     expect(await applyViewport(rx, viewport(2))).toEqual({ applied: true, connectionId: 1 })
     expect(states(rx).at(-1)).toEqual({ state: 'connected', connectionId: 1, viewportVersion: 2 })
   })
-  it('hands the channel to a successor after the previous connection drains, without letting old messages reach it', async () => {
-    const rx = await ready()
-    const pending = forwarder.setViewport(rx, viewport(2))
-    const stale = lastRequest()
+  it('closes the channel permanently when its producer disconnects, distinguishing clean disconnect from error disconnect', async () => {
+    const failed = await ready()
+    const pending = expect(forwarder.setViewport(failed, viewport(2))).rejects.toThrow('Native channel closed')
+    onEvent!({ type: 'disconnected', connectionId: id(99) })
+    expect(forwarder.isOpen(failed)).toBe(true)
     onEvent!({ type: 'disconnected', connectionId: id(1), text: 'connection lost' })
-    expect(await pending).toEqual({ applied: false, reason: 'producer-changed' })
+    await pending
     expect(listeners.warn).toHaveBeenCalledWith('Native producer 1 disconnected: connection lost')
-    expect(states(rx).at(-1)).toEqual({ state: 'draining', connectionId: 1 })
-    expect(await forwarder.setViewport(rx, viewport(3))).toEqual({ applied: false, reason: 'no-producer' })
-    onEvent!({ type: 'drained', connectionId: id(2) })
-    onEvent!({ type: 'drained', connectionId: id(1) })
-    expect(states(rx).at(-1)).toEqual({ state: 'idle' })
-    connect(2)
-    expect(lastRequest()).toMatchObject({ connectionId: 2, version: 3 })
-    // The successor's frames pass from the replay on; the old connection's frames do not.
-    expect(gate()).toEqual({ connectionId: 2, visible: true, maxGeneration: 3 })
-    // A late acknowledgement of the old connection's request neither confirms nor settles anything for the successor.
-    message(1, { type: 'viewport-applied', requestId: stale.requestId, version: 3 })
-    expect(states(rx).at(-1)).toEqual({ state: 'connected', connectionId: 2 })
+    expect(forwarder.isOpen(failed)).toBe(false)
+    expect(states(failed).at(-1)).toEqual({
+      state: 'closed', cause: 'failed', reason: 'Native producer disconnected: connection lost',
+    })
+    await vi.waitFor(() => { expect(forwarder.snapshot()).toEqual([]) })
+    const clean = await ready()
     onEvent!({ type: 'disconnected', connectionId: id(1) })
-    ack()
-    expect(states(rx).at(-1)).toEqual({ state: 'connected', connectionId: 2, viewportVersion: 3 })
-    expect(gate()).toEqual({ connectionId: 2, visible: true, maxGeneration: 3 })
-    expect(sharedTexture.capabilities).toHaveBeenCalledWith(limits.requestTimeoutMs)
-    onEvent!({ type: 'disconnected', connectionId: id(2) })
+    expect(forwarder.isOpen(clean)).toBe(false)
+    expect(states(clean).at(-1)).toEqual({
+      state: 'closed', cause: 'closed', reason: 'Native producer disconnected',
+    })
     expect(listeners.warn).toHaveBeenCalledOnce()
+    await vi.waitFor(() => { expect(forwarder.snapshot()).toEqual([]) })
   })
-  it('treats a send the addon refuses as a producer change', async () => {
+  it('fails the channel if an unexpected second producer connects and rejects sends the addon refuses', async () => {
     const rx = await ready()
     receiver.send.mockImplementationOnce(() => { throw new Error('Frame-forwarding connection is not active') })
-    expect(await forwarder.setViewport(rx, viewport(2))).toEqual({ applied: false, reason: 'producer-changed' })
+    await expect(forwarder.setViewport(rx, viewport(2))).rejects.toThrow('Native channel is closed')
+    connect(2)
+    expect(forwarder.isOpen(rx)).toBe(false)
+    expect(states(rx).at(-1)).toEqual({
+      state: 'closed', cause: 'failed', reason: 'Native channel received an unexpected second producer',
+    })
+    await vi.waitFor(() => { expect(forwarder.snapshot()).toEqual([]) })
   })
   it('rejects a timed-out or refused viewport while the channel stays open, and still confirms a late acknowledgement', async () => {
     vi.useFakeTimers()
@@ -366,21 +367,21 @@ describe('producer connections', () => {
     await forwarder.close(rx)
     await expect(forwarder.setViewport(rx, viewport(2))).rejects.toThrow('channel is closed')
   })
-  it('warns when a replayed viewport fails, but not when its connection ended', async () => {
+  it('warns when an initial viewport fails, but not when the channel closed meanwhile', async () => {
     vi.useFakeTimers()
-    const rx = await open()
-    await forwarder.setViewport(rx, viewport(1))
+    const first = await open()
+    await forwarder.setViewport(first, viewport(1))
     connect()
     await vi.advanceTimersByTimeAsync(limits.requestTimeoutMs)
-    expect(listeners.warn).toHaveBeenCalledExactlyOnceWith('Native viewport replay failed: Native producer acknowledgement timed out')
+    expect(listeners.warn).toHaveBeenCalledExactlyOnceWith('Native initial viewport apply failed: Native producer acknowledgement timed out')
+    const second = await open()
+    await forwarder.setViewport(second, viewport(1))
+    connect()
     onEvent!({ type: 'disconnected', connectionId: id(1) })
-    onEvent!({ type: 'drained', connectionId: id(1) })
-    connect(2)
-    onEvent!({ type: 'disconnected', connectionId: id(2) })
     await vi.advanceTimersByTimeAsync(0)
     expect(listeners.warn).toHaveBeenCalledOnce()
   })
-  it('reports producer errors and invalid control messages of the current connection only', async () => {
+  it('reports producer errors and invalid control messages of the connected producer only', async () => {
     const rx = await ready()
     message(1, { type: 'error', message: 'PPT stream rendering failed' })
     message(1, { type: 'error' })
@@ -402,10 +403,8 @@ describe('producer connections', () => {
     onEvent!({ type: 'rejected', text: 'channel-busy' })
     expect(listeners.warn).toHaveBeenCalledWith('Native producer refused: channel-busy')
     onEvent!({ type: 'drain-blocked', connectionId: id(1), text: 'GPU cleanup is stalled' })
-    expect(states(rx).at(-1)).toEqual({ state: 'draining', connectionId: 1, blocked: 'GPU cleanup is stalled' })
-    onEvent!({ type: 'drain-blocked', connectionId: id(2), text: 'other' })
-    expect(states(rx)).toHaveLength(4)
-    expect(listeners.warn).toHaveBeenCalledWith('Native producer 2 drain is blocked: other')
+    expect(listeners.warn).toHaveBeenCalledWith('Native producer 1 drain is blocked: GPU cleanup is stalled')
+    expect(states(rx).at(-1)).toEqual({ state: 'connected', connectionId: 1, viewportVersion: 1 })
     onEvent!({ type: 'failed', text: 'listener failed' })
     expect(forwarder.isOpen(rx)).toBe(false)
     expect(states(rx).at(-1)).toEqual({ state: 'closed', cause: 'failed', reason: 'Native channel failed: listener failed' })
@@ -445,16 +444,15 @@ describe('presentation gate', () => {
     await applyViewport(rx, viewport(4))
     expect(gate()).toEqual(open1(4))
   })
-  it('closes when the connection ends, drains, or the channel closes', async () => {
-    const rx = await ready()
+  it('closes when the producer disconnects or the channel closes', async () => {
+    const disconnected = await ready()
     onEvent!({ type: 'disconnected', connectionId: id(1) })
     expect(gate()).toBeNull()
-    onEvent!({ type: 'drained', connectionId: id(1) })
-    expect(gate()).toBeNull()
-    connect(2)
-    expect(gate()).toEqual({ connectionId: 2, visible: true, maxGeneration: 1 })
-    ack()
-    await forwarder.close(rx)
+    expect(order.slice(-2)).toEqual(['gate:null', 'close'])
+    await vi.waitFor(() => { expect(forwarder.snapshot()).toEqual([]) })
+    expect(forwarder.isOpen(disconnected)).toBe(false)
+    const explicit = await ready()
+    await forwarder.close(explicit)
     expect(order.slice(-2)).toEqual(['gate:null', 'close'])
   })
 })
@@ -560,7 +558,7 @@ describe('teardown', () => {
     expect(receiver.close).toHaveBeenCalledOnce()
     expect(states(rx).filter(state => state.state === 'closed')).toEqual([{ state: 'closed', cause: 'closed', reason: 'Native channel closed' }])
   })
-  it('ignores connection events while a channel closes', async () => {
+  it('ignores connection events and messages while a channel closes', async () => {
     const rx = await open()
     const closing = Promise.withResolvers<undefined>()
     receiver.close.mockReturnValueOnce(closing.promise)
@@ -569,21 +567,11 @@ describe('teardown', () => {
     onEvent!({ type: 'disconnected', connectionId: id(1) })
     onEvent!({ type: 'drained', connectionId: id(1) })
     onEvent!({ type: 'drain-blocked', connectionId: id(1), text: 'stalled' })
+    message(1, { type: 'error', message: 'late' })
     expect(states(rx)).toEqual([{ state: 'idle' }, { state: 'closed', cause: 'closed', reason: 'Native channel closed' }])
     expect(forwarder.snapshot()).toEqual([{ rx, sequence: 2, channel: { state: 'closed', cause: 'closed', reason: 'Native channel closed' } }])
     closing.resolve(undefined)
     await closed
-    const draining = await open()
-    connect()
-    onEvent!({ type: 'disconnected', connectionId: id(1) })
-    const stalled = Promise.withResolvers<undefined>()
-    receiver.close.mockReturnValueOnce(stalled.promise)
-    const closingDrain = forwarder.close(draining)
-    onEvent!({ type: 'disconnected', connectionId: id(1) })
-    onEvent!({ type: 'drained', connectionId: id(1) })
-    expect(states(draining).at(-1)).toEqual({ state: 'closed', cause: 'closed', reason: 'Native channel closed' })
-    stalled.resolve(undefined)
-    await closingDrain
   })
   it('contains throwing listeners and asynchronous receiver teardown failures', async () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => {})

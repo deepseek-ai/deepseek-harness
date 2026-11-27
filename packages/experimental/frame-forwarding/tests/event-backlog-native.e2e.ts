@@ -140,9 +140,9 @@ describe.skipIf(!nativeSupported)('pending-event limit of the built frame-forwar
     expect(channel.count('failed')).toBe(0)
   })
 
-  it('keeps a FrameForwarder channel open through draining to idle after a connection exceeds the limit, then reconnects', async () => {
+  it('closes a FrameForwarder channel as failed after its producer exceeds the limit', async () => {
     const h = harness!
-    const successorSignal = signalPrefix(h)
+    const signal = signalPrefix(h)
     const states: FrameChannelState[] = []
     const warnings: string[] = []
     let stalled: boolean | undefined
@@ -158,8 +158,7 @@ describe.skipIf(!nativeSupported)('pending-event limit of the built frame-forwar
           listener(event)
           if (event.type !== 'connected' || event.connectionId !== 1) return
           receiver.send(event.connectionId, 'go')
-          startProducer(h, receiver.tx, 'produce', { 'retry-busy': 1, after: 'hold', 'hold-ms': 30_000, signal: successorSignal })
-          stalled = blockUntil(() => signalled(successorSignal, 'connected') || signalled(successorSignal, 'connect-failed'), 30_000)
+          stalled = blockUntil(() => signalled(signal, 'closed'), 30_000)
         })
         return receiver
       },
@@ -169,17 +168,16 @@ describe.skipIf(!nativeSupported)('pending-event limit of the built frame-forwar
     })
     try {
       const channel = await forwarder.channel()
-      const main = startProducer(h, channel.tx, 'produce', { messages: 2000, 'wait-go': 1, after: 'hold', 'hold-ms': 30_000 })
+      const main = startProducer(h, channel.tx, 'produce', { messages: 2000, 'wait-go': 1, after: 'hold', 'hold-ms': 30_000, signal })
       await vi.waitFor(() => {
-        expect(states.some(state => (state.state === 'connected' && state.connectionId === 2) || state.state === 'closed')).toBe(true)
+        expect(states.some(state => state.state === 'closed')).toBe(true)
       }, { timeout: 60_000, interval: 20 })
       expect(stalled).toBe(true)
       expect(states).toEqual([
-        { state: 'idle' }, { state: 'connected', connectionId: 1 }, { state: 'draining', connectionId: 1 }, { state: 'idle' },
-        { state: 'connected', connectionId: 2 },
+        { state: 'idle' }, { state: 'connected', connectionId: 1 },
+        { state: 'closed', cause: 'failed', reason: `Native producer disconnected: ${pendingLimitText}` },
       ])
-      expect(forwarder.isOpen(channel.rx)).toBe(true)
-      expect(forwarder.snapshot().map(entry => entry.channel)).toEqual([{ state: 'connected', connectionId: 2 }])
+      expect(forwarder.isOpen(channel.rx)).toBe(false)
       expect(warnings).toContain(`Native producer 1 disconnected: ${pendingLimitText}`)
       expect(await main.waitLine(['closed', 'hold-timeout'], 10_000)).toMatch(/^closed\b/u)
     } finally {

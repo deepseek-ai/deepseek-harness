@@ -889,6 +889,24 @@ describe('PluginManagerPage', () => {
     expect(document.querySelector('[data-plugin-count]')).toBeNull()
   })
 
+  it.each([false, true])('lists enabled Office preview and opens its details only in Desktop (desktop=%s)', (desktop) => {
+    if (desktop) {
+      vi.stubGlobal('dshDesktop', {})
+      onTestFinished(() => { vi.unstubAllGlobals() })
+    }
+    const name = '@deepseek-ai/dsh-office-frame-forwarding-bundle'
+    const b = renderTab({ packages: [
+      pkg({ name, optional: true, enabled: true }),
+      pkg({ name: '@deepseek-ai/dsh-timeline', optional: true, enabled: false }),
+    ] })
+    const card = `[data-plugin-package="${name}"]`
+    expect(document.querySelector(card) !== null).toBe(desktop)
+    fireEvent.click(screen.getByRole('button', { name: en.moreAction }))
+    expect(document.querySelector(card) !== null).toBe(desktop)
+    act(() => { b.navigation.actions.setView({ kind: 'package', name }) })
+    expect(document.querySelector(`[data-plugin-detail="${name}"]`) !== null).toBe(desktop)
+  })
+
   it.each([false, true])('offers persistent terminals after Timeline with enabled=%s', (enabled) => {
     const name = '@deepseek-ai/dsh-experimental-terminal-bundle'
     const b = renderTab({ packages: [

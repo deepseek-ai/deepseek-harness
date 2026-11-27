@@ -1,0 +1,69 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`presents the preinstalled Desktop experiment with its document artwork 1`] = `
+{
+  "de": {
+    "meta": {
+      "description": "Experimentelle native schreibgeschützte Office-Vorschau. Standardmäßig deaktiviert; rendert nur in Desktop.",
+      "title": "Schreibgeschützte Office-Vorschau",
+    },
+  },
+  "en": {
+    "meta": {
+      "description": "Experimental native read-only Office preview. Disabled by default; renders only in Desktop.",
+      "title": "Office read-only preview",
+    },
+  },
+  "es": {
+    "meta": {
+      "description": "Vista previa nativa experimental de Office de solo lectura. Desactivada de forma predeterminada; solo se renderiza en Desktop.",
+      "title": "Vista previa de Office de solo lectura",
+    },
+  },
+  "fr": {
+    "meta": {
+      "description": "Aperçu Office natif expérimental en lecture seule. Désactivé par défaut ; le rendu n'a lieu que dans Desktop.",
+      "title": "Aperçu Office en lecture seule",
+    },
+  },
+  "icon": "<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="office-page" x1="10" y1="6" x2="26" y2="30" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#55B6AD" />
+      <stop offset="1" stop-color="#268B86" />
+    </linearGradient>
+  </defs>
+  <path d="M11 6H21L27 12V28C27 29.1 26.1 30 25 30H11C9.9 30 9 29.1 9 28V8C9 6.9 9.9 6 11 6Z" fill="url(#office-page)" />
+  <path d="M21 6V10C21 11.1 21.9 12 23 12H27L21 6Z" fill="#B6E1D8" />
+  <path d="M12.5 13H17.5M12.5 16H16" stroke="#FFFFFF" stroke-opacity="0.85" stroke-width="1.5" stroke-linecap="round" />
+  <rect x="12.5" y="23" width="2.5" height="4" rx="0.65" fill="#FFFFFF" fill-opacity="0.75" />
+  <rect x="17" y="20.5" width="2.5" height="6.5" rx="0.65" fill="#FFFFFF" fill-opacity="0.88" />
+  <rect x="21.5" y="18" width="2.5" height="9" rx="0.65" fill="#FFFFFF" />
+</svg>
+",
+  "ja": {
+    "meta": {
+      "description": "実験的なネイティブ Office 読み取り専用プレビューです。既定では無効で、Desktop でのみ描画します。",
+      "title": "Office 読み取り専用プレビュー",
+    },
+  },
+  "pt": {
+    "meta": {
+      "description": "Visualização nativa experimental do Office somente leitura. Desativada por padrão; renderiza somente no Desktop.",
+      "title": "Visualização do Office somente leitura",
+    },
+  },
+  "ru": {
+    "meta": {
+      "description": "Экспериментальный нативный предпросмотр Office только для чтения. По умолчанию отключён; отрисовывается только в Desktop.",
+      "title": "Предпросмотр Office только для чтения",
+    },
+  },
+  "zh": {
+    "meta": {
+      "description": "实验性原生 Office 只读预览。默认关闭，仅在 Desktop 中渲染。",
+      "title": "Office 只读预览",
+    },
+  },
+}
+`;

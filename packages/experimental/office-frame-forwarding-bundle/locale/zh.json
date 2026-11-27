@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Office 只读预览",
+    "description": "实验性原生 Office 只读预览。默认关闭，仅在 Desktop 中渲染。"
+  }
+}

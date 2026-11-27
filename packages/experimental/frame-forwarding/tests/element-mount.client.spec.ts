@@ -89,10 +89,9 @@ function fixture(connected = true) {
       arrive = onFrame
       event = onEvent
       if (connected) event({ kind: 'state', channel: { state: 'connected', connectionId: 1 as FrameConnectionId } })
-      return async () => {}
+      return () => {}
     },
-    apply: vi.fn(), requestFullscreen: vi.fn(async () => {}),
-    exitFullscreen: vi.fn(async () => {}), fail: vi.fn(), dispose: vi.fn(),
+    apply: vi.fn(), fail: vi.fn(), dispose: vi.fn(),
   } satisfies FrameForwardingBridge
   const channel = new FrameRx('rx' as FrameRxId, bridge)
   channels.add(channel)
@@ -144,16 +143,13 @@ describe('video mount', () => {
     expect(f.failure).not.toHaveBeenCalled()
   })
 
-  it('keeps a mount opened during draining reserved until connected, and closes it while suspended', async () => {
+  it('rejects duplicate element mounting without removing the active owner', async () => {
     const f = fixture()
-    f.event({ kind: 'state', channel: { state: 'draining', connectionId: 1 as FrameConnectionId } })
     f.channel.mount(f.element, f.failure)
     await tick()
-    expect(writer.write).not.toHaveBeenCalled()
-    expect(f.element.getAttribute('data-dsh-frame-mount')).toBe('pending')
-    await expect(f.channel.setContentWindow(contentWindow)).rejects.toMatchObject({ reason: 'producer-changed' })
     const other = fixture()
     expect(() => other.channel.mount(f.element, other.failure)).toThrow('frame consumer')
+    expect(f.element.getAttribute('data-dsh-frame-mount')).toBe('video')
     f.event({ kind: 'state', channel: { state: 'closed', cause: 'lost', reason: 'Host exited' } })
     expect(f.element.hasAttribute('data-dsh-frame-mount')).toBe(false)
     expect(f.failure).toHaveBeenCalledOnce()
@@ -257,17 +253,15 @@ describe('video mount', () => {
     const sent = f.bridge.setViewport.mock.calls.map(([, value]) => value)
     expect(sent).toEqual(action === 'close' ? [viewport] : [viewport, { ...viewport, version: 10 }])
   })
-  it.each(['producer-changed', 'refused'] as const)('handles an unmount viewport that ends with %s', async (result) => {
+  it('logs when an unmount viewport is refused without failing the mount', async () => {
     const f = fixture()
     const log = vi.spyOn(console, 'error').mockImplementation(() => {})
     const detach = f.channel.mount(f.element, f.failure)
     f.visible(); await tick()
-    if (result === 'producer-changed') f.bridge.setViewport.mockResolvedValueOnce({ applied: false, reason: result })
-    else f.bridge.setViewport.mockRejectedValueOnce(new Error('refused'))
+    f.bridge.setViewport.mockRejectedValueOnce(new Error('refused'))
     detach()
     await vi.waitFor(() => { expect(f.bridge.setViewport).toHaveBeenCalledTimes(2) })
-    if (result === 'refused') expect(log).toHaveBeenCalledWith('Frame unmount viewport failed', expect.any(Error))
-    else expect(log).not.toHaveBeenCalled()
+    expect(log).toHaveBeenCalledWith('Frame unmount viewport failed', expect.any(Error))
     expect(f.failure).not.toHaveBeenCalled()
   })
   it('sends no queued unmount viewport after the channel closes', async () => {
@@ -346,19 +340,30 @@ describe('video mount', () => {
     expect(() => f.channel.setContentWindow(contentWindow)).toThrow('Frame content requires mount.')
     expect(() => { f.channel.setContentView(contentView) }).toThrow('Frame content requires mount.')
   })
-  it('rejects pending content calls on unmount and never sends their queued successor', async () => {
+  it.each([
+    ['a lost channel', { name: 'FrameDiscardedError', reason: 'lost' }],
+    ['a failed channel', { message: 'receiver stopped' }],
+    ['closing the channel', { name: 'FrameDiscardedError', reason: 'closed' }],
+    ['unmounting', { name: 'FrameDiscardedError', reason: 'cancelled' }],
+  ] as const)('rejects pending content calls with the error of %s and never sends their queued successor', async (ending, expected) => {
     const f = fixture()
-    f.channel.mount(f.element, f.failure); await tick(); await tick()
+    const unmount = f.channel.mount(f.element, f.failure); await tick(); await tick()
     f.channel.setContentView(contentView)
     const acknowledgement = Promise.withResolvers<Awaited<ReturnType<FrameForwardingBridge['setViewport']>>>()
     f.bridge.setViewport.mockReturnValueOnce(acknowledgement.promise)
     const inFlight = f.channel.setContentWindow(contentWindow)
     const queued = f.channel.setContentWindow({ ...contentWindow, y: 100 })
-    const rejected = [expect(inFlight).rejects.toMatchObject({ reason: 'producer-changed' }),
-      expect(queued).rejects.toMatchObject({ reason: 'producer-changed' })]
+    const settled = Promise.all([inFlight, queued].map(request => request.then(() => undefined, (error: unknown) => error)))
     await vi.waitFor(() => { expect(f.bridge.setViewport).toHaveBeenCalledTimes(2) })
-    await f.channel.close()
-    await Promise.all(rejected)
+    if (ending === 'a lost channel') f.event({ kind: 'state', channel: { state: 'closed', cause: 'lost', reason: 'GPU stopped' } })
+    else if (ending === 'a failed channel') f.event({ kind: 'state', channel: { state: 'closed', cause: 'failed', reason: 'receiver stopped' } })
+    else if (ending === 'closing the channel') await f.channel.close()
+    else unmount()
+    const [inFlightError, queuedError] = await settled
+    expect(inFlightError).toMatchObject(expected)
+    expect(queuedError).toBe(inFlightError)
+    if (ending === 'unmounting') expect(f.failure).not.toHaveBeenCalled()
+    else expect(f.failure).toHaveBeenCalledExactlyOnceWith(inFlightError)
     acknowledgement.resolve({ applied: true, connectionId: 1 as FrameConnectionId })
     await tick(); await tick()
     expect(f.bridge.setViewport).toHaveBeenCalledTimes(2)
@@ -374,6 +379,33 @@ describe('video mount', () => {
     expect(f.failure).toHaveBeenCalledExactlyOnceWith(refusal)
     expect(() => f.channel.setContentWindow(contentWindow)).toThrow('Frame content requires mount.')
   })
+  it.each(['the viewport refusal', 'the playback failure'] as const)('rejects a queued window request with %s that ended its mount', async (ending) => {
+    const f = fixture()
+    const playback = Promise.withResolvers<undefined>()
+    vi.spyOn(HTMLMediaElement.prototype, 'play').mockReturnValueOnce(playback.promise)
+    f.channel.mount(f.element, f.failure); await tick(); await tick()
+    f.channel.setContentView(contentView)
+    const acknowledgement = Promise.withResolvers<Awaited<ReturnType<FrameForwardingBridge['setViewport']>>>()
+    f.bridge.setViewport.mockReturnValueOnce(acknowledgement.promise)
+    const inFlight = f.channel.setContentWindow(contentWindow)
+    const queued = f.channel.setContentWindow({ ...contentWindow, y: 100 })
+    const settled = Promise.all([inFlight, queued].map(request => request.then(() => undefined, (error: unknown) => error)))
+    await vi.waitFor(() => { expect(f.bridge.setViewport).toHaveBeenCalledTimes(2) })
+    try {
+      if (ending === 'the playback failure') playback.reject(new Error('play denied'))
+      else acknowledgement.reject(new Error('viewport acknowledgement refused'))
+      const [inFlightError, queuedError] = await settled
+      expect(inFlightError).toMatchObject(ending === 'the playback failure'
+        ? { name: 'FrameFailureError', source: 'presentation', message: 'play denied' }
+        : { message: 'viewport acknowledgement refused' })
+      expect(queuedError).toBe(inFlightError)
+      expect(f.failure).toHaveBeenCalledExactlyOnceWith(inFlightError)
+      expect(f.bridge.setViewport).toHaveBeenCalledTimes(2)
+    } finally {
+      playback.resolve(undefined)
+      acknowledgement.resolve({ applied: true, connectionId: 1 as FrameConnectionId })
+    }
+  })
   it('settles an unchanged-window wait when a resized mount closes before Host acknowledges', async () => {
     const f = fixture()
     f.channel.mount(f.element, f.failure); await tick(); await tick()
@@ -387,7 +419,7 @@ describe('video mount', () => {
     const result = await Promise.race([unchanged, Promise.resolve('still waiting')])
     acknowledgement.resolve({ applied: true, connectionId: 1 as FrameConnectionId })
     await tick()
-    expect(result).toMatchObject({ reason: 'producer-changed' })
+    expect(result).toMatchObject({ reason: 'closed' })
   })
   it('ignores late playback rejection after idempotent disposal and reports writer teardown failure', async () => {
     const f = fixture()
@@ -404,6 +436,30 @@ describe('video mount', () => {
     expect(trackStops[0]).toHaveBeenCalledOnce()
     expect(log).toHaveBeenCalledWith('Frame video writer teardown failed', error)
   })
+  it('resumes the same video after its tab is detached during playback startup', async () => {
+    const f = fixture()
+    const initial = Promise.withResolvers<undefined>()
+    const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockReturnValueOnce(initial.promise)
+    f.channel.mount(f.element, f.failure)
+    await tick()
+    const video = f.element.querySelector('video')
+    f.element.remove()
+    initial.reject(new DOMException('removed from document', 'AbortError'))
+    resized()
+    await tick()
+    expect(play).toHaveBeenCalledTimes(1)
+    f.slot.append(f.element)
+    f.visible()
+    await tick()
+    expect(play.mock.contexts.at(-1)).toBe(video)
+    expect(play).toHaveBeenCalledTimes(2)
+    vi.spyOn(HTMLMediaElement.prototype, 'paused', 'get').mockReturnValue(false)
+    resized()
+    await tick()
+    expect(play).toHaveBeenCalledTimes(2)
+    expect(f.failure).not.toHaveBeenCalled()
+  })
+
   it('stops the track and removes media when playback setup throws', () => {
     const f = fixture()
     const error = new Error('play setup failed')
@@ -443,6 +499,73 @@ describe('video mount', () => {
     expect(content()?.submittedGeneration).toBeUndefined()
   })
 
+  it('keeps the submitted document rectangle while a resize frame is pending', async () => {
+    const f = fixture()
+    f.channel.mount(f.element, f.failure)
+    await tick()
+    f.channel.setContentView(contentView)
+    await f.channel.setContentWindow(contentWindow)
+    f.arrive(f.frame().lease)
+    await tick()
+    const video = f.element.querySelector('video')!
+    const write = Promise.withResolvers<undefined>()
+    writer.write.mockReturnValueOnce(write.promise)
+    await f.channel.setContentWindow({ ...contentWindow, y: 80, height: 40 })
+    f.arrive(f.frame().lease)
+    try {
+      f.channel.setContentView({ ...contentView, y: 20 })
+      await f.channel.setContentWindow({ ...contentWindow, y: 100 })
+      await f.channel.setContentWindow({ ...contentWindow, y: 120 })
+      await tick()
+      expect(f.channel.submittedWindow).toMatchObject(contentWindow)
+      expect(video.style.height).toBe('160px')
+      expect(video.style.transform).toBe('translate(0px, -20px)')
+      expect(video.style.objectFit).toBe('contain')
+    } finally { write.resolve(undefined) }
+    await tick()
+    expect(f.channel.submittedWindow).toMatchObject({ y: 80, height: 40 })
+    expect(video.style.height).toBe('40px')
+    expect(video.style.transform).toBe('translate(0px, 60px)')
+  })
+
+  it('retains the submitted window across unrecognized frames and clears it when the mount ends', async () => {
+    const f = fixture()
+    const unmount = f.channel.mount(f.element, f.failure)
+    await tick()
+    f.channel.setContentView(contentView)
+    await f.channel.setContentWindow(contentWindow)
+    f.arrive(f.frame().lease); await tick()
+    expect(f.channel.submittedWindow).toMatchObject(contentWindow)
+    const unknown = f.frame().lease
+    unknown.metadata.generation = 99
+    f.arrive(unknown); await tick()
+    expect(unknown.release).toHaveBeenCalledOnce()
+    expect(f.channel.submittedWindow).toMatchObject(contentWindow)
+    unmount()
+    expect(f.channel.submittedWindow).toBeUndefined()
+  })
+
+  it('shows a previous window after a viewport-only version replaces the current generation', async () => {
+    const f = fixture()
+    f.channel.mount(f.element, f.failure); await tick()
+    f.channel.setContentView(contentView)
+    await f.channel.setContentWindow(contentWindow)
+    f.arrive(f.frame().lease); await tick()
+    const a = { ...contentWindow, y: 100 }, b = { ...contentWindow, y: 200 }
+    const previous = await f.channel.setContentWindow(a)
+    const superseded = await f.channel.setContentWindow(b)
+    box(f.element, 0, 0, 120, 100); resized(); await tick(); await tick()
+    expect(f.channel.viewport!.version).toBe(superseded.version + 1)
+    expect(f.channel.submittedWindow).toMatchObject(contentWindow)
+    for (const [generation, expected] of [[previous.version, a], [superseded.version, a], [f.channel.viewport!.version, b]] as const) {
+      const lease = f.frame().lease
+      lease.metadata.generation = generation
+      f.arrive(lease); await tick()
+
+      expect(f.channel.submittedWindow).toMatchObject(expected)
+    }
+  })
+
   it.each(vectors.mapping)('places the video for $name', async ({ window, view, expected }) => {
     const f = fixture()
     f.channel.mount(f.element, f.failure)
@@ -456,13 +579,13 @@ describe('video mount', () => {
   })
 })
 
-function directMount(element: HTMLElement) {
+function directMount(element: HTMLElement, initialVisible?: boolean) {
   const owner = {
-    fullscreen: () => ({ active: false, holder: false }), content: () => undefined,
+    content: () => undefined,
     viewport: vi.fn<Parameters<typeof mountElement>[1]['viewport']>(async value => ({ ...value, version: 1 })),
     report: vi.fn<Parameters<typeof mountElement>[1]['report']>(), failure: vi.fn(),
   }
-  const mount = mountElement(element, owner)
+  const mount = mountElement(element, owner, initialVisible)
   displays.add(mount)
   return { mount, owner }
 }
@@ -494,7 +617,7 @@ describe('display resource ownership', () => {
     await expect(mount.requestViewport()).rejects.toBe(error)
     expect(owner.failure).toHaveBeenCalledWith(error)
     mount.pushContent(); mount.dirty()
-    await expect(mount.requestViewport()).rejects.toMatchObject({ reason: 'producer-changed' })
+    await expect(mount.requestViewport()).rejects.toMatchObject({ reason: 'cancelled' })
   })
   it('rejects content requests when synchronous geometry measurement fails', async () => {
     const f = fixture()
@@ -547,15 +670,6 @@ describe('display resource ownership', () => {
     expect(log).toHaveBeenCalledWith('Frame mount cleanup failed', expect.objectContaining({ message: 'detach failed' }))
     expect(log).toHaveBeenCalledWith('Native frame failure listener failed', expect.objectContaining({ message: 'listener failed' }))
   })
-  it('reports replacement mount setup failure', async () => {
-    const f = fixture()
-    f.channel.mount(f.element, f.failure); await tick(); await tick()
-    f.event({ kind: 'state', channel: { state: 'draining', connectionId: 1 as FrameConnectionId } })
-    vi.spyOn(window, 'getComputedStyle').mockImplementationOnce(() => { throw 'computed style failed' })
-    f.event({ kind: 'state', channel: { state: 'connected', connectionId: 2 as FrameConnectionId } })
-    expect(f.failure).toHaveBeenCalledWith(expect.objectContaining({ message: 'computed style failed' }))
-    expect(f.element.hasAttribute('data-dsh-frame-mount')).toBe(false)
-  })
 })
 
 it('reports non-Error layout failures even when video cleanup also fails', async () => {
@@ -567,25 +681,6 @@ it('reports non-Error layout failures even when video cleanup also fails', async
   resized(); await tick()
   expect(log).toHaveBeenCalledWith('Frame mount cleanup failed', expect.objectContaining({ message: 'detach failed' }))
   expect(f.failure).toHaveBeenCalledWith(expect.objectContaining({ source: 'presentation', message: 'layout lost' }))
-})
-
-it('retains unconfirmed frames while their windows remain in the content snapshot', async () => {
-  const f = fixture()
-  f.channel.mount(f.element, f.failure); await tick(); await tick()
-  f.channel.setContentView(contentView)
-  const first = await f.channel.setContentWindow(contentWindow)
-  const future = f.frame().lease
-  future.metadata.generation = first.version + 1
-  f.arrive(future)
-  expect(future.release).toHaveBeenCalledOnce()
-  const { lease } = f.frame()
-  lease.metadata.connectionId = 2 as FrameConnectionId
-  lease.metadata.generation = first.version
-  f.arrive(lease)
-  await f.channel.setContentWindow({ ...contentWindow, y: 100 })
-  expect(lease.release).not.toHaveBeenCalled()
-  await f.channel.setContentWindow({ ...contentWindow, y: 200 })
-  expect(lease.release).toHaveBeenCalledOnce()
 })
 
 it('drops a retained queued document frame when fill mode makes its generation obsolete', async () => {
@@ -605,6 +700,7 @@ it('drops a retained queued document frame when fill mode makes its generation o
     writing.resolve(undefined)
     await tick(); await tick()
   }
+  expect(f.channel.submittedWindow).toBeUndefined()
   expect(first.lease.release).toHaveBeenCalledOnce()
   expect(queued.lease.release).toHaveBeenCalledOnce()
   expect(writer.write).toHaveBeenCalledOnce()
@@ -620,20 +716,6 @@ it('keeps video display after an individual frame failure and reports it through
   expect(f.element.getAttribute('data-dsh-frame-mount')).toBe('video')
   expect(trackStops[0]).not.toHaveBeenCalled()
   expect(events).toContainEqual(error)
-  expect(f.failure).not.toHaveBeenCalled()
-})
-it('recreates the display when a snapshot skips draining and connects a replacement producer', async () => {
-  const f = fixture()
-  f.channel.mount(f.element, f.failure); f.visible(); await tick(); await tick()
-  f.event({ kind: 'state', channel: { state: 'connected', connectionId: 1 as FrameConnectionId, viewportVersion: 1 } })
-  await tick()
-  expect(trackStops).toHaveLength(1)
-  f.event({ kind: 'state', channel: { state: 'connected', connectionId: 2 as FrameConnectionId } })
-  expect(trackStops[0]).toHaveBeenCalledOnce()
-  f.visible(); await tick(); await tick()
-  expect(f.bridge.setViewport.mock.calls.map(([, viewport]) => viewport.visible)).toEqual([true, true])
-  expect(trackStops).toHaveLength(2)
-  expect(f.element.getAttribute('data-dsh-frame-mount')).toBe('video')
   expect(f.failure).not.toHaveBeenCalled()
 })
 it('releases a previous-window video frame older than the submitted generation', async () => {
@@ -663,15 +745,19 @@ it.each([new Error('play denied'), 'play denied'])('reports rejected playback: %
   expect(f.failure).toHaveBeenCalledWith(expect.objectContaining({ source: 'presentation', message: 'play denied' }))
 })
 
-it('observes only its own intersection and pauses a covered viewport', async () => {
+it('observes only its own intersection and honours explicit mount visibility', async () => {
   const f = fixture()
-  f.channel.mount(f.element, f.failure)
+  f.channel.mount(f.element, f.failure, { visible: false })
   intersected([{ target: f.slot, isIntersecting: true }]); await tick()
   expect(f.bridge.setViewport.mock.calls.at(-1)?.[1].visible).toBe(false)
-  f.visible()
-  f.event({ kind: 'fullscreen', active: true, holder: false }); await tick()
+  f.visible(); await tick()
   expect(f.bridge.setViewport.mock.calls.at(-1)?.[1].visible).toBe(false)
-  f.event({ kind: 'fullscreen', active: true, holder: true }); await tick(); await tick()
+  f.channel.setVisible(false)
+  f.channel.setVisible(true); await tick(); await tick()
+  expect(f.bridge.setViewport.mock.calls.at(-1)?.[1].visible).toBe(true)
+  f.channel.setVisible(false); await tick(); await tick()
+  expect(f.bridge.setViewport.mock.calls.at(-1)?.[1].visible).toBe(false)
+  f.channel.setVisible(true); await tick(); await tick()
   expect(f.bridge.setViewport.mock.calls.at(-1)?.[1].visible).toBe(true)
   expect(() => f.channel.setViewport({ version: 100, width: 1, height: 1, deviceScaleFactor: 1, visible: true })).toThrow('managed by mount')
 })
@@ -695,16 +781,15 @@ it('ignores a rejected viewport whose display was disposed before the rejection 
   expect(owner.failure).not.toHaveBeenCalled()
 })
 
-it('keeps an idle channel available for a producer and ignores a cancelled track write during unmount', async () => {
-  const f = fixture()
+it('keeps an idle channel available for its first producer and ignores a cancelled track write during unmount', async () => {
+  const f = fixture(false)
   f.event({ kind: 'state', channel: { state: 'idle' } })
   const unmount = f.channel.mount(f.element, f.failure)
-  f.event({ kind: 'state', channel: { state: 'connected', connectionId: 2 as FrameConnectionId } })
+  f.event({ kind: 'state', channel: { state: 'connected', connectionId: 1 as FrameConnectionId } })
   await tick()
   const pending = Promise.withResolvers<undefined>()
   writer.write.mockReturnValueOnce(pending.promise)
   const { lease } = f.frame()
-  lease.metadata.connectionId = 2 as FrameConnectionId
   f.arrive(lease)
   expect(writer.write).toHaveBeenCalledOnce()
   unmount()
@@ -712,23 +797,4 @@ it('keeps an idle channel available for a producer and ignores a cancelled track
   await tick()
   expect(lease.release).toHaveBeenCalledOnce()
   expect(f.failure).not.toHaveBeenCalled()
-})
-
-it('updates visibility when the mount is trimmed or its docked or floating pane is hidden', async () => {
-  const f = fixture()
-  f.channel.mount(f.element, f.failure)
-  f.visible(); await tick(); await tick()
-  const visible = () => f.bridge.setViewport.mock.calls.at(-1)?.[1].visible
-  expect(visible()).toBe(true)
-  f.element.style.visibility = 'hidden'; await tick(); await tick()
-  expect(visible()).toBe(false)
-  f.element.style.visibility = ''; await tick(); await tick()
-  expect(visible()).toBe(true)
-  f.slot.appendChild(document.createTextNode('unrelated sibling')).remove()
-  await tick(); await tick()
-  const float = document.body.appendChild(document.createElement('div'))
-  float.append(f.slot); float.hidden = true; await tick(); await tick()
-  expect(visible()).toBe(false)
-  float.hidden = false; await tick(); await tick()
-  expect(visible()).toBe(true)
 })

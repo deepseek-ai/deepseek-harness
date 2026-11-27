@@ -8,7 +8,7 @@ import { apply } from '../src/client/excel/index.ts'
 import { LazyExcelBody } from '../src/client/excel/LazyExcelBody.tsx'
 import { en, ja, zh, es, fr, de, ru, pt } from '../src/client/excel/locales.ts'
 
-it('registers complete binary reads and removes the slot and locale on disposal', async () => {
+it('registers CSV/TSV reads and the Office spreadsheet fallback slot', async () => {
   const ctx = new Context()
   const registry = new DocumentPreviewRegistry()
   const removeLocale = vi.fn()
@@ -22,21 +22,25 @@ it('registers complete binary reads and removes the slot and locale on disposal'
   const fiber = ctx.plugin({ apply: (scope) => { apply(scope, limits) } })
   try {
     await fiber.await()
-    for (const path of ['budget.XLSX', 'legacy.xls', 'table.CSV', 'table.tsv']) {
+    for (const path of ['table.CSV', 'table.tsv']) {
       const candidate = registry.candidates(path)[0]!
-      expect(candidate).toMatchObject({ loading: 'bytes-complete', wrap: false, binaryExtensions: ['xlsx', 'xls'] })
+      expect(candidate).toMatchObject({ loading: 'bytes-complete', wrap: false, binaryExtensions: [] })
       expect(candidate.title()).toBe('Spreadsheet')
-      expect(binaryDocumentPath(registry.getSnapshot(), path)).toBe(/\.(xlsx|xls)$/iu.test(path))
+      expect(binaryDocumentPath(registry.getSnapshot(), path)).toBe(false)
     }
+    for (const path of ['budget.xlsx', 'legacy.xls']) expect(registry.candidates(path)).toEqual([])
     expect(registerLocale).toHaveBeenCalledWith('sidebarExcel', { zh, en, ja, es, fr, de, ru, pt })
-    expect(register).toHaveBeenCalledOnce()
+    expect(register).toHaveBeenCalledTimes(2)
     expect(register.mock.calls[0]![1]).toBe(LazyExcelBody)
     const options = register.mock.calls[0]![0] as { inject: () => unknown }
     expect(options).toMatchObject({ locale: 'sidebarExcel' })
     expect(options.inject).toBeTypeOf('function')
     expect(options.inject()).toEqual({ limits })
+    const fallback = register.mock.calls[1]![0] as { inject: () => unknown }
+    expect(fallback).toMatchObject({ name: 'sidebar.right.tab.document.office.spreadsheet' })
+    expect(fallback.inject()).toEqual({ limits })
   } finally { await fiber.dispose() }
   expect(registry.getSnapshot()).toEqual([])
   expect(removeLocale).toHaveBeenCalledOnce()
-  expect(removeBody).toHaveBeenCalledOnce()
+  expect(removeBody).toHaveBeenCalledTimes(2)
 })

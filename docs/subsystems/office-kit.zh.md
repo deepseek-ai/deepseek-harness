@@ -15,7 +15,7 @@
 
 ## 请求和结果
 
-[`OfficeKitRequest`](../../packages/document/office-kit/src/types.ts)包含已授权的源键与版本、可选 stat 大小、延迟的 `read(signal, maxBytes)` 回调、前台或后台优先级以及 `OfficeExtension`：`doc`、`docx`、`xls`、`xlsx`、`ppt` 或 `pptx`。`OfficeKit.convert(request, signal?)` 返回一个完整 PDF 结果。`renderImages()` 返回选定页、幻灯片或工作表区域的有界 PNG 图片；`convertTo()` 与 `recalculate()` 把输出按请求的属主保存在提供方的 `outputDirectory` 下并返回其 Host 路径。它们的请求类型接受 OpenDocument 输入，图片渲染还接受 PDF；可选的 `renderer` 选择 `libreoffice` 或 `poppler`，结果注明所用后端。所有方法共用准入和缓存。取消遵循调用方和提供方生命周期；校验、输出和引擎失败以分类的 `OfficeKitError` 拒绝。
+[`OfficeKitRequest`](../../packages/document/office-kit/src/types.ts)包含已授权的源键与版本、可选 stat 大小、延迟的 `read(signal, maxBytes)` 回调、前台或后台优先级以及 `OfficeExtension`：`doc`、`docx`、`xls`、`xlsx`、`ppt` 或 `pptx`。`OfficeKit.convert(request, signal?)` 返回一个完整 PDF 结果。`renderImages()` 返回选定页、幻灯片或工作表区域的有界 PNG 图片；`convertTo()` 与 `recalculate()` 把输出按请求的属主保存在提供方的 `outputDirectory` 下并返回其 Host 路径。它们的请求类型接受 OpenDocument 输入，图片渲染还接受 PDF；可选的 `renderer` 选择 `libreoffice` 或 `poppler`，结果注明所用后端。这四个方法共用准入和缓存。`discoverRuntime()` 不启动引擎即探测已安装 Kit 的运行时元数据，`openDocument()` 在转换队列和缓存之外延迟加载 Kit 的交互式编辑器入口，应用提供方的引擎解析器及字体和归档配置，返回调用方拥有的 `EditorDocument`。取消遵循调用方和提供方生命周期；校验、输出和引擎失败以分类的 `OfficeKitError` 拒绝。
 
 `OfficeKitPriority` 对请求的预览或 QA 使用 `foreground`，对推测工作使用 `background`。`OfficeSourceKey` 为调用方拥有的已授权源定位符增加品牌类型。`OfficeKitGeneration` 表示提供方生命周期，`OfficeKitKey` 表示其内容身份；消费者不解析这两种不透明值。
 
@@ -104,6 +104,25 @@ async convertTo(request: OfficeConversionRequest, signal?: AbortSignal): Promise
  * @throws {OfficeKitError} Invalid input, unusable output, or engine failure; cancellation rejects with its reason.
  */
 async recalculate(request: OfficeRecalculationRequest, signal?: AbortSignal): Promise<OfficeFileResult>
+
+/**
+ * Inspect installed LibreOffice Kit runtime metadata without starting an engine.
+ * @returns Runtime metadata when Kit and an engine are available; `undefined` when the provider is disposed,
+ * Kit is missing or unloadable, or Kit reports its runtime unavailable (each distinct failure is logged once).
+ * @throws Unexpected discovery or non-`unavailable` Kit errors.
+ */
+async discoverRuntime(): Promise<RuntimeInfo | undefined>
+
+/**
+ * Open an interactive native Office document through the provider's Kit installation without using the conversion
+ * queue or cache. The caller owns the returned document and must call `close()` when finished.
+ * @param request - Document bytes, format, rendering backend, cancellation signal, progress callback, and optional
+ * per-document limit overrides applied on top of this provider's configured Kit font and archive settings.
+ * @returns Caller-owned interactive editor document.
+ * @throws {OfficeKitError} `unavailable` when the provider is disposed or Kit cannot be loaded; cancellation
+ * rejects with its signal reason; engine opening failures propagate from Kit.
+ */
+async openDocument(request: OfficeEditorRequest): Promise<EditorDocument>
 
 /**
  * Read and convert one Office file using the Session's ordinary filesystem authorization.

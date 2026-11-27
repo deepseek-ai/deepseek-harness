@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Visualização do Office somente leitura",
+    "description": "Visualização nativa experimental do Office somente leitura. Desativada por padrão; renderiza somente no Desktop."
+  }
+}

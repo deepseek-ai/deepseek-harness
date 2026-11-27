@@ -23,7 +23,7 @@ export class FrameForwardingClientService implements FrameForwardingClient {
    */
   constructor(ctx: Context, textures: SharedTextureClientExport) {
     const remote = ctx.remote.frameForwarding
-    const bridge = adaptFrameForwardingBridge(textures, remote, globalThis.document)
+    const bridge = adaptFrameForwardingBridge(textures, remote)
     ctx.effect(() => () => { bridge.dispose() })
     this.bridge = bridge
     const events = ctx.remote.$stream<FrameForwardingEvent>({

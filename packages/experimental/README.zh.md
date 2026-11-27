@@ -36,6 +36,8 @@ kind: "package-group"
 
 | 包 | 职责 | ctx 键 |
 |---|---|---|
+| [`office-frame-forwarding-bundle`](office-frame-forwarding-bundle/README.zh.md) | 可选 Desktop 原生 Office 只读预览 | — |
+| [`client-ui-office-frame-forwarding`](client-ui-office-frame-forwarding/README.zh.md) | 授权的原生 Office 只读查看 | `ctx.officePreview` |
 | [`frame-forwarding`](frame-forwarding/README.zh.md) | Host 插件经 Desktop 共享纹理的原生帧转发 | `ctx.frameForwarding` |
 | [`tool-session-query`](tool-session-query/README.zh.md) | 按工作区授权的模型会话搜索、追踪与事件读取 | — |
 | [`session-search`](session-search/README.zh.md) | 可选实验性全局会话搜索工具 | — |

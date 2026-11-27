@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Aperçu Office natif",
+    "description": "Affiche dans Desktop des aperçus en lecture seule des fichiers Word, Excel et PowerPoint locaux tels que LibreOffice les rend via le transfert d'images."
+  }
+}

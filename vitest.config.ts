@@ -406,6 +406,9 @@ export default defineConfig({
         // The forge panel entry imports its generated Remote contribution, which exists only in lib;
         // forge-panel.e2e.ts exercises the built entry, while source tests cover mountForgePanel.
         'packages/experimental/client-ui-forge/src/client/index.ts',
+        // The Office preview entry imports its generated Remote contribution, which exists only in lib;
+        // the built Desktop Client loads it, while source tests cover mountOfficePreview.
+        'packages/experimental/client-ui-office-frame-forwarding/src/client/index.ts',
         // The frame-forwarding entry imports its generated Remote contribution the same way; source tests cover mountFrameForwarding.
         'packages/experimental/frame-forwarding/src/client/index.ts',
         // Slash/command/input round: per-file gaps deferred with the same

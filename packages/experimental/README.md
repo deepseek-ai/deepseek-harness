@@ -36,6 +36,8 @@ Promotion requires a named product role, documented public behavior and limitati
 
 | Package | Role | ctx key |
 |---|---|---|
+| [`office-frame-forwarding-bundle`](office-frame-forwarding-bundle/README.md) | Optional Desktop native read-only Office preview | — |
+| [`client-ui-office-frame-forwarding`](client-ui-office-frame-forwarding/README.md) | Authorized native read-only Office viewing | `ctx.officePreview` |
 | [`frame-forwarding`](frame-forwarding/README.md) | Native frame forwarding for Host plugins through Desktop shared textures | `ctx.frameForwarding` |
 | [`tool-session-query`](tool-session-query/README.md) | Workspace-authorized model session search, trace, and event reads | — |
 | [`session-search`](session-search/README.md) | Optional experimental global session search tools | — |

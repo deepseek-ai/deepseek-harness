@@ -59,6 +59,7 @@ export const OPTIONAL_BUNDLES: readonly string[] = [
   '@deepseek-ai/dsh-cua-bundle',
   '@deepseek-ai/dsh-cua-mcp',
   '@deepseek-ai/dsh-timeline',
+  '@deepseek-ai/dsh-office-frame-forwarding-bundle',
   '@deepseek-ai/dsh-experimental-session-search',
   '@deepseek-ai/dsh-experimental-ralph-bundle',
   '@deepseek-ai/dsh-experimental-terminal-bundle',

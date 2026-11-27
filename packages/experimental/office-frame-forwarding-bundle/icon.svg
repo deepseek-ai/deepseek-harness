@@ -1,0 +1,14 @@
+<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="office-page" x1="10" y1="6" x2="26" y2="30" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#55B6AD" />
+      <stop offset="1" stop-color="#268B86" />
+    </linearGradient>
+  </defs>
+  <path d="M11 6H21L27 12V28C27 29.1 26.1 30 25 30H11C9.9 30 9 29.1 9 28V8C9 6.9 9.9 6 11 6Z" fill="url(#office-page)" />
+  <path d="M21 6V10C21 11.1 21.9 12 23 12H27L21 6Z" fill="#B6E1D8" />
+  <path d="M12.5 13H17.5M12.5 16H16" stroke="#FFFFFF" stroke-opacity="0.85" stroke-width="1.5" stroke-linecap="round" />
+  <rect x="12.5" y="23" width="2.5" height="4" rx="0.65" fill="#FFFFFF" fill-opacity="0.75" />
+  <rect x="17" y="20.5" width="2.5" height="6.5" rx="0.65" fill="#FFFFFF" fill-opacity="0.88" />
+  <rect x="21.5" y="18" width="2.5" height="9" rx="0.65" fill="#FFFFFF" />
+</svg>

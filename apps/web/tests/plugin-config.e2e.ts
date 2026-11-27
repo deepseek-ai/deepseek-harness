@@ -9,7 +9,7 @@ import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import type { Browser, Locator, Page } from 'playwright'
 import { chromium } from 'playwright'
-import { HIDDEN_BUNDLES } from '@deepseek-ai/dsh-official-bundles'
+import { DESKTOP_ONLY_BUNDLES, HIDDEN_BUNDLES } from '@deepseek-ai/dsh-official-bundles'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed, onTestFinished } from 'vitest'
 import { join } from 'node:path'
 import {
@@ -114,11 +114,12 @@ describe('web e2e: plugin configuration pages', () => {
     await more.focus()
     await page.keyboard.press('Enter')
     await panel.getByRole('heading', { name: '实验性插件', exact: true, level: 1 }).waitFor()
-    // The More list omits the shipped bundles whose own rows do not run (the visibility rule lives in
-    // ui-plugin-manager), so it holds fewer cards than the installed optional-bundle list.
+    // The More list omits desktop-only bundles in Web and shipped bundles whose own rows do not run (the
+    // visibility rule lives in ui-plugin-manager), so it holds fewer cards than the installed optional-bundle list.
     const bundles = await scaffold.ctx.pluginManager.listBundles()
     expect(await panel.locator('[data-plugin-group="more"] [data-plugin-package]').count())
       .toBe(bundles.filter(bundle => !HIDDEN_BUNDLES.has(bundle.name)
+        && !DESKTOP_ONLY_BUNDLES.has(bundle.name)
         && bundle.name !== '@deepseek-ai/dsh-experimental-liveshare'
         && bundle.official && (bundle.listedByDefault !== false || bundle.enabled || bundle.installed)).length)
     expect(await basic.count()).toBe(0)

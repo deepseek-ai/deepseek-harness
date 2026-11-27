@@ -17,6 +17,8 @@ export const EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS: Readonly<Record<string, strin
   'packages/experimental/cua-windows': '@deepseek-ai/dsh-cua-windows',
   'packages/experimental/timeline': '@deepseek-ai/dsh-timeline',
   'packages/experimental/frame-forwarding': '@deepseek-ai/dsh-frame-forwarding',
+  'packages/experimental/client-ui-office-frame-forwarding': '@deepseek-ai/dsh-client-ui-office-frame-forwarding',
+  'packages/experimental/office-frame-forwarding-bundle': '@deepseek-ai/dsh-office-frame-forwarding-bundle',
   'packages/experimental/tool-session-query': '@deepseek-ai/dsh-tool-session-query',
   'packages/experimental/session-title-all-prompts-llm': '@deepseek-ai/dsh-session-title-all-prompts-llm',
   'packages/experimental/tool-terminal': '@deepseek-ai/dsh-tool-terminal',

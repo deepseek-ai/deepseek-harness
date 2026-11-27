@@ -9,7 +9,8 @@ import { makeTranslate, RemoteError } from '@deepseek-ai/dsh-client-test-runtime
 import { DocumentPreviewRegistry } from '../src/client/document/registry.ts'
 import { apply } from '../src/client/office/index.ts'
 import { officeFace } from '../src/client/office/face.ts'
-import { OFFICE_DEFAULTS } from '../src/defaults.ts'
+import { apply as registerExcel } from '../src/client/excel/index.ts'
+import { EXCEL_DEFAULTS, OFFICE_DEFAULTS } from '../src/defaults.ts'
 import type { OfficeLimits } from '../src/types.ts'
 import { OfficeBody, type OfficeBodyInjected } from '../src/client/office/OfficeBody.tsx'
 import type { OfficeStore } from '../src/client/office/store.ts'
@@ -36,21 +37,25 @@ it('retains Office view state across remounts and releases it on tab close or pl
   const retained = new AbortController()
   try {
     h.instance.actions.loading(first, 1)
+    h.instance.actions.nativeUnavailable(first, 1)
     h.injected.retainTab(first, closed.signal)
     h.injected.retainTab(first, closed.signal)
     expect(h.instance.getSnapshot().byTab[first]).toBeDefined()
     closed.abort()
     expect(h.instance.getSnapshot().byTab[first]).toBeUndefined()
+    expect(h.instance.getSnapshot().nativeUnavailable[first]).toBeUndefined()
     h.instance.actions.loading(first, 2)
     h.injected.retainTab(first, closed.signal)
     expect(h.instance.getSnapshot().byTab[first]).toBeUndefined()
     h.instance.actions.loading(second, 1)
+    h.instance.actions.nativeUnavailable(second, 1)
     h.injected.retainTab(second, retained.signal)
     const message = documentEn['error.unavailable'].replace('{message}', 'conversion stopped')
     expect(h.describeFailure(new RemoteError('gateway/internal', 'conversion stopped', {}))).toBe(message)
     expect(h.describeFailure({ message: 'conversion stopped' })).toBe(message)
     await h.close()
     expect(h.instance.getSnapshot().byTab[second]).toBeUndefined()
+    expect(h.instance.getSnapshot().nativeUnavailable).toEqual({})
   } finally { closed.abort(); retained.abort(); await h.close() }
 })
 
@@ -94,13 +99,13 @@ it.each(['remote', 'render', 'files'] as const)('keeps Word and PowerPoint regis
   try {
     expect(h.locale.register).toHaveBeenCalledWith('sidebarOffice', { zh, en, ja, es, fr, de, ru, pt })
     for (const path of ['a.DOC', 'b.DOCX', 'c.PPT', 'd.pptx']) {
-      expect(h.registry.candidates(path)[0]!.binaryExtensions).toEqual(['doc', 'docx', 'ppt', 'pptx'])
+      expect(h.registry.candidates(path)[0]!.binaryExtensions).toEqual(['doc', 'docx', 'ppt', 'pptx', 'xlsx', 'xls'])
       expect(h.registry.candidates(path)[0]!.title()).toBe(en.title)
       expect(h.registry.candidates(path)[0]!.loading).toBe('renderer')
       expect(h.registry.candidates(path)[0]).not.toHaveProperty('read')
       await expect(h.read(undefined, path)).rejects.toThrow(en.unavailable)
     }
-    for (const path of ['sheet.XLS', 'sheet.xlsx']) expect(h.registry.candidates(path)).toEqual([])
+    for (const path of ['sheet.XLS', 'sheet.xlsx']) expect(h.registry.candidates(path)).toHaveLength(1)
     expect(h.render).not.toHaveBeenCalled()
   } finally { await h.close() }
   expect(h.registry.getSnapshot()).toEqual([])
@@ -278,4 +283,28 @@ it('joins a retired request during reset without retaining its late PDF in the n
     await resetting
     await closing
   } finally { completed.resolve(converted); await resetting; await h.close() }
+})
+
+
+it.each([undefined, 'render'] as const)('routes workbooks through Office without native preview (missing service: %s)', async (missing) => {
+  const h = await harness({}, missing)
+  const excel = h.ctx.plugin({ apply: (scope: Context) => { registerExcel(scope, EXCEL_DEFAULTS) } })
+  try {
+    await excel.await()
+    for (const path of ['book.xlsx', 'legacy.xls'])
+      expect(h.registry.candidates(path).map(candidate => candidate.id)).toEqual(['@deepseek-ai/dsh-client-ui-sidebar-documentpreview/office'])
+    expect(h.registry.candidates('table.csv').map(candidate => candidate.id)[0]).toBe('@deepseek-ai/dsh-client-ui-sidebar-documentpreview/excel')
+    expect(h.readBytes).not.toHaveBeenCalled()
+    h.readBytes.mockResolvedValueOnce({ ok: true, value: source })
+    expect(await h.read(undefined, 'book.xlsx')).toEqual({ ok: true, value: source })
+    expect(h.readBytes).toHaveBeenCalledExactlyOnceWith(file.sessionId, 'book.xlsx', {}, expect.any(AbortSignal))
+    expect(h.render).not.toHaveBeenCalled()
+    expect(h.rendererGeneration).not.toHaveBeenCalled()
+    h.readBytes.mockResolvedValueOnce({ ok: true, value: source })
+    expect(await h.read(undefined, 'legacy.xls')).toEqual({ ok: true, value: source })
+    expect(h.render).not.toHaveBeenCalled()
+    const tooLarge = { ok: false as const, error: new RemoteError('workspace-file/too-large', 'Too large', { path: 'book.xlsx', limit: 1024 }) }
+    h.readBytes.mockResolvedValueOnce(tooLarge)
+    expect(await h.read(undefined, 'book.xlsx')).toEqual(tooLarge)
+  } finally { await excel.dispose(); await h.close() }
 })

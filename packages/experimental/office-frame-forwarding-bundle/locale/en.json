@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Office read-only preview",
+    "description": "Experimental native read-only Office preview. Disabled by default; renders only in Desktop."
+  }
+}

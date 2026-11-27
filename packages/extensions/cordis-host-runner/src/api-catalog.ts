@@ -3070,6 +3070,20 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['{OfficeKitError} Invalid input, unusable output, or engine failure; cancellation rejects with its reason.'],
       },
       {
+        signature: 'async discoverRuntime(): Promise<RuntimeInfo | undefined>',
+        description: 'Inspect installed LibreOffice Kit runtime metadata without starting an engine.',
+        parameters: [],
+        returns: 'Runtime metadata when Kit and an engine are available; `undefined` when the provider is disposed, Kit is missing or unloadable, or Kit reports its runtime unavailable (each distinct failure is logged once).',
+        throws: ['Unexpected discovery or non-`unavailable` Kit errors.'],
+      },
+      {
+        signature: 'async openDocument(request: OfficeEditorRequest): Promise<EditorDocument>',
+        description: 'Open an interactive native Office document through the provider\'s Kit installation without using the conversion queue or cache. The caller owns the returned document and must call `close()` when finished.',
+        parameters: [{ name: 'request', description: 'Document bytes, format, rendering backend, cancellation signal, progress callback, and optional per-document limit overrides applied on top of this provider\'s configured Kit font and archive settings.' }],
+        returns: 'Caller-owned interactive editor document.',
+        throws: ['{OfficeKitError} `unavailable` when the provider is disposed or Kit cannot be loaded; cancellation rejects with its signal reason; engine opening failures propagate from Kit.'],
+      },
+      {
         signature: '@Remote async render( workspaceFileScope: WorkspaceFileScope, path: string, priority: OfficeKitPriority, signal: AbortSignal, ): Promise<RenderedDocumentBytes>',
         description: 'Read and convert one Office file using the Session\'s ordinary filesystem authorization.',
         parameters: [{ name: 'workspaceFileScope', description: 'Session header lookup shared with workspaceFiles.' }, { name: 'path', description: 'absolute or workspace-relative Office path.' }, { name: 'priority', description: 'foreground preview or speculative background work.' }, { name: 'signal', description: 'Remote cancellation; disposal also cancels outstanding reads and conversions.' }],
@@ -9733,6 +9747,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'OfficeDocumentExtension',
     declaration: 'export type OfficeDocumentExtension = OfficeExtension | \'odt\' | \'ods\' | \'odp\';',
+  },
+  {
+    name: 'OfficeEditorRequest',
+    declaration: 'export interface OfficeEditorRequest extends Omit<OpenDocumentOptions, \'options\'> {\n    readonly options?: Omit<ConverterOptions, \'resolveEnginePackage\'>;\n}',
   },
   {
     name: 'OfficeExtension',

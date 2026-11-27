@@ -15,7 +15,7 @@ The [document package family](../../packages/document/README.md) renders, conver
 
 ## Requests and results
 
-[`OfficeKitRequest`](../../packages/document/office-kit/src/types.ts) contains an already-authorized source key/version, optional stat size, a deferred `read(signal, maxBytes)` callback, foreground/background priority, and a `OfficeExtension`: `doc`, `docx`, `xls`, `xlsx`, `ppt`, or `pptx`. `OfficeKit.convert(request, signal?)` returns one complete PDF result. `renderImages()` returns bounded PNG images of selected pages, slides, or worksheet areas; `convertTo()` and `recalculate()` save the output under the provider's `outputDirectory` for the request's owner and return its Host path. Their request types accept OpenDocument inputs, and image rendering accepts PDF; an optional `renderer` selects `libreoffice` or `poppler`, and the result names the renderer used. All methods share admission and caching. Cancellation follows the caller and provider lifetimes; validation, output, and engine failures reject with a classified `OfficeKitError`.
+[`OfficeKitRequest`](../../packages/document/office-kit/src/types.ts) contains an already-authorized source key/version, optional stat size, a deferred `read(signal, maxBytes)` callback, foreground/background priority, and a `OfficeExtension`: `doc`, `docx`, `xls`, `xlsx`, `ppt`, or `pptx`. `OfficeKit.convert(request, signal?)` returns one complete PDF result. `renderImages()` returns bounded PNG images of selected pages, slides, or worksheet areas; `convertTo()` and `recalculate()` save the output under the provider's `outputDirectory` for the request's owner and return its Host path. Their request types accept OpenDocument inputs, and image rendering accepts PDF; an optional `renderer` selects `libreoffice` or `poppler`, and the result names the renderer used. Those four methods share admission and caching. `discoverRuntime()` inspects installed Kit runtime metadata without starting an engine, and `openDocument()` lazily loads Kit's interactive editor entry with the provider's engine resolver and font/archive configuration outside the conversion queue and cache, returning a caller-owned `EditorDocument`. Cancellation follows the caller and provider lifetimes; validation, output, and engine failures reject with a classified `OfficeKitError`.
 
 `OfficeKitPriority` is `foreground` for requested preview/QA and `background` for speculation. `OfficeSourceKey` brands the caller-owned authorized source locator. `OfficeKitGeneration` brands a provider lifetime, and `OfficeKitKey` brands its content identity; neither opaque value is parsed by consumers.
 
@@ -104,6 +104,25 @@ async convertTo(request: OfficeConversionRequest, signal?: AbortSignal): Promise
  * @throws {OfficeKitError} Invalid input, unusable output, or engine failure; cancellation rejects with its reason.
  */
 async recalculate(request: OfficeRecalculationRequest, signal?: AbortSignal): Promise<OfficeFileResult>
+
+/**
+ * Inspect installed LibreOffice Kit runtime metadata without starting an engine.
+ * @returns Runtime metadata when Kit and an engine are available; `undefined` when the provider is disposed,
+ * Kit is missing or unloadable, or Kit reports its runtime unavailable (each distinct failure is logged once).
+ * @throws Unexpected discovery or non-`unavailable` Kit errors.
+ */
+async discoverRuntime(): Promise<RuntimeInfo | undefined>
+
+/**
+ * Open an interactive native Office document through the provider's Kit installation without using the conversion
+ * queue or cache. The caller owns the returned document and must call `close()` when finished.
+ * @param request - Document bytes, format, rendering backend, cancellation signal, progress callback, and optional
+ * per-document limit overrides applied on top of this provider's configured Kit font and archive settings.
+ * @returns Caller-owned interactive editor document.
+ * @throws {OfficeKitError} `unavailable` when the provider is disposed or Kit cannot be loaded; cancellation
+ * rejects with its signal reason; engine opening failures propagate from Kit.
+ */
+async openDocument(request: OfficeEditorRequest): Promise<EditorDocument>
 
 /**
  * Read and convert one Office file using the Session's ordinary filesystem authorization.

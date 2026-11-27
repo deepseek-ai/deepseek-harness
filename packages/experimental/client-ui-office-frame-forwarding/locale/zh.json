@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Office 原生预览",
+    "description": "在 Desktop 中只读预览本地 Word、Excel 和 PowerPoint 文件，由 LibreOffice 渲染并经帧转发呈现。"
+  }
+}

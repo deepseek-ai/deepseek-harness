@@ -570,6 +570,12 @@ describe('page close and refresh', () => {
       shift: false, repeat: false, composing: false, defaultPrevented: false }
     const context = { target: element, region: 'page' as const, modal: null }
     const consume = vi.fn()
+    const nativeRefresh = vi.fn()
+    const unmountPreview = occurrence.tabActions.bindCommands({ refresh: nativeRefresh })
+    registry.dispatch(gesture, context, vi.fn())
+    expect(nativeRefresh).toHaveBeenCalledOnce()
+    expect(refresh).not.toHaveBeenCalled()
+    unmountPreview()
     registry.dispatch(gesture, context, consume)
     registry.dispatch({ ...gesture, repeat: true }, context, consume)
     expect(refresh).toHaveBeenCalledTimes(1)

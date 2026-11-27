@@ -5,6 +5,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-office-kit/remote'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-api-workspace-files/remote'
+import type { ReadDocumentBytes } from '../rpc.ts'
 import { failureLine } from '../failure-line.ts'
 import { documentTabInfoFactory } from '../document/contract.ts'
 import { en, ja, es, fr, de, ru, pt, zh, type OfficePreviewKey } from './locales.ts'
@@ -13,6 +14,7 @@ import { pdfBodyRegistration } from '../pdf/index.ts'
 import { LazyPdfBody } from '../pdf/LazyPdfBody.tsx'
 import { OfficeBody, type OfficeBodyInjected } from './OfficeBody.tsx'
 import { OfficeFontAction } from './OfficeFontAction.tsx'
+import { officeFallback } from './fallback.ts'
 import { officeFace } from './face.ts'
 import { createOfficeStore } from './store.ts'
 import type { OfficeLimits } from '../../types.ts'
@@ -30,14 +32,14 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
  */
 export function apply(ctx: Context, config: OfficeLimits): void {
   const id = '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/office'
-  const extensions = ['doc', 'docx', 'ppt', 'pptx']
+  const extensions = ['doc', 'docx', 'ppt', 'pptx', 'xlsx', 'xls']
   ctx.effect(() => ctx.locale.register('sidebarOffice', { zh, en, ja, es, fr, de, ru, pt }))
   const t = ctx.locale.bind('sidebarOffice')
   const unavailable: ReadOfficeDocument = (_file, signal) => {
     signal.throwIfAborted()
     return Promise.reject(new Error(t('unavailable')))
   }
-  let read = unavailable
+  let read: ReadDocumentBytes = unavailable
   ctx.effect(() => ctx.documentPreviews.register({
     id,
     extensions, binaryExtensions: extensions, priority: 'builtin',
@@ -46,16 +48,26 @@ export function apply(ctx: Context, config: OfficeLimits): void {
   const store = createOfficeStore()
   ctx.effect(() => ctx.slots.inject('sidebar.right.tab.document.action', () => ctx.slots.register({
     name: 'sidebar.right.tab.document.action', key: id, locale: 'sidebarOffice', store,
+    children: { 'sidebar.right.tab.document.office.native.action': {
+      kind: 'single', scope: 'session', inject: { hooks: { tabInfo: documentTabInfoFactory } },
+    } },
   }, OfficeFontAction)))
   const retainTab = retainDocumentTabs(ctx)
   const documentT = ctx.locale.bind('sidebarDocumentPreview')
   const face = officeFace(
-    (file, signal) => read(file, signal),
+    async (file, signal) => {
+      if (officeFallback(file.path) === 'pdf') return read(file, signal)
+      return ctx.remote.workspaceFiles.readBytes(file.sessionId, file.path, {}, signal)
+    },
     failure => 'code' in failure ? failureLine(documentT, failure) : documentT('error.unavailable', { message: failure.message }),
   )
   ctx.effect(() => ctx.slots.inject('sidebar.right.tab.document', () => ctx.slots.register({
     name: 'sidebar.right.tab.document', key: id, locale: 'sidebarOffice', store,
-    children: { 'sidebar.right.tab.document.office.pdf': {
+    children: { 'sidebar.right.tab.document.office.native': {
+      kind: 'single', scope: 'session', inject: { hooks: { tabInfo: documentTabInfoFactory } },
+    }, 'sidebar.right.tab.document.office.spreadsheet': {
+      kind: 'keyed', scope: 'session', inject: { hooks: { tabInfo: documentTabInfoFactory } },
+    }, 'sidebar.right.tab.document.office.pdf': {
       kind: 'keyed', scope: 'session', inject: { hooks: { tabInfo: documentTabInfoFactory } },
     } },
     inject: (sessionId, actions): OfficeBodyInjected => ({

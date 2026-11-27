@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Vista previa de Office de solo lectura",
+    "description": "Vista previa nativa experimental de Office de solo lectura. Desactivada de forma predeterminada; solo se renderiza en Desktop."
+  }
+}

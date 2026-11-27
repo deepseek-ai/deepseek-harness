@@ -26,10 +26,9 @@ export interface FrameForwardingService {
    */
   capabilities(): Promise<FrameForwardingCapabilities>
   /**
-   * Open a channel. It serves one producer connection at a time: a producer started with `tx` connects, a second one
-   * is refused as `channel-busy`, and after a producer disconnects or exits its frames drain before the next one
-   * connects with the same credential. The channel keeps the renderer's latest viewport and applies it to each new
-   * connection before delivering its frames.
+   * Open a channel. It serves at most one producer connection: a producer started with `tx` connects, any second
+   * candidate is refused while connected, and once the producer disconnects the channel closes permanently. A viewport
+   * submitted before the producer connects is applied once it connects.
    * @returns The producer credential and the receive identity for the renderer.
    */
   channel(): Promise<FrameChannel>

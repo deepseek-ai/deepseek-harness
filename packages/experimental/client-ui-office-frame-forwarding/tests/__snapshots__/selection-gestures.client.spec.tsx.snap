@@ -1,0 +1,23 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`'docx': a new range starts inside the old selection while native input is pending > docx replacement selection 1`] = `
+[
+  {
+    "height": "max(1px, calc(413px * var(--office-content-scale)))",
+    "left": "calc(2037px * var(--office-content-scale))",
+    "top": "calc(3164px * var(--office-content-scale))",
+    "width": "max(1px, calc(1521px * var(--office-content-scale)))",
+  },
+]
+`;
+
+exports[`'xlsx': a new range starts inside the old selection while native input is pending > xlsx replacement selection 1`] = `
+[
+  {
+    "height": "max(1px, calc(765px * var(--office-content-scale)))",
+    "left": "calc(0px * var(--office-content-scale))",
+    "top": "calc(2775px * var(--office-content-scale))",
+    "width": "max(1px, calc(4787px * var(--office-content-scale)))",
+  },
+]
+`;

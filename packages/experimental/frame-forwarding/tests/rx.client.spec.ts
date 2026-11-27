@@ -1,6 +1,5 @@
 /**
- * Newest-first streams across producer switches, readiness, frame release, and the
- * channel's fullscreen requests and state, without a GPU.
+ * Newest-first streams, readiness, frame release, and channel event subscriptions without a GPU.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { brandString } from '@deepseek-ai/dsh-brand'
@@ -19,7 +18,7 @@ const connected = (connectionId: number, viewportVersion?: number): FrameChannel
 function fixture(initial: FrameChannelState | null = connected(1)) {
   let arrive: (lease: FrameForwardingFrameLease) => void = () => {}
   let report: (event: FrameRxEvent) => void = () => {}
-  const detach = vi.fn(async () => {})
+  const detach = vi.fn()
   const bridge = {
     attach(_rx, { onFrame, onEvent }) {
       arrive = onFrame
@@ -30,8 +29,6 @@ function fixture(initial: FrameChannelState | null = connected(1)) {
     setViewport: vi.fn(async (_rx: FrameRxId, _viewport: FrameForwardingViewport): Promise<FrameViewportResult> =>
       ({ applied: true, connectionId: 1 as FrameConnectionId })),
     apply: vi.fn(),
-    requestFullscreen: vi.fn(async (_rx: FrameRxId, _element: Element) => {}),
-    exitFullscreen: vi.fn(async (_rx: FrameRxId) => {}),
     fail: vi.fn(),
     dispose: vi.fn(),
   } satisfies FrameForwardingBridge
@@ -61,39 +58,31 @@ afterEach(async () => {
 })
 
 describe('producer connections', () => {
-  it('keeps frames of a later connection until its state arrives, and drops them on a viewport change', async () => {
+  it('releases frames of mismatched connections or generations immediately', () => {
     const f = fixture()
-    const third = f.lease('stream', { connectionId: 3 })
-    f.receive(third)
-    f.state(connected(2))
-    expect(third.release).not.toHaveBeenCalled()
-    await f.channel.setViewport(viewport(1))
-    expect(third.release).toHaveBeenCalledOnce()
+    const present = vi.fn()
+    f.channel.consume(present, vi.fn())
+    const wrongConnection = f.lease('other-conn', { connectionId: 2 })
+    f.receive(wrongConnection)
+    const wrongGeneration = f.lease('other-gen', { generation: 9 })
+    f.receive(wrongGeneration)
+    expect(wrongConnection.release).toHaveBeenCalledOnce()
+    expect(wrongGeneration.release).toHaveBeenCalledOnce()
+    expect(present).not.toHaveBeenCalled()
   })
-  it('releases early frames of a connection whose first reported state is draining, and keeps a later connection\'s', () => {
-    const f = fixture()
-    const ended = f.lease('tile', { connectionId: 2 })
-    const later = f.lease('tile', { connectionId: 3 })
-    f.receive(ended)
-    f.receive(later)
-    f.state({ state: 'draining', connectionId: 2 as FrameConnectionId })
-    expect(ended.release).toHaveBeenCalledOnce()
-    expect(later.release).not.toHaveBeenCalled()
-  })
-  it('ignores errors of an earlier connection and reports the current one\'s other errors to the stream', async () => {
+  it('ignores errors of an unknown connection and reports the connected producer\'s errors to the stream', () => {
     const f = fixture()
     const failure = vi.fn()
-    f.state(connected(2))
     f.channel.consume(vi.fn(), failure)
-    f.event({ kind: 'error', connectionId: 1 as FrameConnectionId, source: 'producer', error: 'old stream failed' })
-    f.event({ kind: 'error', connectionId: 2 as FrameConnectionId, source: 'producer', error: 'PPT stream rendering failed' })
-    f.event({ kind: 'error', connectionId: 2 as FrameConnectionId, source: 'presentation', requestId: 'stream', error: 'frame transfer failed' })
+    f.event({ kind: 'error', connectionId: 2 as FrameConnectionId, source: 'producer', error: 'other stream failed' })
+    f.event({ kind: 'error', connectionId: 1 as FrameConnectionId, source: 'producer', error: 'PPT stream rendering failed' })
+    f.event({ kind: 'error', connectionId: 1 as FrameConnectionId, source: 'presentation', requestId: 'stream', error: 'frame transfer failed' })
     expect(failure.mock.calls).toEqual([
       [new FrameFailureError('producer', 'PPT stream rendering failed')], [new FrameFailureError('presentation', 'frame transfer failed')],
     ])
     expect(failure.mock.calls.map(([error]) => (error as FrameFailureError).source)).toEqual(['producer', 'presentation'])
   })
-  it('resolves readiness once a producer acknowledged the latest viewport', async () => {
+  it('resolves readiness once the producer acknowledged the latest viewport', async () => {
     const f = fixture(null)
     let ready: FrameConnectionId | undefined
     const waiting = f.channel.ready().then((connectionId) => { ready = connectionId })
@@ -104,12 +93,10 @@ describe('producer connections', () => {
     await f.channel.setViewport(viewport(1))
     const afterViewport = f.channel.ready()
     f.state(connected(1, 0))
-    f.state({ state: 'draining', connectionId: 1 as FrameConnectionId })
-    f.state(connected(2))
     expect(await Promise.race([afterViewport, Promise.resolve('pending')])).toBe('pending')
-    f.state(connected(2, 1))
-    expect(await afterViewport).toBe(2)
-    expect(await f.channel.ready()).toBe(2)
+    f.state(connected(1, 1))
+    expect(await afterViewport).toBe(1)
+    expect(await f.channel.ready()).toBe(1)
   })
   it('cancels and fails readiness waits', async () => {
     const f = fixture(null)
@@ -126,15 +113,6 @@ describe('producer connections', () => {
     const closing = g.channel.ready().catch(reason)
     await g.channel.close()
     expect(await closing).toBe('closed')
-  })
-  it('rejects a viewport whose connection ended before acknowledging it, and keeps one without a producer', async () => {
-    const f = fixture()
-    f.bridge.setViewport.mockResolvedValueOnce({ applied: false, reason: 'producer-changed' })
-    expect(await f.channel.setViewport(viewport(1)).catch(reason)).toBe('producer-changed')
-    // A producer change does not hold back the next viewport.
-    f.bridge.setViewport.mockResolvedValueOnce({ applied: false, reason: 'no-producer' })
-    await f.channel.setViewport(viewport(2))
-    expect(f.bridge.setViewport.mock.calls.map(([, value]) => value.version)).toEqual([1, 2])
   })
 })
 
@@ -167,7 +145,7 @@ describe('channel lifetime', () => {
     f.state({ state: 'closed', cause: 'closed', reason: 'Native channel closed' })
     expect(reason(failure.mock.calls[0]![0])).toBe('closed')
     expect(await f.channel.closed).toBe('closed')
-    f.state(connected(2))
+    f.state(connected(1))
     expect(f.channel.connectionId).toBeUndefined()
     expect(() => f.channel.ready()).toThrow('Native channel closed.')
     const late = f.lease('late')
@@ -256,21 +234,6 @@ describe('continuous frames', () => {
     expect(presented).toEqual(['first', '19'])
     expect(first.release).toHaveBeenCalledOnce()
   })
-  it('keeps presenting across a producer switch once the successor\'s state arrives', async () => {
-    const f = fixture()
-    const presented: number[] = []
-    f.channel.consume((frame) => { presented.push(frame.metadata.connectionId) }, vi.fn())
-    f.receive(f.lease('stream'))
-    f.state({ state: 'draining', connectionId: 1 as FrameConnectionId })
-    const stale = f.lease('stream')
-    f.receive(stale)
-    const early = f.lease('stream', { connectionId: 2 })
-    f.receive(early)
-    f.state(connected(2))
-    await vi.waitFor(() => { expect(early.release).toHaveBeenCalledOnce() })
-    expect(stale.release).toHaveBeenCalledOnce()
-    expect(presented).toEqual([1, 2])
-  })
   it('releases the waiting frame on unsubscribe and the presented one only after its callback settles', async () => {
     const f = fixture()
     const painting = Promise.withResolvers<undefined>()
@@ -324,15 +287,14 @@ describe('continuous frames', () => {
 })
 
 describe('channel event subscriptions', () => {
-  it('replays known state, and fullscreen without replaying historical errors', () => {
+  it('replays known state and content without replaying historical errors', () => {
     const f = fixture()
     const log = vi.spyOn(console, 'debug').mockImplementation(() => {})
-    f.event({ kind: 'fullscreen', active: true, holder: true })
     f.event({ kind: 'error', connectionId: 1 as FrameConnectionId, source: 'producer', error: 'earlier' })
     const seen: FrameRxEvent[] = []
     f.channel.onEvent(event => seen.push(event))
     expect(seen).toEqual([
-      { kind: 'state', channel: connected(1) }, { kind: 'fullscreen', active: true, holder: true },
+      { kind: 'state', channel: connected(1) },
       { kind: 'content', submittedGeneration: undefined },
     ])
     log.mockRestore()
@@ -341,7 +303,7 @@ describe('channel event subscriptions', () => {
     const f = fixture(null)
     const seen: FrameRxEvent[] = []
     f.channel.onEvent(event => seen.push(event))
-    expect(seen).toEqual([{ kind: 'fullscreen', active: false, holder: false }, { kind: 'content', submittedGeneration: undefined }])
+    expect(seen).toEqual([{ kind: 'content', submittedGeneration: undefined }])
   })
   it('isolates subscriptions including repeated listener identity, exceptions and idempotent disposal', () => {
     const f = fixture()
@@ -356,58 +318,52 @@ describe('channel event subscriptions', () => {
     expect(listener).toHaveBeenCalledExactlyOnceWith({ kind: 'state', channel: { state: 'idle' } })
     expect(log).toHaveBeenCalledWith('Native channel event listener failed', expect.objectContaining({ message: 'event listener failed' }))
     second(); second(); throwing()
-    f.state(connected(2))
+    f.state(connected(1, 1))
     expect(listener).toHaveBeenCalledOnce()
     log.mockRestore()
   })
   it('delivers all event kinds in arrival order to every observer, including reentrant events', () => {
     const f = fixture()
     const first: FrameRxEvent[] = [], second: FrameRxEvent[] = []
-    const staleError = { kind: 'error', connectionId: 9 as FrameConnectionId, source: 'producer', error: 'old connection' } as const
+    const staleError = { kind: 'error', connectionId: 9 as FrameConnectionId, source: 'producer', error: 'other connection' } as const
     f.channel.onEvent((event) => {
       first.push(event)
-      if (event.kind === 'fullscreen' && event.active) f.event(staleError)
+      if (event.kind === 'content' && event.submittedGeneration === 3) f.event(staleError)
     })
     f.channel.onEvent(event => second.push(event))
     first.length = 0; second.length = 0
-    const fullscreen = { kind: 'fullscreen', active: true, holder: false } as const
-    f.event(fullscreen)
+    const content = { kind: 'content', submittedGeneration: 3 } as const
+    f.event(content)
     const failure = { kind: 'failure', error: 'Client disposed' } as const
     f.event(failure)
-    expect(first).toEqual([fullscreen, staleError, failure])
+    expect(first).toEqual([content, staleError, failure])
     expect(second).toEqual(first)
   })
   it('replays a reentrant subscription after previously queued state changes', () => {
     const f = fixture()
     const late: FrameRxEvent[] = []
     f.channel.onEvent((event) => {
-      if (event.kind !== 'fullscreen' || !event.active) return
-      f.state(connected(2))
+      if (event.kind !== 'content' || event.submittedGeneration !== 3) return
+      f.state(connected(1, 3))
       f.channel.onEvent(value => late.push(value))
     })
-    f.event({ kind: 'fullscreen', active: true, holder: true })
-    expect(late).toEqual([{ kind: 'state', channel: connected(2) }, { kind: 'fullscreen', active: true, holder: true },
-      { kind: 'content', submittedGeneration: undefined }])
+    f.event({ kind: 'content', submittedGeneration: 3 })
+    expect(late).toEqual([{ kind: 'state', channel: connected(1, 3) }, { kind: 'content', submittedGeneration: 3 }])
   })
   it.each(['closed', 'lost', 'failed', 'disposed'] as const)('ends subscriptions after %s and ignores late events', (cause) => {
     const f = fixture()
     const listener = vi.fn()
-    const fullscreen = vi.fn()
     const remove = f.channel.onEvent(listener)
-    f.channel.onFullscreen(fullscreen)
     listener.mockClear()
     const terminal: FrameRxEvent = cause === 'disposed' ? { kind: 'failure', error: 'Client disposed' }
       : { kind: 'state', channel: { state: 'closed', cause, reason: 'ended' } }
     f.event(terminal)
     expect(listener).toHaveBeenCalledExactlyOnceWith(terminal)
-    f.event({ kind: 'fullscreen', active: true, holder: false })
-    f.state(connected(2))
+    f.state(connected(1, 2))
     const late = vi.fn()
     f.channel.onEvent(late)()
-    f.channel.onFullscreen(late)()
     remove(); remove()
     expect(listener).toHaveBeenCalledOnce()
-    expect(fullscreen).not.toHaveBeenCalled()
     expect(late).not.toHaveBeenCalled()
   })
   it('reports local closure once, including reentrant close from a terminal listener', async () => {
@@ -426,7 +382,7 @@ describe('channel event subscriptions', () => {
     expect(f.detach).toHaveBeenCalledOnce()
     expect(first).toEqual([{ kind: 'state', channel: { state: 'closed', cause: 'closed', reason: 'Native channel closed.' } }])
     expect(second).toEqual(first)
-    f.event({ kind: 'fullscreen', active: true, holder: false })
+    f.event({ kind: 'content', submittedGeneration: 5 })
     expect(second).toEqual(first)
   })
   it('stops initial replay when its listener closes the channel', async () => {
@@ -443,60 +399,6 @@ describe('channel event subscriptions', () => {
       { kind: 'state', channel: { state: 'closed', cause: 'closed', reason: 'Native channel closed.' } },
     ])
     expect(f.detach).toHaveBeenCalledOnce()
-  })
-  it('shares fullscreen changes with onFullscreen without adding replay to that method', () => {
-    const f = fixture()
-    const every: FrameRxEvent[] = []
-    const fullscreen: { active: boolean; holder: boolean }[] = []
-    f.channel.onEvent(event => every.push(event))
-    const remove = f.channel.onFullscreen(state => fullscreen.push(state))
-    expect(fullscreen).toEqual([])
-    every.length = 0
-    f.event({ kind: 'fullscreen', active: true, holder: false })
-    f.event({ kind: 'fullscreen', active: false, holder: false })
-    expect(every).toEqual(fullscreen.map(state => ({ kind: 'fullscreen', ...state })))
-    expect(f.channel.fullscreen).toEqual(fullscreen.at(-1))
-    remove(); remove()
-    f.event({ kind: 'fullscreen', active: true, holder: true })
-    expect(fullscreen).toHaveLength(2)
-  })
-})
-
-describe('fullscreen', () => {
-  it('requests and leaves fullscreen for its channel, and refuses requests once closed or failed', async () => {
-    const f = fixture()
-    const view = {} as Element
-    await f.channel.requestFullscreen(view)
-    expect(f.bridge.requestFullscreen).toHaveBeenCalledWith(rx, view)
-    await f.channel.exitFullscreen()
-    expect(f.bridge.exitFullscreen).toHaveBeenCalledWith(rx)
-    f.event({ kind: 'failure', error: 'paint failed' })
-    await expect(f.channel.requestFullscreen(view)).rejects.toThrow('paint failed')
-    const closed = fixture()
-    await closed.channel.close()
-    expect(reason(await closed.channel.requestFullscreen(view).catch((error: unknown) => error))).toBe('closed')
-    expect(f.bridge.requestFullscreen).toHaveBeenCalledOnce()
-  })
-
-  it('keeps the latest fullscreen state, reports changes to its observers, and contains a failing observer', async () => {
-    const f = fixture()
-    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
-    expect(f.channel.fullscreen).toEqual({ active: false, holder: false })
-    const seen: unknown[] = []
-    f.channel.onFullscreen(() => { throw new Error('observer failed') })
-    const remove = f.channel.onFullscreen(state => seen.push(state))
-    f.event({ kind: 'fullscreen', active: true, holder: false })
-    expect(f.channel.fullscreen).toEqual({ active: true, holder: false })
-    remove()
-    f.event({ kind: 'fullscreen', active: false, holder: false })
-    expect(seen).toEqual([{ active: true, holder: false }])
-    expect(log).toHaveBeenCalledWith('Native fullscreen listener failed', expect.objectContaining({ message: 'observer failed' }))
-    const after = vi.fn()
-    f.channel.onFullscreen(after)
-    await f.channel.close()
-    f.event({ kind: 'fullscreen', active: true, holder: false })
-    expect(after).not.toHaveBeenCalled()
-    log.mockRestore()
   })
 })
 
@@ -518,34 +420,38 @@ it('exposes and replays the latest viewport while ordering reentrant viewport re
   expect(f.channel.viewport).toEqual(viewport(2))
   const replay: FrameRxEvent[] = []
   f.channel.onEvent(event => replay.push(event))
-  expect(replay.map(event => event.kind)).toEqual(['state', 'viewport', 'fullscreen', 'content'])
+  expect(replay.map(event => event.kind)).toEqual(['state', 'viewport', 'content'])
   expect(replay[1]).toEqual({ kind: 'viewport', viewport: viewport(2) })
   expect(events.filter(event => event.kind === 'viewport').map(event => event.viewport.version)).toEqual([1, 2])
 })
 
-it('replays displayed generation and coalesces repeated and reentrant content reports', () => {
+it('delivers each track write, coalesces consecutive clears and replays only the latest submission', () => {
   const f = fixture()
-  const seen: FrameRxEvent[] = []
+  const seen: FrameRxEvent[] = [], write = { kind: 'content', submittedGeneration: 2 } as const
+  const clear = { kind: 'content', submittedGeneration: undefined } as const
+  let reentered = false
   f.channel.onEvent((event) => {
     seen.push(event)
-    if (event.kind === 'content' && event.submittedGeneration === 2) {
-      f.event({ kind: 'content', submittedGeneration: 2 })
+    if (event.kind === 'content' && event.submittedGeneration === 2 && !reentered) {
+      reentered = true
+      f.event(write)
     }
   })
-  f.event({ kind: 'content', submittedGeneration: 2 })
-  f.event({ kind: 'content', submittedGeneration: 2 })
-  expect(seen.filter(event => event.kind === 'content')).toEqual([
-    { kind: 'content', submittedGeneration: undefined }, { kind: 'content', submittedGeneration: 2 },
-  ])
+  f.event(clear)
+  f.event(write)
+  f.event(write)
+  expect(seen.filter(event => event.kind === 'content')).toEqual([clear, write, write, write])
   const replay: FrameRxEvent[] = []
   f.channel.onEvent(event => replay.push(event))
-  expect(replay.at(-1)).toEqual({ kind: 'content', submittedGeneration: 2 })
-  f.event({ kind: 'content', submittedGeneration: undefined })
-  expect(seen.at(-1)).toEqual({ kind: 'content', submittedGeneration: undefined })
+  expect(replay.filter(event => event.kind === 'content')).toEqual([write])
+  f.event(clear)
+  f.event(clear)
+  expect(replay.filter(event => event.kind === 'content')).toEqual([write, clear])
 })
 
-it('requires a mount for either content setter', () => {
+it('requires a mount for visibility and content setters', () => {
   const f = fixture()
+  expect(() => { f.channel.setVisible(false) }).toThrow('Frame visibility requires mount.')
   expect(() => { f.channel.setContentView({ x: 0, y: 0, scale: 1 }) }).toThrow('Frame content requires mount.')
   expect(() => { f.channel.setContentView(undefined) }).toThrow('Frame content requires mount.')
   expect(() => f.channel.setContentWindow({ x: 0, y: 0, width: 1, height: 1 })).toThrow('Frame content requires mount.')
@@ -563,11 +469,11 @@ it('applies bridge viewport announcements and replays them to later subscribers'
 it('skips an event listener removed by an earlier listener in the same delivery', () => {
   const f = fixture()
   let remove = () => {}
-  f.channel.onEvent((event) => { if (event.kind === 'fullscreen' && event.active) remove() })
+  f.channel.onEvent((event) => { if (event.kind === 'content' && event.submittedGeneration === 4) remove() })
   const later = vi.fn()
   remove = f.channel.onEvent(later)
   later.mockClear()
-  f.event({ kind: 'fullscreen', active: true, holder: false })
+  f.event({ kind: 'content', submittedGeneration: 4 })
   expect(later).not.toHaveBeenCalled()
 })
 
@@ -575,11 +481,11 @@ it('does not apply queued state announcements after reentrant close', async () =
   const f = fixture()
   let closing: Promise<void> | undefined
   f.channel.onEvent((event) => {
-    if (event.kind !== 'fullscreen' || !event.active) return
-    f.state(connected(2))
+    if (event.kind !== 'content' || event.submittedGeneration !== 4) return
+    f.state(connected(1, 4))
     closing = f.channel.close()
   })
-  f.event({ kind: 'fullscreen', active: true, holder: false })
+  f.event({ kind: 'content', submittedGeneration: 4 })
   await closing
   expect(f.channel.connectionId).toBeUndefined()
   await expect(f.channel.closed).resolves.toBe('closed')

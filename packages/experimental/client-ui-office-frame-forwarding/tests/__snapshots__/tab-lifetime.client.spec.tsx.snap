@@ -1,0 +1,103 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`'docx' refresh opens a new session while the previous revision is still releasing > native views after repeated refresh 1`] = `
+[
+  {
+    "native": true,
+    "nativeUnavailableReported": false,
+    "revision": 2,
+  },
+  {
+    "native": true,
+    "nativeUnavailableReported": false,
+    "revision": 3,
+  },
+  {
+    "native": true,
+    "nativeUnavailableReported": false,
+    "revision": 4,
+  },
+]
+`;
+
+exports[`'docx' retains its session, scroll, zoom, selection and mounted image across tab switches > restored native view 1`] = `
+{
+  "format": "docx",
+  "loading": "opacity: 1;",
+  "retained": "3",
+  "scroll": [
+    85,
+    125,
+  ],
+  "selection": "left: calc(1500px * var(--office-content-scale)); top: calc(3000px * var(--office-content-scale)); width: max(1px, calc(900px * var(--office-content-scale))); height: max(1px, calc(450px * var(--office-content-scale)));",
+  "zoom": "100%",
+}
+`;
+
+exports[`'pptx' refresh opens a new session while the previous revision is still releasing > native views after repeated refresh 1`] = `
+[
+  {
+    "native": true,
+    "nativeUnavailableReported": false,
+    "revision": 2,
+  },
+  {
+    "native": true,
+    "nativeUnavailableReported": false,
+    "revision": 3,
+  },
+  {
+    "native": true,
+    "nativeUnavailableReported": false,
+    "revision": 4,
+  },
+]
+`;
+
+exports[`'pptx' retains its session, scroll, zoom, selection and mounted image across tab switches > restored native view 1`] = `
+{
+  "format": "pptx",
+  "loading": "opacity: 1;",
+  "retained": "3",
+  "scroll": [
+    85,
+    125,
+  ],
+  "selection": "left: calc(1500px * var(--office-content-scale)); top: calc(3000px * var(--office-content-scale)); width: max(1px, calc(900px * var(--office-content-scale))); height: max(1px, calc(450px * var(--office-content-scale)));",
+  "zoom": "50%",
+}
+`;
+
+exports[`'xlsx' refresh opens a new session while the previous revision is still releasing > native views after repeated refresh 1`] = `
+[
+  {
+    "native": true,
+    "nativeUnavailableReported": false,
+    "revision": 2,
+  },
+  {
+    "native": true,
+    "nativeUnavailableReported": false,
+    "revision": 3,
+  },
+  {
+    "native": true,
+    "nativeUnavailableReported": false,
+    "revision": 4,
+  },
+]
+`;
+
+exports[`'xlsx' retains its session, scroll, zoom, selection and mounted image across tab switches > restored native view 1`] = `
+{
+  "format": "xlsx",
+  "loading": "opacity: 1;",
+  "retained": "3",
+  "scroll": [
+    85,
+    125,
+  ],
+  "selection": "left: calc(1500px * var(--office-content-scale)); top: calc(3000px * var(--office-content-scale)); width: max(1px, calc(900px * var(--office-content-scale))); height: max(1px, calc(450px * var(--office-content-scale)));",
+  "zoom": "125%",
+}
+`;

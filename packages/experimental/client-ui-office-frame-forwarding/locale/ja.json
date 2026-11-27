@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Office ネイティブプレビュー",
+    "description": "ローカルの Word、Excel、PowerPoint ファイルを、LibreOffice が描画しフレーム転送で表示する形で Desktop に読み取り専用でプレビューします。"
+  }
+}

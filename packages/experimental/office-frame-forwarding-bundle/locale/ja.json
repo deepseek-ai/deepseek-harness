@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Office 読み取り専用プレビュー",
+    "description": "実験的なネイティブ Office 読み取り専用プレビューです。既定では無効で、Desktop でのみ描画します。"
+  }
+}

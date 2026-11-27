@@ -3,8 +3,7 @@ import type { BoundActions } from '@deepseek-ai/dsh-client-store'
 import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { RemoteFailure } from '@deepseek-ai/dsh-api-remotes/client'
-import type { SessionFile } from '../rpc.ts'
-import type { ReadOfficeDocument } from './cache.ts'
+import type { SessionFile, ReadDocumentBytes } from '../rpc.ts'
 import type { OfficeStore } from './store.ts'
 
 /** Conversion loading callback supplied to the Office body through Slot injection. */
@@ -30,12 +29,12 @@ export interface OfficeLoadInjected {
 
 /**
  * Bind Office reads to store actions without exposing Remote work to the component.
- * @param read - authorized conversion reader, including Client cache reuse.
+ * @param read - authorized fallback reader, including Client cache reuse.
  * @param describeFailure - localized conversion or source-access failure text.
  * @returns Slot inject factory; the file address supplies the read's Session authority.
  */
 export function officeFace(
-  read: ReadOfficeDocument,
+  read: ReadDocumentBytes,
   describeFailure: (failure: RemoteFailure | { readonly message: string }) => string,
 ): (sessionId: SessionId, actions: BoundActions<OfficeStore>) => OfficeLoadInjected {
   return (_sessionId, actions) => ({

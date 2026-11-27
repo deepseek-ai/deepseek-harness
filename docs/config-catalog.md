@@ -707,6 +707,63 @@ export interface ContextMenuConfig {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-client-ui-context-menu -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-client-ui-office-frame-forwarding -->
+<a id="deepseek-aidsh-client-ui-office-frame-forwarding"></a>
+
+## `@deepseek-ai/dsh-client-ui-office-frame-forwarding`
+
+- `inject`: `fs` · `sandboxPolicy`
+- `source`: [`packages/experimental/client-ui-office-frame-forwarding/src/config.ts:34`](../packages/experimental/client-ui-office-frame-forwarding/src/config.ts)
+
+```ts config-catalog
+/** Resolved settings passed to the Host service. */
+export interface Config {
+  /** Render-window margin on each side, as a fraction of the visible viewport, from 0 to 1. */
+  overscanViewports: number
+  /** Fraction of the overscan margin reserved before reanchoring, from 0 to 1. */
+  reanchorHysteresis: number
+  /** Milliseconds without a zoom change before requesting a new render window; 0 redraws immediately. */
+  zoomSettleMs: number
+  /** Consecutive texture-credit timeouts before requesting a visibility reset to reclaim idle surfaces. */
+  creditRetryLimit: number
+  /** Maximum RGBA bytes in one page preview and total bytes retained in the document's page-preview cache. */
+  maxPagePreviewBytes: number
+  /**
+   * Native GPU rendering backend: `ganesh` selects Skia Ganesh and `graphite` selects Skia Graphite through WebGPU.
+   * Opening fails when the selected GPU backend is unavailable; the view uses its format-specific fallback.
+   */
+  renderBackend: OfficeRenderBackend
+  /** Native slideshow scheduling target in frames per second; delivery may be slower. */
+  presentationFrameRate: number
+  /** Maximum source document size in bytes. */
+  maxDocumentBytes: number
+  /** Milliseconds an open document can wait for its first or next renderer lease. */
+  orphanRetentionMs: number
+  /** Deadline for the initial open and for each native operation after an editor has started. */
+  operationTimeoutMs: number
+  /**
+   * Deadline for an engine to connect to its frame-forwarding channel; shorter than `operationTimeoutMs`, whose expiry
+   * ends the engine.
+   */
+  channelConnectTimeoutMs: number
+  /** Renderer deadline for a requested frame and for the first slideshow frame of each viewport, in milliseconds. */
+  frameTimeoutMs: number
+  /**
+   * Channels a document may replace without the user asking within `automaticReconnectWindowMs`, after Desktop lost
+   * its frames; 0 leaves every replacement to the user. A frame of the new channel can crash Chromium's GPU process
+   * again, and Chromium stops compositing on the GPU after 3 recent crashes, forgiving one every 5 minutes; one
+   * replacement per 10 minutes keeps the crashes such replacements cause below that limit.
+   */
+  automaticReconnects: number
+  /** Sliding window of `automaticReconnects`, in milliseconds. */
+  automaticReconnectWindowMs: number
+}
+
+/** Native GPU drawing backend: Skia Ganesh or Skia Graphite through WebGPU. */
+export type OfficeRenderBackend = 'ganesh' | 'graphite'
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-client-ui-office-frame-forwarding -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-client-ui-plugin-manager -->
 <a id="deepseek-aidsh-client-ui-plugin-manager"></a>
 
@@ -3320,7 +3377,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-office-kit`
 
-- `source`: [`packages/document/office-kit/src/index.ts:43`](../packages/document/office-kit/src/index.ts)
+- `source`: [`packages/document/office-kit/src/index.ts:54`](../packages/document/office-kit/src/index.ts)
 
 ```ts config-catalog
 /** Provider concurrency and kit rendering/font configuration. */
@@ -6329,6 +6386,7 @@ Imported as libraries by other packages; a `cordis.yml` cannot load them.
 | `@deepseek-ai/dsh-llm-mock-server` | — | [`packages/test-support/llm-mock-server/src/index.ts`](../packages/test-support/llm-mock-server/src/index.ts) |
 | `@deepseek-ai/dsh-loader-smoke` | — | [`packages/test-support/loader-smoke/src/index.ts`](../packages/test-support/loader-smoke/src/index.ts) |
 | `@deepseek-ai/dsh-native-command` | — | [`packages/util/native-command/src/index.ts`](../packages/util/native-command/src/index.ts) |
+| `@deepseek-ai/dsh-office-frame-forwarding-bundle` | — | [`packages/experimental/office-frame-forwarding-bundle/src/index.ts`](../packages/experimental/office-frame-forwarding-bundle/src/index.ts) |
 | `@deepseek-ai/dsh-official-bundles` | — | [`packages/util/official-bundles/src/index.ts`](../packages/util/official-bundles/src/index.ts) |
 | `@deepseek-ai/dsh-output-retention` | — | [`packages/util/output-retention/src/index.ts`](../packages/util/output-retention/src/index.ts) |
 | `@deepseek-ai/dsh-package-manifest` | — | [`packages/util/package-manifest/src/index.ts`](../packages/util/package-manifest/src/index.ts) |

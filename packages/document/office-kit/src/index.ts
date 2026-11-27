@@ -7,7 +7,8 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { extname, isAbsolute, join, relative, sep } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
-import type { Converter, ConverterOptions } from '@deepseek-ai/libreoffice-kit'
+import type { Converter, ConverterOptions, RuntimeInfo } from '@deepseek-ai/libreoffice-kit'
+import type { EditorDocument, OpenDocumentOptions } from '@deepseek-ai/libreoffice-kit/editor'
 import z from '@deepseek-ai/schemastery'
 import type { WorkspaceFileScope, WorkspaceFileStat } from '@deepseek-ai/dsh-api-workspace-files'
 import type {} from '@deepseek-ai/dsh-fs'
@@ -31,6 +32,16 @@ import { ConversionQueue, type OfficeOperation, type OfficeOperationOutput, type
 export * from './errors.ts'
 export * from './identity.ts'
 export * from './types.ts'
+export type { RuntimeInfo } from '@deepseek-ai/libreoffice-kit'
+export type {
+  EditorDocument, EditorEvent, EditorInfo, EditorViewport, OpenDocumentOptions, PresentationControl,
+} from '@deepseek-ai/libreoffice-kit/editor'
+
+/** Caller-owned options for opening an interactive native document through the provider's Kit installation. */
+export interface OfficeEditorRequest extends Omit<OpenDocumentOptions, 'options'> {
+  /** Per-document limit overrides applied on top of this provider's configured Kit options; engine resolution belongs to the provider. */
+  readonly options?: Omit<ConverterOptions, 'resolveEnginePackage'>
+}
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -141,10 +152,14 @@ export const Config: z<Partial<Config>, Config> = z.object({
 })
 
 /** Kit operations loaded from the provider's Kit entry. */
-type KitModule = Pick<typeof import('@deepseek-ai/libreoffice-kit'), 'createConverter'>
+type KitModule = Pick<typeof import('@deepseek-ai/libreoffice-kit'), 'ConversionError' | 'createConverter' | 'discoverRuntime'>
+
+/** Interactive editor operations loaded lazily from the provider's Kit installation. */
+type KitEditorModule = Pick<typeof import('@deepseek-ai/libreoffice-kit/editor'), 'openDocument'>
 
 /** Imported Kit operations with the engine resolver anchored at the same Kit entry. */
-interface LoadedKit extends KitModule {
+interface LoadedKit {
+  readonly module: KitModule
   readonly resolveEnginePackage: NonNullable<ConverterOptions['resolveEnginePackage']>
 }
 
@@ -169,6 +184,7 @@ export class OfficeKit extends TypertRemoteService {
   private readonly outputs: OutputStore
   private readonly options: Omit<ConverterOptions, 'resolveEnginePackage'>
   private loadedKit?: Promise<LoadedKit>
+  private loadedEditor?: Promise<KitEditorModule>
   private readonly reportedKitFailures = new Set<string>()
 
   /**
@@ -333,6 +349,52 @@ export class OfficeKit extends TypertRemoteService {
   }
 
   /**
+   * Inspect installed LibreOffice Kit runtime metadata without starting an engine.
+   * @returns Runtime metadata when Kit and an engine are available; `undefined` when the provider is disposed,
+   * Kit is missing or unloadable, or Kit reports its runtime unavailable (each distinct failure is logged once).
+   * @throws Unexpected discovery or non-`unavailable` Kit errors.
+   */
+  async discoverRuntime(): Promise<RuntimeInfo | undefined> {
+    if (this.remoteLifetime.signal.aborted) return undefined
+    const kit = await this.loadKit().catch(() => undefined)
+    if (kit === undefined) return undefined
+    try {
+      return await kit.module.discoverRuntime({ resolveEnginePackage: kit.resolveEnginePackage })
+    } catch (cause) {
+      if (cause instanceof kit.module.ConversionError && cause.code === 'unavailable') {
+        this.unavailableKit('LibreOffice Kit reported its runtime unavailable.', cause)
+        return undefined
+      }
+      throw cause
+    }
+  }
+
+  /**
+   * Open an interactive native Office document through the provider's Kit installation without using the conversion
+   * queue or cache. The caller owns the returned document and must call `close()` when finished.
+   * @param request - Document bytes, format, rendering backend, cancellation signal, progress callback, and optional
+   * per-document limit overrides applied on top of this provider's configured Kit font and archive settings.
+   * @returns Caller-owned interactive editor document.
+   * @throws {OfficeKitError} `unavailable` when the provider is disposed or Kit cannot be loaded; cancellation
+   * rejects with its signal reason; engine opening failures propagate from Kit.
+   */
+  async openDocument(request: OfficeEditorRequest): Promise<EditorDocument> {
+    const checkActive = (): void => {
+      if (this.remoteLifetime.signal.aborted) throw new OfficeKitError('unavailable', 'Office kit has been disposed.')
+      request.signal?.throwIfAborted()
+    }
+    checkActive()
+    const { resolveEnginePackage } = await this.loadKit()
+    checkActive()
+    const { openDocument } = await this.loadEditor()
+    checkActive()
+    return openDocument({
+      ...request,
+      options: { ...this.options, ...request.options, resolveEnginePackage },
+    })
+  }
+
+  /**
    * Read and convert one Office file using the Session's ordinary filesystem authorization.
    * @param workspaceFileScope - Session header lookup shared with workspaceFiles.
    * @param path - absolute or workspace-relative Office path.
@@ -426,16 +488,43 @@ export class OfficeKit extends TypertRemoteService {
     return loading
   }
 
-  private async importKit(): Promise<LoadedKit> {
-    const kit = resolveKitModule(() => import.meta.resolve('@deepseek-ai/libreoffice-kit'))
-    if (kit.kind === 'missing') throw this.unavailableKit('LibreOffice Kit is not installed.', kit.error)
-    let createConverter: KitModule['createConverter']
+  private async importEntry(
+    lookup: () => string | URL, subject: string,
+  ): Promise<{ readonly module: unknown; readonly resolveEnginePackage: LoadedKit['resolveEnginePackage'] }> {
+    const kit = resolveKitModule(lookup)
+    if (kit.kind === 'missing') throw this.unavailableKit(`${subject} is not installed.`, kit.error)
     try {
-      ({ createConverter } = await import(kit.entry) as KitModule)
+      const module: unknown = await import(kit.entry)
+      return { module, resolveEnginePackage: kit.resolveEnginePackage }
     } catch (cause) {
-      throw this.unavailableKit('LibreOffice Kit could not be loaded.', cause)
+      throw this.unavailableKit(`${subject} could not be loaded.`, cause)
     }
-    return { createConverter, resolveEnginePackage: kit.resolveEnginePackage }
+  }
+
+  private async importKit(): Promise<LoadedKit> {
+    const { module, resolveEnginePackage } = await this.importEntry(
+      () => import.meta.resolve('@deepseek-ai/libreoffice-kit'), 'LibreOffice Kit',
+    )
+    return { module: module as KitModule, resolveEnginePackage }
+  }
+
+  /**
+   * Locate and import Kit's interactive editor entry lazily. A successful import is reused for the provider lifetime;
+   * a missing or unloadable entry rejects as `unavailable` without being retained, so a later open retries.
+   */
+  private loadEditor(): Promise<KitEditorModule> {
+    if (this.loadedEditor !== undefined) return this.loadedEditor
+    const loading = this.importEditor()
+    this.loadedEditor = loading
+    loading.catch(() => { delete this.loadedEditor })
+    return loading
+  }
+
+  private async importEditor(): Promise<KitEditorModule> {
+    const { module } = await this.importEntry(
+      () => import.meta.resolve('@deepseek-ai/libreoffice-kit/editor'), 'LibreOffice Kit editor',
+    )
+    return { openDocument: (module as KitEditorModule).openDocument }
   }
 
   /** Classify a Kit failure as `unavailable`, logging each distinct message and cause once per provider lifetime. */
@@ -461,8 +550,8 @@ export class OfficeKit extends TypertRemoteService {
     let directory: string | undefined
     try {
       if (slot.converter === undefined) {
-        slot.converter = this.loadKit().then(({ createConverter, resolveEnginePackage }) =>
-          createConverter({ ...this.options, resolveEnginePackage })).catch((error: unknown) => {
+        slot.converter = this.loadKit().then(({ module, resolveEnginePackage }) =>
+          module.createConverter({ ...this.options, resolveEnginePackage })).catch((error: unknown) => {
           delete slot.converter
           throw error
         })
