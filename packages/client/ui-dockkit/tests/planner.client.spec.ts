@@ -10,19 +10,19 @@
  * driving `record`/`stepBack` directly cannot drift apart.
  */
 import { describe, expect, it } from 'vitest'
-import { applyOp } from '../src/engine/operations.ts'
-import { DockController } from '../src/engine/controller.ts'
-import { createIdMinter, createInitialState } from '../src/engine/initial.ts'
+import { applyOp } from '../src/client/engine/operations.ts'
+import { DockController } from '../src/client/engine/controller.ts'
+import { createIdMinter, createInitialState } from '../src/client/engine/initial.ts'
 import {
   activeDockPaneId, findContentTab, findPaneContentTab, planDropTab, planDuplicateTab, planFloatTab, planOpenContent,
   planPlaceTab, planSetExpanded, planSetMode, planSettle, planSplitPane, planUnfloatPane, planAddTab,
-} from '../src/engine/planner.ts'
+} from '../src/client/engine/planner.ts'
 import {
   EMPTY_HISTORY, record, recordedOps, stepBack, stepForward, type History,
-} from '../src/engine/sequence.ts'
-import { dockPaneIds, findTabPane, getPane, getSplit } from '../src/engine/tree.ts'
-import type { LayoutOp, LayoutState, PaneId, TabId } from '../src/contract/types.ts'
-import type { Mint } from '../src/engine/planner.ts'
+} from '../src/client/engine/sequence.ts'
+import { dockPaneIds, findTabPane, getPane, getSplit } from '../src/client/engine/tree.ts'
+import type { LayoutOp, LayoutState, PaneId, TabId } from '../src/client/contract/types.ts'
+import type { Mint } from '../src/client/engine/planner.ts'
 import { asTab, fileTab, firstTab, seedTab, seededState } from './fixtures.client.ts'
 
 /** A deep snapshot, for proving a planner left its input alone. */

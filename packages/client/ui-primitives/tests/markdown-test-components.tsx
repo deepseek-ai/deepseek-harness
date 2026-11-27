@@ -4,7 +4,7 @@ import {
   MarkdownText as LocalizedMarkdownText,
   type MarkdownCodeLabels,
   type MarkdownLabels,
-} from '../src/index.ts'
+} from '../src/client/index.ts'
 import { markdownLabels as defaultMarkdownLabels } from './labels.client.ts'
 
 type MarkdownTextProps = Omit<ComponentProps<typeof LocalizedMarkdownText>, 'labels'> & {

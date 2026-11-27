@@ -2,7 +2,7 @@
 
 import { act, cleanup, createEvent, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { InlineEditor } from '../src/InlineEditor.tsx'
+import { InlineEditor } from '../src/client/InlineEditor.tsx'
 
 afterEach(() => {
   cleanup()

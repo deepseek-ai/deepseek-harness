@@ -7,10 +7,10 @@
  */
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
-import { FloatLayer } from '../src/components/FloatLayer.tsx'
-import type { DockIntents } from '../src/contract/adapter.ts'
-import type { FloatRect, PaneId } from '../src/contract/types.ts'
-import { floatRect, getPane } from '../src/engine/tree.ts'
+import { FloatLayer } from '../src/client/components/FloatLayer.tsx'
+import type { DockIntents } from '../src/client/contract/adapter.ts'
+import type { FloatRect, PaneId } from '../src/client/contract/types.ts'
+import { floatRect, getPane } from '../src/client/engine/tree.ts'
 import { seededController, TEST_LABELS } from './fixtures.client.ts'
 
 let now = 0

@@ -179,22 +179,22 @@ Markdown 链接图标保留完整图标框及内部留白。与前文的外间�
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 原子组件公开导出 |
-| [`src/markdown/`](src/markdown/) | Markdown 与数学公式流水线：micromark 解析、KaTeX 排版、增量流式渲染器、`CodeBlock`/`JsonBlock` |
-| [`src/TerminalBlock.tsx`](src/TerminalBlock.tsx) | ANSI 转义解析（`anser`）与终端卡片渲染 |
-| [`src/ReadBlock.tsx`](src/ReadBlock.tsx) / [`src/DiffBlock.tsx`](src/DiffBlock.tsx) | 读取与差异卡片 |
-| [`src/SearchBlock.tsx`](src/SearchBlock.tsx) / [`src/WebBlock.tsx`](src/WebBlock.tsx) | 搜索与网页检索卡片 |
-| [`src/icons/`](src/icons/) | 默认产品图标图形、其 `ICON_SYMBOLS` sprite 文档，以及引用这些 symbol 的与尺寸无关的 `Regular` 和 `Medium` 组件 |
-| [`src/code-highlighting.ts`](src/code-highlighting.ts) | 共享的文件名 grammar 选择与惰性逐行高亮 |
-| [`src/input-modality.ts`](src/input-modality.ts) | 全文档输入模态，发布到 `<html>` |
-| [`src/plugin-artwork.tsx`](src/plugin-artwork.tsx) | 固定配色插件插画，SVG def id 按实例生成 |
-| [`src/useAnchoredMaxHeight.ts`](src/useAnchoredMaxHeight.ts) | 底部锚定浮层的高度限制 |
-| [`src/settings-form/`](src/settings-form/) | 设置页套件：基于设置 scope 的暂存表单模型、值字段与密文字段、表单框架 |
+| [`src/client/index.ts`](src/client/index.ts) | 原子组件公开导出 |
+| [`src/client/markdown/`](src/client/markdown/) | Markdown 与数学公式流水线：micromark 解析、KaTeX 排版、增量流式渲染器、`CodeBlock`/`JsonBlock` |
+| [`src/client/TerminalBlock.tsx`](src/client/TerminalBlock.tsx) | ANSI 转义解析（`anser`）与终端卡片渲染 |
+| [`src/client/ReadBlock.tsx`](src/client/ReadBlock.tsx) / [`src/client/DiffBlock.tsx`](src/client/DiffBlock.tsx) | 读取与差异卡片 |
+| [`src/client/SearchBlock.tsx`](src/client/SearchBlock.tsx) / [`src/client/WebBlock.tsx`](src/client/WebBlock.tsx) | 搜索与网页检索卡片 |
+| [`src/client/icons/`](src/client/icons/) | 默认产品图标图形、其 `ICON_SYMBOLS` sprite 文档，以及引用这些 symbol 的与尺寸无关的 `Regular` 和 `Medium` 组件 |
+| [`src/client/code-highlighting.ts`](src/client/code-highlighting.ts) | 共享的文件名 grammar 选择与惰性逐行高亮 |
+| [`src/client/input-modality.ts`](src/client/input-modality.ts) | 全文档输入模态，发布到 `<html>` |
+| [`src/client/plugin-artwork.tsx`](src/client/plugin-artwork.tsx) | 固定配色插件插画，SVG def id 按实例生成 |
+| [`src/client/useAnchoredMaxHeight.ts`](src/client/useAnchoredMaxHeight.ts) | 底部锚定浮层的高度限制 |
+| [`src/client/settings-form/`](src/client/settings-form/) | 设置页套件：基于设置 scope 的暂存表单模型、值字段与密文字段、表单框架 |
 
 <a id="input-modality"></a>
 ### 输入模态
 
-[`input-modality.ts`](src/input-modality.ts) 为 tooltip 跟踪输入，并在 `<html>` 上发布 `data-input-modality`，供[主题焦点样式](../ui-theme/README.zh.md#understand-the-implementation)使用。`pointerModality()` 在指针输入后为 true，在任意按键后为 false，包括 IME（输入法）组合输入按键；`Tooltip` 据此决定聚焦时是否可以显示气泡。发布的属性保持 `pointer`，直到非组合输入的导航键（Tab、方向键、Home/End、PageUp/PageDown）到达，或非组合输入按键之后焦点移到不同控件。重新聚焦同一控件不会恢复键盘模态。指针输入、IME 组合输入按键和 window blur 都会清除待处理按键；没有待处理按键的焦点变化不改变模态。监听器与文档同寿命；从 Node 导入时不安装监听器。 焦点变化规则只观察传到 window 的事件；shadow root 内部不向外暴露这些事件的额外导航由组件负责。
+[`input-modality.ts`](src/client/input-modality.ts) 为 tooltip 跟踪输入，并在 `<html>` 上发布 `data-input-modality`，供[主题焦点样式](../ui-theme/README.zh.md#understand-the-implementation)使用。`pointerModality()` 在指针输入后为 true，在任意按键后为 false，包括 IME（输入法）组合输入按键；`Tooltip` 据此决定聚焦时是否可以显示气泡。发布的属性保持 `pointer`，直到非组合输入的导航键（Tab、方向键、Home/End、PageUp/PageDown）到达，或非组合输入按键之后焦点移到不同控件。重新聚焦同一控件不会恢复键盘模态。指针输入、IME 组合输入按键和 window blur 都会清除待处理按键；没有待处理按键的焦点变化不改变模态。监听器与文档同寿命；从 Node 导入时不安装监听器。 焦点变化规则只观察传到 window 的事件；shadow root 内部不向外暴露这些事件的额外导航由组件负责。
 
 ### 流式 Markdown
 

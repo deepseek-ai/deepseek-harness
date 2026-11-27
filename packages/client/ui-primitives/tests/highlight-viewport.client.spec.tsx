@@ -2,8 +2,8 @@
 
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ReadBlock } from '../src/ReadBlock.tsx'
-import { CodeBlock } from '../src/markdown/CodeBlock.tsx'
+import { ReadBlock } from '../src/client/ReadBlock.tsx'
+import { CodeBlock } from '../src/client/markdown/CodeBlock.tsx'
 import { markdownLabels, readBlockLabels } from './labels.client.ts'
 
 class IntersectionObserverStub {

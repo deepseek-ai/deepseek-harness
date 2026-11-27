@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { CommandText } from '../src/CommandText.tsx'
-import { TerminalBlock } from '../src/TerminalBlock.tsx'
+import { CommandText } from '../src/client/CommandText.tsx'
+import { TerminalBlock } from '../src/client/TerminalBlock.tsx'
 import { terminalBlockLabels } from './labels.client.ts'
 
 const originalFonts = Object.getOwnPropertyDescriptor(document, 'fonts')

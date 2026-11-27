@@ -6,7 +6,7 @@ import type {
   SearchBlockLabels,
   TerminalBlockLabels,
   WebBlockLabels,
-} from '../src/index.ts'
+} from '../src/client/index.ts'
 
 export const markdownLabels: MarkdownLabels = {
   code: { copyLabel: '复制', copiedLabel: '复制成功' },

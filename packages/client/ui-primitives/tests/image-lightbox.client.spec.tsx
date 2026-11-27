@@ -3,8 +3,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { useState } from 'react'
-import { ImageLightbox } from '../src/ImageLightbox.tsx'
-import { Menu } from '../src/Menu.tsx'
+import { ImageLightbox } from '../src/client/ImageLightbox.tsx'
+import { Menu } from '../src/client/Menu.tsx'
 
 afterEach(cleanup)
 

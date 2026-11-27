@@ -14,7 +14,7 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 // Comments are stripped so a rule's captured selector is exactly its selector.
-const css = readFileSync(resolve(import.meta.dirname, '../src/components/dockkit.module.css'), 'utf8')
+const css = readFileSync(resolve(import.meta.dirname, '../src/client/components/dockkit.module.css'), 'utf8')
   .replace(/\/\*[\s\S]*?\*\//g, ' ')
 
 /** The sheet's app-region rules, as `[selector, value]` in source order. */

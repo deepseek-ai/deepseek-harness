@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseAnsiLines } from '../src/ansi.ts'
+import { parseAnsiLines } from '../src/client/ansi.ts'
 
 const ESC = '\u001b'
 const BS = '\u0008'

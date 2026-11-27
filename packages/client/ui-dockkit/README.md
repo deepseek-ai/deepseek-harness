@@ -90,7 +90,7 @@ These are not stylistic; each one fixes a defect found in a real browser.
 <a id="build-shape"></a>
 ## Build shape
 
-The package is statically linked: tsdown's `staticLinked` preset emits one browser ESM bundle at `lib/index.js` (every bare specifier stays an import, sourcemaps chain to the sources), and the Web shell resolves the package name and bundles that artifact itself. The preset compiles `dockkit.module.css` with class names of the form `<hash>_<local>` and carries its text in the bundle's `__$dsh_client_module_manifest` export; the renderer installs it as one style element with `data-plugin="@deepseek-ai/dsh-client-ui-dockkit"` and `data-path="src/components/dockkit.module.css"`.
+The package is statically linked: tsdown's `staticLinked` preset emits one browser ESM bundle at `lib/index.js` (every bare specifier stays an import, sourcemaps chain to the sources), and the Web shell resolves the package name and bundles that artifact itself. The preset compiles `dockkit.module.css` with class names of the form `<hash>_<local>` and carries its text in the bundle's `__$dsh_client_module_manifest` export; the renderer installs it as one style element with `data-plugin="@deepseek-ai/dsh-client-ui-dockkit"` and `data-path="src/client/components/dockkit.module.css"`.
 
 <a id="model-experience"></a>
 ## Model Experience

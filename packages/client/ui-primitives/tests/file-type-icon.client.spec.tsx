@@ -4,8 +4,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   classifyFileType, fileExtension, FileTypeIcon, type FileTypeKind,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import { classifyCodeFileType } from '../src/code-file-types.ts'
-import css from '../src/FileTypeIcon.module.css'
+import { classifyCodeFileType } from '../src/client/code-file-types.ts'
+import css from '../src/client/FileTypeIcon.module.css'
 
 afterEach(cleanup)
 

@@ -3,14 +3,14 @@
  * clamping. The model itself stays unbounded; these rules gate dispatch.
  */
 import { describe, expect, it } from 'vitest'
-import { applyOp } from '../src/engine/operations.ts'
+import { applyOp } from '../src/client/engine/operations.ts'
 import {
   canSplit, clampSizes, DOCK_ZONES, dockPaneCount, MAX_DOCK_PANES, MIN_PANE_FRACTION, zoneAt, zoneSplit,
-} from '../src/engine/constraints.ts'
-import { createIdMinter, createInitialState } from '../src/engine/initial.ts'
+} from '../src/client/engine/constraints.ts'
+import { createIdMinter, createInitialState } from '../src/client/engine/initial.ts'
 import { seedTab } from './fixtures.client.ts'
-import { getPane } from '../src/engine/tree.ts'
-import type { LayoutState } from '../src/contract/types.ts'
+import { getPane } from '../src/client/engine/tree.ts'
+import type { LayoutState } from '../src/client/contract/types.ts'
 
 /** Split the root pane repeatedly until the docked grid holds `count` panes. */
 function grid(count: number): LayoutState {

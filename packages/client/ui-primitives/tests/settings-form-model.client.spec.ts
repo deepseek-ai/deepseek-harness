@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   SettingsFormModel, settingsNumberField, settingsTextField,
   type SettingsFormPathOp, type SettingsFormScope, type SettingsFormScopeSnapshot,
-} from '../src/index.ts'
+} from '../src/client/index.ts'
 
 interface StubScope<T> {
   scope: SettingsFormScope<T>

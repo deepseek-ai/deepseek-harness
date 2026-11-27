@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { placeTooltip, type TooltipSide } from '../src/tooltip-placement.ts'
+import { placeTooltip, type TooltipSide } from '../src/client/tooltip-placement.ts'
 
 const input = {
   anchor: { left: 400, right: 422, top: 400, bottom: 422 },

@@ -2,7 +2,7 @@
 /** The shared checkbox keeps native label activation and controlled state. */
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { Checkbox } from '../src/Checkbox.tsx'
+import { Checkbox } from '../src/client/Checkbox.tsx'
 
 afterEach(cleanup)
 

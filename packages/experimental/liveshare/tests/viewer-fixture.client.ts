@@ -671,7 +671,7 @@ const TERMINAL_OUTPUT_FIXTURE = [
  */
 const SEARCH_MATCHES_FIXTURE: { path: string; matches: { lineNumber: number; line: string }[] }[] = [
   {
-    path: 'packages/client/ui-primitives/src/SearchBlock.tsx',
+    path: 'packages/client/ui-primitives/src/client/SearchBlock.tsx',
     matches: [
       { lineNumber: 16, line: 'export const DEFAULT_SEARCH_MAX_LINES = 16' },
       { lineNumber: 138, line: 'export function SearchBlock(props: SearchBlockProps) {' },
@@ -706,8 +706,8 @@ const SEARCH_MATCHES_TEXT = [
 ].join('\n')
 
 const SEARCH_PATHS_FIXTURE = [
-  'packages/client/ui-primitives/src/SearchBlock.tsx',
-  'packages/client/ui-primitives/src/SearchBlock.module.css',
+  'packages/client/ui-primitives/src/client/SearchBlock.tsx',
+  'packages/client/ui-primitives/src/client/SearchBlock.module.css',
   'packages/client/ui-tool/src/client/tool/models/search-card-model.ts',
   'packages/client/ui-tool/src/client/tool/toolviews/search-row.tsx',
   'packages/client/ui-tool/tests/search-card.client.spec.tsx',
@@ -734,7 +734,7 @@ const READ_SAMPLE_SOURCE = [
   'const marker = "fixture read sample"',
 ]
 const READ_SAMPLE_LINES = READ_SAMPLE_SOURCE.map((text, index) => ({ number: READ_SAMPLE_FIRST_LINE + index, text }))
-const READ_SAMPLE_PATH = 'packages/client/ui-primitives/src/ReadBlock.tsx'
+const READ_SAMPLE_PATH = 'packages/client/ui-primitives/src/client/ReadBlock.tsx'
 const READ_SAMPLE_TOTAL = 180
 const READ_SAMPLE_LAST_LINE = READ_SAMPLE_FIRST_LINE + READ_SAMPLE_SOURCE.length - 1
 const READ_SAMPLE_TEXT = [

@@ -3,8 +3,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ComponentProps } from 'react'
-import { DEFAULT_READ_MAX_LINES, ReadBlock as LocalizedReadBlock, type ReadBlockLine } from '../src/index.ts'
-import { grammarLoadCount, highlightLines, subscribeGrammarLoaded } from '../src/markdown/highlight.ts'
+import { DEFAULT_READ_MAX_LINES, ReadBlock as LocalizedReadBlock, type ReadBlockLine } from '../src/client/index.ts'
+import { grammarLoadCount, highlightLines, subscribeGrammarLoaded } from '../src/client/markdown/highlight.ts'
 import { readBlockLabels } from './labels.client.ts'
 
 function ReadBlock(props: Omit<ComponentProps<typeof LocalizedReadBlock>, 'labels'>) {

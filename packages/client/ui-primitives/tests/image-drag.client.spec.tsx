@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { DraggableImage } from '../src/DraggableImage.tsx'
-import type { PreparedFileDrag } from '../src/file-drag-actions.ts'
+import { DraggableImage } from '../src/client/DraggableImage.tsx'
+import type { PreparedFileDrag } from '../src/client/file-drag-actions.ts'
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
 

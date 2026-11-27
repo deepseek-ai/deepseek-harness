@@ -2,7 +2,7 @@
 import { StrictMode } from 'react'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useClipboardCopy } from '../src/use-clipboard-copy.ts'
+import { useClipboardCopy } from '../src/client/use-clipboard-copy.ts'
 
 const originalClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
 const writeText = vi.fn<(text: string) => Promise<void>>()

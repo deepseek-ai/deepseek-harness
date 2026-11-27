@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
-const source = readFileSync(fileURLToPath(new URL('../src/Marquee.module.css', import.meta.url)), 'utf8').replace(/\/\*[\s\S]*?\*\//g, ' ')
+const source = readFileSync(fileURLToPath(new URL('../src/client/Marquee.module.css', import.meta.url)), 'utf8').replace(/\/\*[\s\S]*?\*\//g, ' ')
 const reduced = /@media \(prefers-reduced-motion: reduce\) \{([\s\S]*)\}\s*$/.exec(source)?.[1] ?? ''
 const base = source.replace(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]*\}\s*$/, '')
 

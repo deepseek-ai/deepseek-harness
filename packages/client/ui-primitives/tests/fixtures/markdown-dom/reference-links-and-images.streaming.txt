@@ -1,8 +1,8 @@
-<div class="_markdown_404681">
+<div class="_markdown_a633fb">
   <p>
     #text "A "
     <a href="https://example.com/ref" rel="noopener noreferrer" target="_blank">
-      <svg aria-hidden="true" class="_linkIcon_404681" fill="none" height="14" stroke-width="1.3" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg">
+      <svg aria-hidden="true" class="_linkIcon_a633fb" fill="none" height="14" stroke-width="1.3" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg">
         <path d="M7.99986 14.0887C11.3626 14.0887 14.0886 11.3627 14.0886 7.99998C14.0886 4.63727 11.3626 1.91125 7.99986 1.91125C4.63715 1.91125 1.91113 4.63727 1.91113 7.99998C1.91113 11.3627 4.63715 14.0887 7.99986 14.0887Z" stroke="currentColor" vector-effect="non-scaling-stroke">
         <path d="M2.34619 8H13.6538" stroke-linecap="square" stroke="currentColor" vector-effect="non-scaling-stroke">
         <path d="M7.99976 14.0889C9.23509 14.0889 10.1743 11.3629 10.1743 8.00006C10.1743 4.63739 9.23509 1.91138 7.99976 1.91138" stroke="currentColor" vector-effect="non-scaling-stroke">
@@ -10,7 +10,7 @@
       #text "full"
     #text " reference, a "
     <a href="https://example.com/collapsed" rel="noopener noreferrer" target="_blank">
-      <svg aria-hidden="true" class="_linkIcon_404681" fill="none" height="14" stroke-width="1.3" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg">
+      <svg aria-hidden="true" class="_linkIcon_a633fb" fill="none" height="14" stroke-width="1.3" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg">
         <path d="M7.99986 14.0887C11.3626 14.0887 14.0886 11.3627 14.0886 7.99998C14.0886 4.63727 11.3626 1.91125 7.99986 1.91125C4.63715 1.91125 1.91113 4.63727 1.91113 7.99998C1.91113 11.3627 4.63715 14.0887 7.99986 14.0887Z" stroke="currentColor" vector-effect="non-scaling-stroke">
         <path d="M2.34619 8H13.6538" stroke-linecap="square" stroke="currentColor" vector-effect="non-scaling-stroke">
         <path d="M7.99976 14.0889C9.23509 14.0889 10.1743 11.3629 10.1743 8.00006C10.1743 4.63739 9.23509 1.91138 7.99976 1.91138" stroke="currentColor" vector-effect="non-scaling-stroke">
@@ -18,7 +18,7 @@
       #text "collapsed"
     #text " one, and a "
     <a href="https://example.com/shortcut" rel="noopener noreferrer" target="_blank">
-      <svg aria-hidden="true" class="_linkIcon_404681" fill="none" height="14" stroke-width="1.3" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg">
+      <svg aria-hidden="true" class="_linkIcon_a633fb" fill="none" height="14" stroke-width="1.3" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg">
         <path d="M7.99986 14.0887C11.3626 14.0887 14.0886 11.3627 14.0886 7.99998C14.0886 4.63727 11.3626 1.91125 7.99986 1.91125C4.63715 1.91125 1.91113 4.63727 1.91113 7.99998C1.91113 11.3627 4.63715 14.0887 7.99986 14.0887Z" stroke="currentColor" vector-effect="non-scaling-stroke">
         <path d="M2.34619 8H13.6538" stroke-linecap="square" stroke="currentColor" vector-effect="non-scaling-stroke">
         <path d="M7.99976 14.0889C9.23509 14.0889 10.1743 11.3629 10.1743 8.00006C10.1743 4.63739 9.23509 1.91138 7.99976 1.91138" stroke="currentColor" vector-effect="non-scaling-stroke">
@@ -28,4 +28,4 @@
   <p>
     #text "[missing full][nope], [missing collapsed][], ![missing image][gone]."
   <p>
-    <img alt="ref image" class="_image_404681" decoding="async" loading="lazy" referrerpolicy="no-referrer" src="https://example.com/ref.png">
+    <img alt="ref image" class="_image_a633fb" decoding="async" loading="lazy" referrerpolicy="no-referrer" src="https://example.com/ref.png">

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-const stylesheet = readFileSync(new URL('../src/Tooltip.module.css', import.meta.url), 'utf8')
+const stylesheet = readFileSync(new URL('../src/client/Tooltip.module.css', import.meta.url), 'utf8')
 
 describe('tooltip overflow styles', () => {
   it('wraps unbroken labels and bounds the complete bubble in both viewport dimensions', () => {

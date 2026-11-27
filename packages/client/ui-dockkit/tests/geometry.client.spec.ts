@@ -6,10 +6,10 @@ import { describe, expect, it } from 'vitest'
 import {
   containsPoint, dividerSizes, DRAG_THRESHOLD, floatRectAt, insertionIndex, movedRect,
   passedThreshold, resizedRect, zoneInRect,
-} from '../src/engine/geometry.ts'
-import type { PaneMeasure, Rect } from '../src/engine/geometry.ts'
-import { halvesFit, SPLIT_MINIMUMS } from '../src/engine/geometry.ts'
-import { FLOAT_DEFAULT_SIZE, FLOAT_MIN_SIZE } from '../src/index.ts'
+} from '../src/client/engine/geometry.ts'
+import type { PaneMeasure, Rect } from '../src/client/engine/geometry.ts'
+import { halvesFit, SPLIT_MINIMUMS } from '../src/client/engine/geometry.ts'
+import { FLOAT_DEFAULT_SIZE, FLOAT_MIN_SIZE } from '../src/client/index.ts'
 
 const PANE: Rect = { x: 100, y: 200, width: 400, height: 300 }
 

@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { HoverCard } from '../src/HoverCard.tsx'
-import { HoverCardGroup } from '../src/HoverCardGroup.tsx'
-import { Tooltip } from '../src/Tooltip.tsx'
+import { HoverCard } from '../src/client/HoverCard.tsx'
+import { HoverCardGroup } from '../src/client/HoverCardGroup.tsx'
+import { Tooltip } from '../src/client/Tooltip.tsx'
 
 beforeEach(() => { vi.useFakeTimers() })
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks() })

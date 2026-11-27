@@ -25,7 +25,7 @@ describe.each([{ name: 'Chromium', engine: chromium }, { name: 'WebKit', engine:
   let browser: Browser | undefined
   let css: string
   beforeAll(async () => {
-    css = await readFile(new URL('../../../packages/client/ui-primitives/src/Menu.module.css', import.meta.url), 'utf8')
+    css = await readFile(new URL('../../../packages/client/ui-primitives/src/client/Menu.module.css', import.meta.url), 'utf8')
     browser = await engine.launch()
   })
   afterAll(async () => { await browser?.close() })

@@ -12,8 +12,8 @@ import { MarkdownText } from './markdown-test-components.tsx'
 import { markdownLabels } from './labels.client.ts'
 import {
   collectReferenceTargets, createReferenceTargets, renderBlocks, renderFootnoteSection,
-} from '../src/markdown/render.tsx'
-import type { MarkdownRenderContext } from '../src/markdown/render.tsx'
+} from '../src/client/markdown/render.tsx'
+import type { MarkdownRenderContext } from '../src/client/markdown/render.tsx'
 
 afterEach(cleanup)
 

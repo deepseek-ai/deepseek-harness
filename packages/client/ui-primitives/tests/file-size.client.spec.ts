@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fileSizeText } from '../src/file-size.ts'
+import { fileSizeText } from '../src/client/file-size.ts'
 
 describe('fileSizeText', () => {
   it('formats bytes and both sides of the KB, MB, and GB rounding thresholds', () => {

@@ -6,8 +6,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   classifyFileType, FileTypeIcon, type CodeFileType, type FileTypeProjectContext,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import { CODE_FILE_ARTWORK, CODE_FILE_ICON_ID_TOKEN } from '../src/code-file-icon-artwork.ts'
-import { CODE_FILE_TYPES } from '../src/code-file-types.ts'
+import { CODE_FILE_ARTWORK, CODE_FILE_ICON_ID_TOKEN } from '../src/client/code-file-icon-artwork.ts'
+import { CODE_FILE_TYPES } from '../src/client/code-file-types.ts'
 
 afterEach(cleanup)
 
@@ -119,7 +119,7 @@ describe('full-color code-file artwork', () => {
   })
 
   it('records the design exports that supply the closed artwork set', () => {
-    const path = resolve('packages/client/ui-primitives/src/code-file-icon-artwork.manifest.json')
+    const path = resolve('packages/client/ui-primitives/src/client/code-file-icon-artwork.manifest.json')
     const manifest = JSON.parse(readFileSync(path, 'utf8')) as {
       owner: string
       sources: Array<{ kind: string; sha256: string; icons: string[] }>

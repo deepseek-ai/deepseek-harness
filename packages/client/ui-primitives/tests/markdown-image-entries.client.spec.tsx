@@ -2,9 +2,9 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { fileMediaUrl } from '@deepseek-ai/dsh-util-workspace-path'
-import { MarkdownDelegateProvider } from '../src/markdown/MarkdownDelegate.tsx'
+import { MarkdownDelegateProvider } from '../src/client/markdown/MarkdownDelegate.tsx'
 import { MarkdownText } from './markdown-test-components.tsx'
-import { parseGfm, parseGfmWithMath } from '../src/markdown/parse.ts'
+import { parseGfm, parseGfmWithMath } from '../src/client/markdown/parse.ts'
 
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks() })
 const fileDrag = { prepare: vi.fn(async () => ({ start: () => true, release: () => {} })), reportFailure: vi.fn() }

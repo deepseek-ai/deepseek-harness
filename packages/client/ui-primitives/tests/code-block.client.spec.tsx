@@ -3,10 +3,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ComponentProps } from 'react'
-import { CodeBlock as LocalizedCodeBlock } from '../src/markdown/CodeBlock.tsx'
-import { CODE_HIGHLIGHT_EXTENSIONS, languageForPath } from '../src/code-highlighting.ts'
+import { CodeBlock as LocalizedCodeBlock } from '../src/client/markdown/CodeBlock.tsx'
+import { CODE_HIGHLIGHT_EXTENSIONS, languageForPath } from '../src/client/code-highlighting.ts'
 import { readLangHintForPath } from '@deepseek-ai/dsh-util-code-language'
-import { highlightToHtml, subscribeGrammarLoaded } from '../src/markdown/highlight.ts'
+import { highlightToHtml, subscribeGrammarLoaded } from '../src/client/markdown/highlight.ts'
 import { markdownLabels } from './labels.client.ts'
 
 function CodeBlock(props: Omit<ComponentProps<typeof LocalizedCodeBlock>, 'copyLabel' | 'copiedLabel'>) {

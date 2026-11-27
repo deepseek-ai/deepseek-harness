@@ -1,7 +1,7 @@
 /** Go regex matching runs in a terminable source-mode worker, not on the test runner's event loop. */
 import { Worker } from 'node:worker_threads'
 import { expect, it } from 'vitest'
-import { patchGoGrammar } from '../src/markdown/highlight.ts'
+import { patchGoGrammar } from '../src/client/markdown/highlight.ts'
 import { GO_SOURCE } from './go-source.ts'
 
 it('highlights struct comments with braces without blocking settled or streaming code', async () => {

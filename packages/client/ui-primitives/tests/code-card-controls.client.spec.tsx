@@ -2,10 +2,10 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { CodeBlock } from '../src/markdown/CodeBlock.tsx'
-import { MarkdownText } from '../src/markdown/MarkdownText.tsx'
-import { ReadBlock } from '../src/ReadBlock.tsx'
-import { DiffBlock } from '../src/DiffBlock.tsx'
+import { CodeBlock } from '../src/client/markdown/CodeBlock.tsx'
+import { MarkdownText } from '../src/client/markdown/MarkdownText.tsx'
+import { ReadBlock } from '../src/client/ReadBlock.tsx'
+import { DiffBlock } from '../src/client/DiffBlock.tsx'
 import { diffBlockLabels, readBlockLabels } from './labels.client.ts'
 
 const toolbarLabels = { codeLabel: 'Code block', wrapLabel: 'Wrap lines', unwrapLabel: 'Do not wrap lines' }

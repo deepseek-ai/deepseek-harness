@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
-import { highlightLines, patchPerlGrammar, subscribeGrammarLoaded } from '../src/markdown/highlight.ts'
-import type { HighlightSpan } from '../src/markdown/highlight.ts'
+import { highlightLines, patchPerlGrammar, subscribeGrammarLoaded } from '../src/client/markdown/highlight.ts'
+import type { HighlightSpan } from '../src/client/markdown/highlight.ts'
 
 const PERL_SOURCE = [
   'for my $doc (split /^---\\s*$/m, $rules) {',

@@ -2,12 +2,12 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import type { ComponentProps } from 'react'
-import { TabLayout } from '../src/components/TabLayout.tsx'
-import { DockController } from '../src/engine/controller.ts'
-import { getNode, getPane } from '../src/engine/tree.ts'
-import type { PaneCallbacks } from '../src/components/render.ts'
-import type { TabId } from '../src/contract/types.ts'
-import { followPointer } from '../src/components/pointer.ts'
+import { TabLayout } from '../src/client/components/TabLayout.tsx'
+import { DockController } from '../src/client/engine/controller.ts'
+import { getNode, getPane } from '../src/client/engine/tree.ts'
+import type { PaneCallbacks } from '../src/client/components/render.ts'
+import type { TabId } from '../src/client/contract/types.ts'
+import { followPointer } from '../src/client/components/pointer.ts'
 import { seededController, TEST_LABELS } from './fixtures.client.ts'
 
 afterEach(() => { cleanup(); vi.restoreAllMocks() })

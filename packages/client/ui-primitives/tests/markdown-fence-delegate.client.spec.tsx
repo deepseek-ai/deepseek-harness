@@ -3,10 +3,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
-import { MarkdownText } from '../src/markdown/MarkdownText.tsx'
-import { MarkdownDelegateProvider } from '../src/markdown/MarkdownDelegate.tsx'
-import { FenceCodeBlock } from '../src/markdown/FenceBlocks.tsx'
-import type { MarkdownDelegateFenceInfo } from '../src/markdown/MarkdownDelegate.tsx'
+import { MarkdownText } from '../src/client/markdown/MarkdownText.tsx'
+import { MarkdownDelegateProvider } from '../src/client/markdown/MarkdownDelegate.tsx'
+import { FenceCodeBlock } from '../src/client/markdown/FenceBlocks.tsx'
+import type { MarkdownDelegateFenceInfo } from '../src/client/markdown/MarkdownDelegate.tsx'
 import { markdownLabels } from './labels.client.ts'
 
 afterEach(cleanup)

@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render } from '@testing-library/react'
-import { Toast } from '../src/Toast.tsx'
+import { Toast } from '../src/client/Toast.tsx'
 
 afterEach(cleanup)
 

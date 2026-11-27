@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useRef } from 'react'
-import { MarqueeText, useHoverMarquee } from '../src/Marquee.tsx'
+import { MarqueeText, useHoverMarquee } from '../src/client/Marquee.tsx'
 
 afterEach(cleanup)
 

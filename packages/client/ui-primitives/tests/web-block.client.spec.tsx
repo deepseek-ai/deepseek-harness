@@ -2,10 +2,10 @@
 
 import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, render } from '@testing-library/react'
-import { LinkIconMedium, WebBlock as LocalizedWebBlock } from '../src/index.ts'
+import { LinkIconMedium, WebBlock as LocalizedWebBlock } from '../src/client/index.ts'
 import type {
   WebFetchBlockProps, WebSearchBlockProps, WebSourceView,
-} from '../src/index.ts'
+} from '../src/client/index.ts'
 import { webBlockLabels } from './labels.client.ts'
 
 type WebBlockProps =

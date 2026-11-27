@@ -1,4 +1,4 @@
-<div class="_markdown_404681">
+<div class="_markdown_a633fb">
   <p>
     #text "Trusted commands stay off: "
     <span class="katex">
@@ -22,7 +22,7 @@
     #text "Unbalanced errors render the error arm: "
     <span class="katex-error" style="color: rgb(204, 0, 0);" title="ParseError: KaTeX parse error: Unexpected end of input in a macro argument, expected '}' at end of input: \\frac{">
       #text "\\frac{"
-  <div class="_tableScroll_404681 _tableFill_404681">
+  <div class="_tableScroll_a633fb _tableFill_a633fb">
     <table>
       <thead>
         <tr>

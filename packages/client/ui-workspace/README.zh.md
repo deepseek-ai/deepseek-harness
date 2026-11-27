@@ -247,9 +247,9 @@ Workspace 基线就绪后，浏览器持久化的展开状态和 Session 顺序�
 
 侧边栏隐藏持久化摘要中带有 `origin: 'subagent'` 或 `origin: 'side'` 的行。可见普通行的共享 ongoing loading 来自其已加载 parent 目录中正在运行的直接 child，绝不来自摘要谱系。Child 活动状态使用最新 UI status，尚无该状态时使用 Session 摘要。
 
-行动画由 [AnimatedRows](../ui-primitives/src/AnimatedRows.tsx) 负责。它仅在 React 提交改变行成员或顺序时读取更新前后的位置，并使用浏览器原生位移与透明度动画。被移除的行以不可交互的副本在列表旁经过裁剪的覆盖层中淡出，不会延迟 React 卸载，也不会扩大滚动范围。初始加载、拖拽提交、展开其余会话和视图选项变化直接完成。动画组件不使用布局观察器或轮询，也不会因仅内容更新或滚动而测量位置。
+行动画由 [AnimatedRows](../ui-primitives/src/client/AnimatedRows.tsx) 负责。它仅在 React 提交改变行成员或顺序时读取更新前后的位置，并使用浏览器原生位移与透明度动画。被移除的行以不可交互的副本在列表旁经过裁剪的覆盖层中淡出，不会延迟 React 卸载，也不会扩大滚动范围。初始加载、拖拽提交、展开其余会话和视图选项变化直接完成。动画组件不使用布局观察器或轮询，也不会因仅内容更新或滚动而测量位置。
 
-Workspace 和 Session 的原生拖拽预览使用不可交互的离屏副本，在主题侧栏底色上保留行尺寸和缩进。行组件显式请求 `--dsh-sidebar-row-padding`、`--dsh-sidebar-label-gap` 和 `--dsh-sidebar-paint-inset`；预览复制这些变量的计算值，计算后的起始侧内边距则保留 Workspace 树的层级缩进。[useRowDragPreview](../ui-primitives/src/useRowDragPreview.ts) 在拖拽结束、替换预览或行卸载时移除副本。预览不改变原行的背景或拖放事件处理。如果浏览器拒绝自定义拖拽图片，则移除副本并继续原生拖动。
+Workspace 和 Session 的原生拖拽预览使用不可交互的离屏副本，在主题侧栏底色上保留行尺寸和缩进。行组件显式请求 `--dsh-sidebar-row-padding`、`--dsh-sidebar-label-gap` 和 `--dsh-sidebar-paint-inset`；预览复制这些变量的计算值，计算后的起始侧内边距则保留 Workspace 树的层级缩进。[useRowDragPreview](../ui-primitives/src/client/useRowDragPreview.ts) 在拖拽结束、替换预览或行卸载时移除副本。预览不改变原行的背景或拖放事件处理。如果浏览器拒绝自定义拖拽图片，则移除副本并继续原生拖动。
 
 展开时，工作区浏览器最高为一个侧栏视口（`100cqh`），搜索展开时高度正好等于一个视口。工具栏保持普通布局，位于列表区域上方；列表区域是该区块自己的纵向滚动容器，因此列表行止于工具栏下沿，不会从透明工具栏下方经过。工具栏保持 36px 高，居中的搜索框展开为 32px 高，并与新会话按钮同宽。打开搜索只聚焦输入框，不滚动。搜索展开时区块保持完整高度，因此结果较少或为空时工具栏保持原位。展开时，列表区域通过 `useSectionScroller().bindScrollerRef` 绑定自身，侧栏会把视口上的滚轮滚动继续交给列表。侧栏视口仍可向下滚动时，滚动状态容器查询让列表不接受原生滚动。列表区域向右延伸到距侧栏边缘 2px 处放置滚动条，并用内边距让列表行回到侧栏的左右内边距位置。
 

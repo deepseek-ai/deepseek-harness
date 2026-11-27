@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { expect, it } from 'vitest'
 
-const css = readFileSync(fileURLToPath(new URL('../src/TerminalBlock.module.css', import.meta.url)), 'utf8')
+const css = readFileSync(fileURLToPath(new URL('../src/client/TerminalBlock.module.css', import.meta.url)), 'utf8')
   .replace(/\/\*[\s\S]*?\*\//g, ' ')
 
 it('centers the status dot on one command line rather than the wrapped prompt height', () => {

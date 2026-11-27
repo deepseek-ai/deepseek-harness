@@ -4,11 +4,11 @@
  * split seats, drop resolution, floating, and the notification contract.
  */
 import { describe, expect, it } from 'vitest'
-import { DockController } from '../src/engine/controller.ts'
-import { dockPaneCount, FLOAT_DEFAULT_SIZE } from '../src/engine/constraints.ts'
+import { DockController } from '../src/client/engine/controller.ts'
+import { dockPaneCount, FLOAT_DEFAULT_SIZE } from '../src/client/engine/constraints.ts'
 import { SEED_CONTENT_ID, childAt, firstTab, seededController } from './fixtures.client.ts'
-import { dockPaneIds, findTabPane, getPane, getSplit } from '../src/engine/tree.ts'
-import type { LayoutState, PaneId } from '../src/contract/types.ts'
+import { dockPaneIds, findTabPane, getPane, getSplit } from '../src/client/engine/tree.ts'
+import type { LayoutState, PaneId } from '../src/client/contract/types.ts'
 
 /** Tab titles of one pane, in strip order. */
 function titles(state: LayoutState, paneId: PaneId): string[] {

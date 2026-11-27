@@ -4,7 +4,7 @@ import { createRef } from 'react'
 import { createPortal } from 'react-dom'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, expect, it } from 'vitest'
-import { MenuSurface } from '../src/MenuSurface.tsx'
+import { MenuSurface } from '../src/client/MenuSurface.tsx'
 
 afterEach(cleanup)
 

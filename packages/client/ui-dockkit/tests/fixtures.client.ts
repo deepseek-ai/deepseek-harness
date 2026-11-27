@@ -2,10 +2,10 @@
  * Shared spec fixtures. The kit has no notion of a guide or a preview tab, so
  * the suites supply their own content families — exactly as an embedder does.
  */
-import type { NodeId, PaneId, PaneNode, SplitId, SplitNode, TabId, TabRecord } from '../src/contract/types.ts'
-import { createIdMinter, createInitialState, DockController, type IdMinter } from '../src/index.ts'
-import type { DockLabels } from '../src/contract/adapter.ts'
-import type { LayoutState } from '../src/contract/types.ts'
+import type { NodeId, PaneId, PaneNode, SplitId, SplitNode, TabId, TabRecord } from '../src/client/contract/types.ts'
+import { createIdMinter, createInitialState, DockController, type IdMinter } from '../src/client/index.ts'
+import type { DockLabels } from '../src/client/contract/adapter.ts'
+import type { LayoutState } from '../src/client/contract/types.ts'
 
 /** Consistency id of the seeded tab these suites use. */
 export const SEED_CONTENT_ID = 'seed:start'

@@ -1,8 +1,8 @@
 /** Desktop welcome presentation; account and credential operations stay in the preload. */
 import { useEffect, useRef, useState } from 'react'
 import type { SyntheticEvent } from 'react'
-import { Toast } from '@deepseek-ai/dsh-client-ui-primitives/src/Toast.tsx'
-import { StateDot } from '@deepseek-ai/dsh-client-ui-primitives/src/StateDot.tsx'
+import { Toast } from '@deepseek-ai/dsh-client-ui-primitives/src/client/Toast.tsx'
+import { StateDot } from '@deepseek-ai/dsh-client-ui-primitives/src/client/StateDot.tsx'
 import type { AccountView } from '@deepseek-ai/dsh-deepseek-account/types'
 import type { WelcomeApi } from '../welcome-api.ts'
 

@@ -31,14 +31,14 @@
       ".scrollBody:has([data-conversation-composer-overlay]) > .composerSeat": 1
     }
   },
-  "packages/client/ui-primitives/src/JsonTree.module.css": {
+  "packages/client/ui-primitives/src/client/JsonTree.module.css": {
     "has-outside-subject": {
       ".row:has(:scope > .copySlot) > .stringField .stringToggleSlot": 1,
       ".row:has(:scope > .stringField) > .copySlot": 1,
       ".row:hover:not(:has(.row:hover)) > .copySlot": 1
     }
   },
-  "packages/client/ui-primitives/src/markdown/MarkdownText.module.css": {
+  "packages/client/ui-primitives/src/client/markdown/MarkdownText.module.css": {
     "unkeyed-costly-subject": {
       ".markdown li > *:last-child:not(:global(.md-code-block), .fenceSeat)": 1
     }

@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { Menu } from '../src/Menu.tsx'
+import { Menu } from '../src/client/Menu.tsx'
 
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 

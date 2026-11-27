@@ -1,14 +1,14 @@
-<div class="_markdown_404681">
+<div class="_markdown_a633fb">
   <p>
-    <img alt="https image" class="_image_404681" decoding="async" loading="lazy" referrerpolicy="no-referrer" src="https://example.com/secure.png">
+    <img alt="https image" class="_image_a633fb" decoding="async" loading="lazy" referrerpolicy="no-referrer" src="https://example.com/secure.png">
   <p>
-    <img alt="http image" class="_image_404681" decoding="async" loading="lazy" referrerpolicy="no-referrer" src="http://example.com/plain.png">
+    <img alt="http image" class="_image_a633fb" decoding="async" loading="lazy" referrerpolicy="no-referrer" src="http://example.com/plain.png">
   <p>
-    <span class="_imageAlt_404681">
+    <span class="_imageAlt_a633fb">
       #text "relative dropped"
     #text " and inline "
-    <span class="_imageAlt_404681">
+    <span class="_imageAlt_a633fb">
       #text "bad scheme"
     #text " end."
   <p>
-    <img alt="" class="_image_404681" decoding="async" loading="lazy" referrerpolicy="no-referrer" src="https://example.com/empty-alt.png">
+    <img alt="" class="_image_a633fb" decoding="async" loading="lazy" referrerpolicy="no-referrer" src="https://example.com/empty-alt.png">
