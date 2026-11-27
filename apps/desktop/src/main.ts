@@ -200,6 +200,7 @@ protocol.registerSchemesAsPrivileged([{
 }])
 
 interface RuntimeResources {
+  readonly frameReceiverPath: string
   readonly nodeBin: string
   readonly node: string
   readonly pnpm: string
@@ -215,7 +216,9 @@ function runtimeResources(): RuntimeResources {
       : join(process.resourcesPath, 'runtime', 'primary-runtime', 'dependencies', 'pnpm', 'bin', 'pnpm.mjs'))
   const dsh = (development ? process.env.DSH_DESKTOP_DSH_DIR : undefined)
     ?? (development ? join(app.getAppPath(), '.desktop-build', 'development', 'project') : join(app.getAppPath(), 'dsh'))
-  return { node, nodeBin, pnpm, dsh }
+  const nativeRoot = development ? app.getAppPath() : join(process.resourcesPath, 'app.asar.unpacked')
+  const frameReceiverPath = join(nativeRoot, 'lib', 'native', `${process.platform}-${process.arch}`, 'frame-forwarding.node')
+  return { node, nodeBin, pnpm, dsh, frameReceiverPath }
 }
 
 function developmentPrimaryRuntime(): string {
@@ -539,25 +542,29 @@ async function main(): Promise<void> {
   const platformView = new DesktopPlatformView(join(app.getAppPath(), 'lib', 'preload-platform-account.cjs'),
     () => locale.id === 'zh-CN' ? 'zh_CN' : 'en_US', process.platform === 'win32' ? 'win32' : 'darwin',
     owner => isMandatory() || updateOverlays.input(owner).blocked)
-  const nativeRoot = development ? app.getAppPath() : join(process.resourcesPath, 'app.asar.unpacked')
-  const frameReceiverPath = join(nativeRoot, 'lib', 'native', `${process.platform}-${process.arch}`, 'frame-forwarding.node')
   const backend = new DesktopBackendController((onFailure) => {
-    const hostInspectPort = developmentHostInspectPort(development)
-    const host = new DesktopHostProcess(resources.node, resources.dsh, activeProject,
-      hostInspectPort, { ...hostEnvironment, DSH_CLIENT_VERSION: desktopClientVersion() }, (error) => {
+    const host = new DesktopHostProcess(resources.node, resources.dsh, activeProject, {
+      inspectPort: developmentHostInspectPort(development),
+      environment: { ...hostEnvironment, DSH_CLIENT_VERSION: desktopClientVersion() },
+      primaryRuntime,
+      packageManager: resources,
+      frameReceiverPath: resources.frameReceiverPath,
+      channels: [textures.channel],
+      onFailure(error) {
         void textures.dispose().catch((closeError: unknown) => { console.error('Shared texture cleanup failed', closeError) })
         onFailure(error)
       },
-      primaryRuntime,
-      resources, (next) => { platformView.setSession(next) }, (record) => {
+      onPlatformSession: (next) => { platformView.setSession(next) },
+      onPluginOperation(record) {
         operationJournal ??= new OperationJournal(join(app.getPath('userData'), 'plugin-operations'), {
           segmentBytes: 256 * 1024, recordBytes: 4096, queuedBytes: 64 * 1024,
         })
         operationJournal.enqueue(JSON.stringify(record))
-      }, [textures.channel])
+      },
+    })
     return {
       start: async () => {
-        const ready = await host.start(frameReceiverPath)
+        const ready = await host.start()
         const cookie = ready.authenticationCookie
         hostCookie = cookie
         hostUrl = ready.url

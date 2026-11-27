@@ -1,5 +1,5 @@
 import { parsePluginOperationRecord } from '@deepseek-ai/dsh-plugin-manager/diagnostic'
-import type { DesktopHostProcess } from '../src/host-process.ts'
+import type { DesktopHostProcessOptions } from '../src/host-process.ts'
 import type { AccountView } from '@deepseek-ai/dsh-deepseek-account/types'
 import { WINDOWS_TITLEBAR_HEIGHT } from '../src/windows-layout.ts'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -183,11 +183,7 @@ const harness = await vi.hoisted(async () => {
     })
     constructor(
       readonly node: string, readonly runtime: string, readonly profile: string,
-      readonly inspectPort?: number, readonly environment?: NodeJS.ProcessEnv, readonly onFailure?: (error: Error) => void,
-      readonly primaryRuntime?: string,
-      readonly packageManager?: { pnpm: string; nodeBin: string },
-      readonly onPlatformSession?: ConstructorParameters<typeof DesktopHostProcess>[8],
-      readonly onPluginOperation?: ConstructorParameters<typeof DesktopHostProcess>[9],
+      readonly options: DesktopHostProcessOptions = {},
     ) { hosts.push(this) }
   }
   const app = Object.assign(new EventEmitter(), {
@@ -543,9 +539,9 @@ describe('desktop main startup', () => {
     await readyForUpdate()
     const host = harness.hosts[0]!
     expect(host.node).toBe(process.execPath)
-    expect(host.primaryRuntime).toBe(packaged
+    expect(host.options.primaryRuntime).toBe(packaged
       ? join('desktop-test-resources', 'runtime', 'primary-runtime') : 'test-primary-runtime')
-    expect(host.packageManager).toMatchObject({
+    expect(host.options.packageManager).toMatchObject({
       pnpm: packaged
         ? join('desktop-test-resources', 'runtime', 'primary-runtime', 'dependencies', 'pnpm', 'bin', 'pnpm.mjs')
         : 'test-pnpm',
@@ -804,7 +800,7 @@ describe('desktop main startup', () => {
     vi.stubEnv('DSH_DESKTOP_DSH_DIR', join(root, 'app.asar', 'dsh'))
     const host = await readyForUpdate()
     await vi.waitFor(() => { expect(harness.analytics.mock.calls.some(([event]) => (event as { eventName: string }).eventName === 'desktop_app_launch')).toBe(true) })
-    expect(host.primaryRuntime).toBe('test-primary-runtime')
+    expect(host.options.primaryRuntime).toBe('test-primary-runtime')
     expect(existsSync(harness.app.getPath('logs'))).toBe(false)
     expect(writeCrashReport).not.toHaveBeenCalled()
     expect(harness.dialog.showMessageBox).not.toHaveBeenCalledWith(expect.objectContaining({ title: en.startupFailed }))
@@ -1431,7 +1427,7 @@ describe('desktop main startup', () => {
     await harness.hostStarted.promise
     const host = harness.hosts[0]!
     const failure = new DesktopHostFatalError('test plugin failed', 'missing required services')
-    host.onFailure!(failure)
+    host.options.onFailure!(failure)
     host.ready.reject(failure)
     await host.stopping.promise
     host.exited.resolve()
@@ -2941,7 +2937,7 @@ describe('desktop main startup', () => {
     const record = parsePluginOperationRecord({ runId: 'c254ab28-97c9-4382-95e6-2db9c66f98c8', transportDropped: 0,
       operation: { id: 'c254ab28-97c9-4382-95e6-2db9c66f98c9', time: '2026-10-20T00:00:00.000Z',
         reason: 'bundle', phase: 'started', target: 'test', stage: 'enable' } })!
-    harness.hosts[0]!.onPluginOperation!(record)
+    harness.hosts[0]!.options.onPluginOperation!(record)
     const file = join(harness.app.getPath('userData'), 'plugin-operations', 'operations.jsonl')
     await vi.waitFor(() => { expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual(record) })
     expect(existsSync(join(harness.app.getPath('logs'), 'plugin-operations'))).toBe(false)
@@ -2956,7 +2952,7 @@ describe('desktop main startup', () => {
     const diagnostic = "Error: profile has no cordis.yml\n    at loadProfileDirectory (app-boot/lib/index.js:12:3) {\n  code: 'ENOENT',\n  path: '/profiles/desktop/cordis.yml'\n}"
     // DesktopHostProcess.fail() rejects start() and calls onFailure with the same error object.
     const failure = new DesktopHostFatalError('profile has no cordis.yml', diagnostic)
-    host.onFailure!(failure)
+    host.options.onFailure!(failure)
     host.ready.reject(failure)
     await host.stopping.promise
     host.exited.resolve()
@@ -2989,7 +2985,7 @@ describe('desktop main startup', () => {
       level: 'error', message: 'client-modules: bundle script plugins/??a/client.js&rev=1 failed to load',
       sourceId: 'dsh-app://app/assets/entry.js', lineNumber: 12,
     })
-    host.onFailure!(new Error('dsh desktop host exited with 1: fatal uncaught exception: ENOENT'))
+    host.options.onFailure!(new Error('dsh desktop host exited with 1: fatal uncaught exception: ENOENT'))
     await host.stopping.promise
     expect(writeCrashReport).toHaveBeenCalledOnce()
     const [directory, report] = vi.mocked(writeCrashReport).mock.calls[0]!
@@ -3083,7 +3079,7 @@ describe('desktop main startup', () => {
     const host = harness.hosts[0]!
     host.ready.resolve()
     await Promise.resolve(invoke(DESKTOP_IPC.boot))
-    host.onFailure!(new Error('backend exited'))
+    host.options.onFailure!(new Error('backend exited'))
     await host.stopping.promise
     expect(harness.app.relaunch).not.toHaveBeenCalled()
     expect(harness.disableAllPlugins).not.toHaveBeenCalled()
@@ -3123,7 +3119,7 @@ describe('desktop main startup', () => {
     expect(harness.hosts).toHaveLength(0)
     finishRead()
     await harness.hostStarted.promise
-    expect(harness.hosts[0]!.environment?.DSH_TEST_LOGIN_SHELL).toBe('login')
+    expect(harness.hosts[0]!.options.environment?.DSH_TEST_LOGIN_SHELL).toBe('login')
     harness.hosts[0]!.ready.resolve()
     await Promise.all([boot, harness.navigated.promise])
     const { signal } = harness.loginShell.mock.calls[0]![2]
@@ -3153,16 +3149,18 @@ describe('desktop main startup', () => {
     expect(harness.hosts[0]).toMatchObject({
       node: process.execPath,
       runtime: join(harness.app.getAppPath(), 'dsh'),
-      primaryRuntime: join('desktop-test-resources', 'runtime', 'primary-runtime'),
+      options: {
+        primaryRuntime: join('desktop-test-resources', 'runtime', 'primary-runtime'),
+        frameReceiverPath: join('desktop-test-resources', 'app.asar.unpacked', 'lib', 'native', 'win32-x64', 'frame-forwarding.node'),
+      },
       profile: 'desktop-test-profile',
     })
-    expect(harness.hosts[0]!.environment).not.toBe(process.env)
-    expect(harness.hosts[0]!.start).toHaveBeenCalledWith(join('desktop-test-resources', 'app.asar.unpacked', 'lib', 'native', 'win32-x64', 'frame-forwarding.node'))
-    expect(harness.hosts[0]!.environment?.DSH_CLIENT_VERSION).toBe('1.2.3')
-    expect(harness.hosts[0]!.environment?.DSH_TEST_LOGIN_SHELL).toBe('login')
+    expect(harness.hosts[0]!.options.environment).not.toBe(process.env)
+    expect(harness.hosts[0]!.options.environment?.DSH_CLIENT_VERSION).toBe('1.2.3')
+    expect(harness.hosts[0]!.options.environment?.DSH_TEST_LOGIN_SHELL).toBe('login')
     expect(console.warn).toHaveBeenCalledWith('desktop login shell: /account/shell failed (timeout)')
     expect(harness.analytics).toHaveBeenCalledExactlyOnceWith({ eventName: 'desktop_app_launch', timestamp: Date.now(), attributes: {} })
-    expect(harness.hosts[0]!.start).toHaveBeenCalledTimes(1)
+    expect(harness.hosts[0]!.start).toHaveBeenCalledExactlyOnceWith()
     expect(harness.windows).toHaveLength(1)
     expect(window.urls).toEqual(['dsh-app://app/'])
   })
@@ -3175,9 +3173,14 @@ describe('desktop main startup', () => {
     harness.prepared.resolve()
     await harness.hostStarted.promise
     const project = join(harness.app.getAppPath(), '.desktop-build', 'development', 'project')
-    expect(harness.hosts[0]).toMatchObject({ node: process.execPath, runtime: project,
-      primaryRuntime: 'test-primary-runtime', profile: 'desktop-test-profile' })
-    expect(harness.hosts[0]!.start).toHaveBeenCalledWith(join(harness.app.getAppPath(), 'lib', 'native', 'win32-x64', 'frame-forwarding.node'))
+    expect(harness.hosts[0]).toMatchObject({
+      node: process.execPath, runtime: project, profile: 'desktop-test-profile',
+      options: {
+        primaryRuntime: 'test-primary-runtime',
+        frameReceiverPath: join(harness.app.getAppPath(), 'lib', 'native', 'win32-x64', 'frame-forwarding.node'),
+      },
+    })
+    expect(harness.hosts[0]!.start).toHaveBeenCalledExactlyOnceWith()
     expect(harness.applyRelease).toHaveBeenCalledOnce()
     harness.hosts[0]!.ready.resolve()
     await harness.navigated.promise
@@ -3221,7 +3224,7 @@ describe('desktop main startup', () => {
     host.ready.resolve()
     await vi.waitFor(() => { expect(host.fetch).toHaveBeenCalledOnce() })
     host.exited.resolve()
-    host.onFailure!(new Error('backend exited during startup preferences'))
+    host.options.onFailure!(new Error('backend exited during startup preferences'))
     await harness.dialogShown.promise
     preferences.resolve(Response.json({ hasApiKey: true, localePreference: null }))
     await startup

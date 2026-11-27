@@ -48,9 +48,10 @@ export async function smokeDesktopRuntime(
     npm_config_userconfig: join(home, 'npmrc'), npm_config_globalconfig: join(home, 'npmrc'),
     npm_config_store_dir: join(home, 'store'), npm_config_enable_global_virtual_store: 'false',
   }
-  const host = new DesktopHostProcess(node, root, profile, undefined, hostEnvironment,
-    undefined, join(resourcesRuntime, 'primary-runtime'),
-    { pnpm: join(resourcesRuntime, 'primary-runtime', 'dependencies', 'pnpm', 'bin', 'pnpm.mjs'), nodeBin: join(resourcesRuntime, 'bin') })
+  const host = new DesktopHostProcess(node, root, profile, {
+    environment: hostEnvironment, primaryRuntime: join(resourcesRuntime, 'primary-runtime'),
+    packageManager: { pnpm: join(resourcesRuntime, 'primary-runtime', 'dependencies', 'pnpm', 'bin', 'pnpm.mjs'), nodeBin: join(resourcesRuntime, 'bin') },
+  })
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
     writeFileSync(join(home, 'npmrc'), '')

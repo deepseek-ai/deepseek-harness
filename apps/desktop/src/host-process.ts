@@ -190,6 +190,28 @@ export class DesktopHostFatalError extends Error {
   get diagnostic(): string | undefined { return this.#diagnostic }
 }
 
+/** Launch configuration and Main-process listeners for one Desktop Host. */
+export interface DesktopHostProcessOptions {
+  /** Loopback inspector port for workspace development. */
+  readonly inspectPort?: number | undefined
+  /** Environment inherited by the Host and its plugin subprocesses. Defaults to the current process environment. */
+  readonly environment?: NodeJS.ProcessEnv
+  /** Dependency payload exposed to the profile as `DSH_PRIMARY_RUNTIME`. */
+  readonly primaryRuntime?: string
+  /** Bundled pnpm entry and Node launcher directory, scoped to package operations. */
+  readonly packageManager?: { readonly pnpm: string; readonly nodeBin: string }
+  /** Absolute path of the receiver preinstalled by Desktop. */
+  readonly frameReceiverPath?: string
+  /** Receives the first unexpected child failure, including after readiness. */
+  readonly onFailure?: ((error: Error) => void) | undefined
+  /** Private credential updates for embedded Platform views. */
+  readonly onPlatformSession?: (session: PlatformSession | null) => void
+  /** Diagnostic sink; malformed records are ignored without failing the Host. */
+  readonly onPluginOperation?: (record: PluginOperationRecord) => void
+  /** Feature exchanges attached before the spawned Host sends its first message. */
+  readonly channels?: readonly DesktopHostChannel[]
+}
+
 /** One Web backend running under the Electron executable in Node mode. */
 export class DesktopHostProcess {
   readonly #authentication = new DesktopParentAuthentication()
@@ -216,58 +238,43 @@ export class DesktopHostProcess {
    * @param node - Absolute Electron executable in Node mode.
    * @param runtimeDir - Immutable packages carried by the current application.
    * @param projectDir - Desktop plugin profile and child working directory.
-   * @param inspectPort - Optional loopback inspector port for workspace development.
-   * @param environment - Environment inherited by the Host and its plugin subprocesses.
-   * @param onFailure - Receives the first unexpected child failure, including after readiness.
-   * @param primaryRuntime - Optional bundled dependency payload; the Host exposes it to its profile as `DSH_PRIMARY_RUNTIME`.
-   * @param packageManager - Bundled pnpm entry and Node launcher directory, scoped to package operations.
-   * @param onPlatformSession - Private credential updates for embedded Platform views.
-   * @param onPluginOperation - Optional diagnostic sink; malformed records are ignored without failing the Host.
-   * @param channels - Feature exchanges attached to each spawned Host; messages none of them claims must be shell events.
+   * @param options - Launch configuration and listeners for this child.
    */
   constructor(
     private readonly node: string,
     private readonly runtimeDir: string,
     private readonly projectDir: string,
-    private readonly inspectPort?: number,
-    private readonly environment: NodeJS.ProcessEnv = process.env,
-    private readonly onFailure?: (error: Error) => void,
-    private readonly primaryRuntime?: string,
-    private readonly packageManager?: { readonly pnpm: string; readonly nodeBin: string },
-
-    private readonly onPlatformSession?: (session: PlatformSession | null) => void,
-    private readonly onPluginOperation?: (record: PluginOperationRecord) => void,
-    private readonly channels: readonly DesktopHostChannel[] = [],
+    private readonly options: DesktopHostProcessOptions = {},
   ) {}
 
   /**
    * Start this child once and await its Web application URL.
-   * @param frameReceiverPath - Absolute path of the Desktop-preinstalled receiver, when available.
    * @returns Ready facts supplied by the child after application startup.
    */
-  async start(frameReceiverPath?: string): Promise<DesktopHostReady> {
+  async start(): Promise<DesktopHostReady> {
     if (this.child !== undefined) return this.readyPromise
     const entry = join(this.runtimeDir, 'node_modules', '@deepseek-ai', 'dsh-desktop-host', 'lib', 'index.js')
+    const { inspectPort, primaryRuntime, packageManager, frameReceiverPath, environment = process.env, channels = [] } = this.options
     const child = spawn(this.node, [
       '--expose-internals',
-      ...(this.inspectPort === undefined ? [] : [`--inspect=127.0.0.1:${String(this.inspectPort)}`]),
+      ...(inspectPort === undefined ? [] : [`--inspect=127.0.0.1:${String(inspectPort)}`]),
       entry,
       this.runtimeDir,
       this.projectDir,
       // Empty asks the Host for the payload beside its runtime directory, so that layout has one owner.
-      this.primaryRuntime ?? '',
-      ...this.packageManager === undefined ? [] : [this.packageManager.pnpm, this.packageManager.nodeBin],
+      primaryRuntime ?? '',
+      ...packageManager === undefined ? [] : [packageManager.pnpm, packageManager.nodeBin],
       ...(frameReceiverPath === undefined ? [] : ['--frame-receiver-path', frameReceiverPath]),
     ], {
       cwd: this.projectDir,
-      env: desktopNodeEnvironment(this.node, undefined, this.environment),
+      env: desktopNodeEnvironment(this.node, undefined, environment),
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
     })
     this.child = child
     child.stderr?.setEncoding('utf8')
     child.stderr?.on('data', (chunk: string) => { this.stderr = (this.stderr + chunk).slice(-MAX_HOST_DIAGNOSTIC_CHARS) })
     child.stdout?.pipe(process.stdout)
-    const receivers = this.channels.map(channel => channel.attach(child, {
+    const receivers = channels.map(channel => channel.attach(child, {
       fail: (error) => { this.fail(error) },
       stopping: () => this.stopping,
     }))
@@ -275,7 +282,7 @@ export class DesktopHostProcess {
       if (typeof message === 'object' && message !== null && 'type' in message && message.type === 'plugin-operation') {
         const record = 'record' in message ? parsePluginOperationRecord(message.record) : undefined
         if (record !== undefined && record.runId === this.runId) {
-          try { this.onPluginOperation?.(record) }
+          try { this.options.onPluginOperation?.(record) }
           catch (_error) {
             // Diagnostic persistence cannot invalidate the Host's business IPC channel.
             console.error('desktop plugin operation diagnostic sink failed')
@@ -307,7 +314,7 @@ export class DesktopHostProcess {
           child.kill('SIGTERM')
         })
       }
-      else if (message.type === 'platform-session') this.onPlatformSession?.(message.session)
+      else if (message.type === 'platform-session') this.options.onPlatformSession?.(message.session)
       else if (message.type === 'shutdown-complete') {
         if (this.stopping) this.shutdownCompleted = true
         else this.fail(new Error('dsh desktop host acknowledged an unrequested shutdown'))
@@ -410,7 +417,7 @@ export class DesktopHostProcess {
     const child = this.child
     if (child === undefined) return
     this.stopping = true
-    this.onPlatformSession?.(null)
+    this.options.onPlatformSession?.(null)
     if (child.connected) child.send({ type: 'shutdown' }, (error) => { if (error !== null) this.fail(error) })
     const exited = this.exitPromise ?? Promise.resolve()
     const graceful = await exitsWithin(exited, 10_000)
@@ -430,13 +437,13 @@ export class DesktopHostProcess {
 
   private fail(error: Error): void {
     if (this.runId !== undefined) Object.assign(error, { hostRunId: this.runId })
-    this.onPlatformSession?.(null)
+    this.options.onPlatformSession?.(null)
     this.readyReject(error)
     for (const request of this.controlRequests.values()) request.reject(error)
     this.controlRequests.clear()
     if (!this.failureReported && !this.stopping) {
       this.failureReported = true
-      try { this.onFailure?.(error) } catch (listenerError) {
+      try { this.options.onFailure?.(error) } catch (listenerError) {
         console.error('desktop host failure listener failed', listenerError)
       }
     }

@@ -101,7 +101,7 @@ function projectWithHost(source = HTTP_HOST): string {
 function hostProcess(
   runtime: string, profile = runtime, onFailure?: (error: Error) => void, environment = process.env,
 ): DesktopHostProcess {
-  const host = new DesktopHostProcess(process.execPath, runtime, profile, undefined, environment, onFailure)
+  const host = new DesktopHostProcess(process.execPath, runtime, profile, { environment, onFailure })
   hosts.push(host)
   return host
 }
@@ -173,8 +173,7 @@ ${HTTP_HOST}`)
     const journal = new OperationJournal(directory, { recordBytes: 4096, segmentBytes: 8192, queuedBytes: 8192 })
     onTestFinished(async () => { await journal.close() })
     const sink = vi.fn(value => journal.enqueue(JSON.stringify(value)))
-    const first = new DesktopHostProcess(process.execPath, runtime, runtime, undefined, process.env,
-      undefined, undefined, undefined, undefined, sink)
+    const first = new DesktopHostProcess(process.execPath, runtime, runtime, { onPluginOperation: sink })
     hosts.push(first)
     await first.start()
     await first.stop()
@@ -186,8 +185,9 @@ ${HTTP_HOST}`)
     const warning = vi.spyOn(console, 'error').mockImplementation(() => {})
     try {
       const failure = vi.fn()
-      const second = new DesktopHostProcess(process.execPath, runtime, runtime, undefined, process.env,
-        failure, undefined, undefined, undefined, () => { throw new Error('sink unavailable') })
+      const second = new DesktopHostProcess(process.execPath, runtime, runtime, {
+        onFailure: failure, onPluginOperation() { throw new Error('sink unavailable') },
+      })
       hosts.push(second)
       await second.start()
       expect(await second.updateTasks('inspect')).toBe(false)
@@ -249,8 +249,7 @@ ${HTTP_HOST}`)
         }
       },
     }
-    const host = new DesktopHostProcess(process.execPath, runtime, runtime, undefined, process.env,
-      undefined, undefined, undefined, undefined, undefined, [channel])
+    const host = new DesktopHostProcess(process.execPath, runtime, runtime, { channels: [channel] })
     hosts.push(host)
     expect((await host.start()).url).toBe('http://127.0.0.1:3080/')
     await host.stop(true)
@@ -259,7 +258,7 @@ ${HTTP_HOST}`)
 
     const failing: DesktopHostChannel = { attach: (_child, link) => () => { link.fail(new Error('channel refused the Host')); return true } }
     const refused = new DesktopHostProcess(process.execPath, projectWithHost("process.send({ type: 'ready', url: 'http://127.0.0.1:3080/' })"),
-      runtime, undefined, process.env, undefined, undefined, undefined, undefined, undefined, [failing])
+      runtime, { channels: [failing] })
     hosts.push(refused)
     await expect(refused.start()).rejects.toThrow('channel refused the Host')
   })
@@ -403,11 +402,12 @@ process.send({ type: 'starting', runId: randomUUID() })
     const runtime = projectWithHost(HTTP_HOST.replace('runtime: process.argv[2]',
       'receiverArgs: process.argv.slice(7), pnpm: process.argv[5], nodeBin: process.argv[6], primaryRuntime: process.argv[4], runtime: process.argv[2]'))
     const primaryRuntime = join(runtime, 'external-primary-runtime')
-    const host = new DesktopHostProcess(process.execPath, runtime, runtime, undefined, process.env,
-      undefined, primaryRuntime, { pnpm: join(runtime, 'pnpm.mjs'), nodeBin: join(runtime, 'bin') })
-    hosts.push(host)
     const receiverPath = join(runtime, 'Desktop resources', 'frame-forwarding.node')
-    const { url } = await host.start(receiverPath)
+    const host = new DesktopHostProcess(process.execPath, runtime, runtime, {
+      primaryRuntime, frameReceiverPath: receiverPath, packageManager: { pnpm: join(runtime, 'pnpm.mjs'), nodeBin: join(runtime, 'bin') },
+    })
+    hosts.push(host)
+    const { url } = await host.start()
     expect(await (await fetch(url)).json()).toMatchObject({
       primaryRuntime, pnpm: join(runtime, 'pnpm.mjs'), nodeBin: join(runtime, 'bin'), receiverArgs: ['--frame-receiver-path', receiverPath],
     })
@@ -493,7 +493,7 @@ process.send({ type: 'starting', runId: randomUUID() })
 it.each([null, 'stable-account'])('carries Platform identity %s over private IPC and clears credentials on shutdown', async (userId) => {
   const runtime = projectWithHost(HTTP_HOST.replace("process.send({ type: 'ready'", "process.send({ type: 'platform-session', session: { origin: 'https://platform.deepseek.com', userId: " + JSON.stringify(userId) + ", token: 'fixture-secret', embeddedPageDist: 'feat/test' } }); process.send({ type: 'ready'"))
   const changed = vi.fn()
-  const host = new DesktopHostProcess(process.execPath, runtime, runtime, undefined, process.env, undefined, undefined, undefined, changed)
+  const host = new DesktopHostProcess(process.execPath, runtime, runtime, { onPlatformSession: changed })
   hosts.push(host)
   await host.start()
   expect(changed).toHaveBeenCalledWith({ origin: 'https://platform.deepseek.com', userId, token: 'fixture-secret', embeddedPageDist: 'feat/test' })
@@ -506,7 +506,7 @@ it.each([undefined, '', 7])('rejects malformed Platform account identity %s on p
   const runtime = projectWithHost(HTTP_HOST.replace("process.send({ type: 'ready'",
     `process.send({ type: 'platform-session', session: ${JSON.stringify(session)} }); process.send({ type: 'ready'`))
   const changed = vi.fn()
-  const host = new DesktopHostProcess(process.execPath, runtime, runtime, undefined, process.env, undefined, undefined, undefined, changed)
+  const host = new DesktopHostProcess(process.execPath, runtime, runtime, { onPlatformSession: changed })
   hosts.push(host)
   await expect(host.start()).rejects.toThrow('invalid IPC event')
   expect(changed.mock.calls).toEqual([[null]])

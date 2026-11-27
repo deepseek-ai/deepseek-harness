@@ -29,8 +29,9 @@ function hostWith(
   mkdirSync(join(packageRoot, 'lib'), { recursive: true })
   writeFileSync(join(packageRoot, 'package.json'), '{"name":"@deepseek-ai/dsh-desktop-host","type":"module"}\n')
   writeFileSync(join(packageRoot, 'lib', 'index.js'), source)
-  const host = new DesktopHostProcess(process.execPath, runtime, runtime, undefined, process.env,
-    onFailure, undefined, undefined, undefined, undefined, [createSharedTextureChannel(handle)])
+  const host = new DesktopHostProcess(process.execPath, runtime, runtime, {
+    onFailure, channels: [createSharedTextureChannel(handle)],
+  })
   hosts.push(host)
   return host
 }

@@ -68,8 +68,9 @@ describe.skipIf(!existsSync(builtHost))('built Desktop Host Office resources', (
       writeFileSync(join(paths.profile, 'cordis.patch.yml'), '- id: webserver\n  config:\n    host: 127.0.0.1\n    port: 0\n')
       installSkillProbe(paths.profile)
       const primaryRuntime = mode === 'relative-source' ? 'runtime/primary-runtime' : join(runtime, 'primary-runtime')
-      host = new DesktopHostProcess(process.execPath, project, paths.profile, undefined,
-        process.env, (error) => { failures.push(error) }, primaryRuntime)
+      host = new DesktopHostProcess(process.execPath, project, paths.profile, {
+        primaryRuntime, onFailure: (error) => { failures.push(error) },
+      })
       const { url, authenticationCookie: cookie } = await host.start()
       const response = await fetch(url, { headers: { cookie }, redirect: 'manual' })
       await response.body?.cancel()
