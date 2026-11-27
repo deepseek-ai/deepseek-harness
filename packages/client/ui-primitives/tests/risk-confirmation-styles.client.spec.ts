@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { expect, it } from 'vitest'
 
-const css = readFileSync(fileURLToPath(new URL('../src/RiskConfirmation.module.css', import.meta.url)), 'utf8')
+const css = readFileSync(fileURLToPath(new URL('../src/client/RiskConfirmation.module.css', import.meta.url)), 'utf8')
   .replace(/\/\*[\s\S]*?\*\//g, ' ')
 
 it('wraps a description that quotes an unbroken path or command inside the dialog', () => {
