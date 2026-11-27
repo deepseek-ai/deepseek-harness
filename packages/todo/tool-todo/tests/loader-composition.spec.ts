@@ -151,7 +151,7 @@ describe('tool-todo real Loader composition through cordis.yml', () => {
     await expect(boot(configLines)).rejects.toThrow(failure)
   }, 30_000)
 
-  it('activates stale-list reminders when reminder.enabled is true and rejects invalid reminder config', async () => {
+  it('activates stale-list reminders when reminder.enabled is true', async () => {
     const ctx = await boot([
       '    allowParallelInProgress: true',
       '    reminder:',
@@ -185,12 +185,14 @@ describe('tool-todo real Loader composition through cordis.yml', () => {
     if (decision.kind !== 'enter') throw new Error('expected an entered step')
     expect(decision.messages).toHaveLength(1)
     expect(decision.messages[0]?.source.kind).toBe('todo-reminder')
+  }, 30_000)
 
+  it('rejects a zero reminder interval when loading tool-todo', async () => {
     await expect(boot([
       '    allowParallelInProgress: true',
       '    reminder:',
       '      enabled: true',
       '      intervalSteps: 0',
-    ])).rejects.toThrow()
+    ])).rejects.toThrow('$.reminder.intervalSteps')
   }, 30_000)
 })
