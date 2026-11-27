@@ -17,14 +17,14 @@ export class DesktopHostProcess extends Host {
     fixture.taskQueries.push({ at: Date.now(), action, active: result })
     return result
   }
-  constructor(node, runtime, project, _inspectPort, environment, onFailure, primaryRuntime, packageManager) {
+  constructor(node, runtime, project, options) {
     // Port zero lets the OS allocate the development inspector; no fixed listener is acquired.
-    super(node, runtime, project, 0, environment, onFailure, primaryRuntime, packageManager)
+    super(node, runtime, project, { ...options, inspectPort: 0 })
     fixture.host = this
   }
-  async start(frameReceiverPath) {
+  async start() {
     try {
-      const result = await super.start(frameReceiverPath)
+      const result = await super.start()
       fixture.readyHosts.add(this)
       fixture.ready.resolve(result.url)
       return result

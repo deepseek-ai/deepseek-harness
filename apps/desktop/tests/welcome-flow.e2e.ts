@@ -82,13 +82,15 @@ describe.skipIf(!existsSync(builtHost))('built Desktop welcome flow', () => {
       const nodeBin = join(root, 'runtime/primary-runtime/dependencies/node/bin')
       mkdirSync(nodeBin, { recursive: true })
       cpSync(process.execPath, join(nodeBin, process.platform === 'win32' ? 'node.exe' : 'node'))
-      writeFileSync(join(paths.profile, 'cordis.patch.yml'), `- id: webserver\n  config:\n    host: 127.0.0.1\n    port: 0\n- id: deepseek-account\n  config:\n${process.platform === 'linux' ? '    desktopPlatform: darwin\n' : ''}    platformOrigin: ${platform.origin}\n    harnessOrigin: ${platform.origin}\n    allowLoopbackHttp: true\n    requestHeaders:\n      Cookie: test_gate=synthetic\n`)
+      const desktopPlatform = process.platform === 'win32' ? 'win32' : 'darwin'
+      writeFileSync(join(paths.profile, 'cordis.patch.yml'), `- id: webserver\n  config:\n    host: 127.0.0.1\n    port: 0\n- id: deepseek-account\n  config:\n    desktopPlatform: ${desktopPlatform}\n    platformOrigin: ${platform.origin}\n    harnessOrigin: ${platform.origin}\n    allowLoopbackHttp: true\n    requestHeaders:\n      Cookie: test_gate=synthetic\n`)
       let backend: DesktopWelcomeBackend
       let hostOrigin = ''
       const restart = async (): Promise<void> => {
         await host?.stop()
-        host = new DesktopHostProcess(process.execPath, project, paths.profile, undefined,
-          process.env, undefined, join(root, 'runtime', 'primary-runtime'))
+        host = new DesktopHostProcess(process.execPath, project, paths.profile, {
+          primaryRuntime: join(root, 'runtime', 'primary-runtime'),
+        })
         const { url, authenticationCookie } = await host.start()
         hostOrigin = new URL(url).origin
         backend = connectDesktopWelcome(url, authenticationCookie)
