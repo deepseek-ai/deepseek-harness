@@ -85,7 +85,7 @@ A terminal account-state stream failure appears in the sign-in dialog or Account
 
 The balance card shows recharge funds and bonus credit in separate rows. While signed in, the bonus row appears during loading, after a failed wallet read, and when a wallet holds positive bonus credit; a successful read without positive bonus credit omits the row. A failed wallet read shows the existing unavailable copy as a link to Platform — the same destination and behavior as the Usage action, so the embedded page opens on Desktop and a new tab elsewhere — while the loading state stays plain text. Currencies retain their own amounts, and a notice date is rendered only inside the server’s own message.
 
-A successful login selects the first available `deepseek-account` model as the default when no other provider has a configured API key, even if a previous default was saved. Configured keys preserve the existing default even when their provider has no available models. Session-specific selections remain unchanged.
+When no other provider has a configured API key, a successful login keeps a saved default that names a listed `deepseek-account` model, together with its reasoning effort, and otherwise selects the first available `deepseek-account` model as the default. Configured keys preserve the existing default even when their provider has no available models. Session-specific selections remain unchanged.
 
 <a id="model-experience"></a>
 ## Model Experience
