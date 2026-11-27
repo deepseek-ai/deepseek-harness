@@ -11,10 +11,14 @@ import css from './ProgramCallRow.module.css'
 
 const PROGRAM_ICON = <IconHubOutlineRegular size={14} />
 
-type ProgramCallRowProps = Pick<ToolRowProps, 'useDisclosure' | 't'> & {
+type ProgramCallRowProps = Pick<ToolRowProps, 't'> & {
   /** Wire name of the program tool. */
   readonly toolName: string
   readonly block: ToolCallBlock
+  /** Whether this row shows its nested rows. */
+  readonly expanded: boolean
+  /** Opens or closes this row. */
+  readonly onToggle: () => void
   /** The program source row and the sub-call rows, mounted only while this row is open. */
   readonly children: ReactNode
 }
@@ -24,11 +28,10 @@ type ProgramCallRowProps = Pick<ToolRowProps, 'useDisclosure' | 't'> & {
  * The count of dispatched sub-calls follows the description; a failed or interrupted call shows
  * that state there instead, and an Auto-denied call the denial. An Auto-denied call and a call
  * whose description has not arrived show the generic tool title. Preparation has no disclosure.
- * @param props - Program call stage, disclosure state, and the nested rows.
+ * @param props - Program call stage, open state, and the nested rows.
  * @returns The header row with its nested rows while open.
  */
-export function ProgramCallRow({ useDisclosure, t, toolName, block, children }: ProgramCallRowProps) {
-  const { expanded, toggle } = useDisclosure()
+export function ProgramCallRow({ t, toolName, block, expanded, onToggle, children }: ProgramCallRowProps) {
   const model = useMemo(() => toolRowModel(toolName, block), [toolName, block])
   const { state } = model
   const denial = model.autoReviewDenial === null ? null : localizeAutoReviewDenial(model.autoReviewDenial, t)
@@ -58,7 +61,7 @@ export function ProgramCallRow({ useDisclosure, t, toolName, block, children }: 
         expandable={expandable}
         expandOnRowClick
         keepContentWhenOpen
-        onToggle={toggle}
+        onToggle={onToggle}
         collapsedContent={detail !== null && (
           <>
             <span className={rowCss.sep} data-shimmer-decoration aria-hidden />

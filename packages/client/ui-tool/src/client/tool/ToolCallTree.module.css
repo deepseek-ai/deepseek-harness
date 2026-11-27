@@ -19,3 +19,9 @@
   padding-left: 8px;
   border-left: 0.5px solid var(--dsw-alias-border-l2);
 }
+
+/* The sub-call under a collapsed, running program call: one row high, whatever its view renders. */
+.currentSubCall {
+  overflow: hidden;
+  height: calc(24px + var(--dsh-content-font-delta, 0px));
+}

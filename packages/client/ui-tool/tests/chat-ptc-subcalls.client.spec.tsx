@@ -73,6 +73,11 @@ const subCall = (
   subCalls: [],
 })
 
+const startedSubCall = (parent: string, n: number, name: string, args: object): ToolCallBlock => ({
+  phase: 'start' as const, args: PartialArguments.fromText(JSON.stringify(args)), callId: `${parent}:code:${n}`, name,
+  argsRaw: JSON.stringify(args), parentCallId: parent, turn: 0, step: 0, time: 21_000, subCalls: [],
+})
+
 function snapshotWith(
   nodes: ToolResultNode[],
   subCalls: readonly ToolCallBlock[],
@@ -431,6 +436,10 @@ describe('program sub-calls through the real chat machinery', () => {
     const view = mountApp(b.runtime)
     expect(view.container.querySelector('[data-program-call][data-state="running"]')).not.toBeNull()
     expect(view.getByText('Running')).toBeTruthy()
+    // Between two sub-calls the collapsed row keeps the last one started, still inert.
+    const current = view.container.querySelector('[data-current-subcall]')
+    expect(current?.hasAttribute('inert')).toBe(true)
+    expect(current?.querySelector('[data-sample="bash"]')?.getAttribute('data-state')).toBe('ok')
     openProgramCall(view.container)
     const running = view.container.querySelector('[data-variant="code"][data-state="running"]')
     expect(running).not.toBeNull()
@@ -441,18 +450,53 @@ describe('program sub-calls through the real chat machinery', () => {
 
   it('a started-but-unsettled sub-call renders the running state exactly like a native in-flight row', async () => {
     const parent = 'call-live'
-    const runningSub: ToolCallBlock = {
-      phase: 'start' as const, args: PartialArguments.fromText('{"pattern":"todo"}'), callId: `${parent}:code:1`, name: 'grep', argsRaw: '{"pattern":"todo"}',
-      parentCallId: parent,
-      turn: 0, step: 0, time: 21_000, subCalls: [],
-    }
-    const b = await bench(snapshotWith([], [runningSub], [runningCode(parent)]))
+    const b = await bench(snapshotWith([], [startedSubCall(parent, 1, 'grep', { pattern: 'todo' })], [runningCode(parent)]))
     const view = mountApp(b.runtime)
     openProgramCall(view.container)
     // The nested row derives 'running' from the StartedToolCall shape — the
     // same data-state chrome (row sweep) a native in-flight row wears.
     const nested = view.container.querySelector('[data-subcalls] [data-variant][data-state="running"]')
     expect(nested).not.toBeNull()
+  })
+
+  it('shows the unsettled sub-call a running program started last as one inert row under its collapsed header row', async () => {
+    const parent = 'call-live'
+    const subCalls = [
+      startedSubCall(parent, 1, 'grep', { pattern: 'todo' }),
+      startedSubCall(parent, 2, 'mystery', { n: 1 }),
+      subCall(21, parent, 3, 'bash', { command: 'ls notes', description: 'List notes' }, 'demo.txt'),
+    ]
+    const b = await bench(snapshotWith([], subCalls, [runningCode(parent)]))
+    const view = mountApp(b.runtime)
+    const rows = view.container.querySelectorAll('[data-current-subcall]')
+    expect(rows).toHaveLength(1)
+    // The preview follows the header row as a sibling inside the call's own row wrapper.
+    expect(rows[0]?.previousElementSibling?.getAttribute('data-program-call')).toBe('run_code')
+    expect(rows[0]?.getAttribute('data-current-subcall')).toBe(`${parent}:code:2`)
+    expect(rows[0]?.hasAttribute('inert')).toBe(true)
+    expect(rows[0]?.querySelector('[data-tool="mystery"][data-state="running"]')).not.toBeNull()
+    expect(view.container.querySelector('[data-subcalls]')).toBeNull()
+
+    openProgramCall(view.container)
+    expect(view.container.querySelector('[data-current-subcall]')).toBeNull()
+    expect(view.container.querySelectorAll('[data-subcalls] [data-chat-call-id]')).toHaveLength(3)
+  })
+
+  it('shows no current sub-call row under a running program call without sub-calls or under a settled program call', async () => {
+    const parent = 'call-64'
+    const stopped: ToolResultNode = {
+      ...codeResult(10, parent), isError: true, content: [],
+      error: { name: 'ToolInterruptedError', code: 'interrupted' },
+    }
+    const b = await bench(snapshotWith([stopped], [startedSubCall(parent, 1, 'grep', { pattern: 'todo' })]))
+    const view = mountApp(b.runtime)
+    expect(view.container.querySelector('[data-program-call][data-state="stopped"]')).not.toBeNull()
+    expect(view.container.querySelector('[data-current-subcall]')).toBeNull()
+
+    const idle = await bench(snapshotWith([], [], [runningCode('call-live')]))
+    const idleView = mountApp(idle.runtime)
+    expect(idleView.container.querySelector('[data-program-call][data-state="running"]')).not.toBeNull()
+    expect(idleView.container.querySelector('[data-current-subcall]')).toBeNull()
   })
 
   it('an ordinary tool row renders no sub-call nest', async () => {

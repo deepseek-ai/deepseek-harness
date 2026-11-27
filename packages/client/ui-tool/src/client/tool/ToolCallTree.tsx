@@ -1,5 +1,5 @@
 /** Root/subcall Tool composition with one keyed atomic dispatch path. */
-import { memo, useCallback, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { memo, useCallback, useMemo, useState, type ComponentProps, type KeyboardEvent, type ReactNode } from 'react'
 import clsx from 'clsx'
 import type { ToolCallBlock } from '@deepseek-ai/dsh-client-ui-chat/client'
 import { DisclosureRow, IconEllipsisOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -51,6 +51,24 @@ const ToolCall = memo(function ToolCall({
       fallback: renderFallback(owner),
     })
 })
+
+/**
+ * Render the row of one sub-call for display under its collapsed, running program call.
+ * The row is inert, so it neither opens nor takes focus and assistive technology skips it;
+ * its container is one row high whatever the dispatched view renders.
+ * @param props - The sub-call and the props its dispatch forwards.
+ * @returns The inert sub-call row.
+ */
+function CurrentSubCall({ block, ...dispatch }: Omit<ComponentProps<typeof ToolCall>, 'callId' | 'toolName' | 'call'> & {
+  block: ToolCallBlock
+}) {
+  const call = useMemo(() => toolCallPhase(block), [block])
+  return (
+    <div className={clsx(css.nested, css.currentSubCall)} data-current-subcall={block.callId} inert>
+      <ToolCall {...dispatch} callId={block.callId} toolName={callName(call)} call={call} />
+    </div>
+  )
+}
 
 /** Sub-call count above which a call lists only its first sub-calls, followed by an omission row. */
 const SUB_CALL_LIST_LIMIT = 24
@@ -111,6 +129,54 @@ function SubCallList({ subCalls, t, ...branch }: SubCallListProps) {
   )
 }
 
+type ProgramCallBranchProps = Pick<ToolTreeProps, 'renderSlot' | 'cwd' | 'openFile' | 'inspectCall' | 'loadImage' | 'useDisclosure' | 't'> & {
+  renderFallback: (owner: ToolCallOwnerProps) => ReactNode
+  /** Wire name of the program tool. */
+  toolName: string
+  block: ToolCallBlock
+  home?: string | undefined
+  /** The program's own toolview and its sub-call rows, mounted only while this row is open. */
+  children: ReactNode
+}
+
+/**
+ * Render a program call's row and, while the program runs and that row is closed, one row for the
+ * sub-call it is running or ran last. The row's expanded body is `children`.
+ * @param props - The program call, its expanded body, and the props each rendered call forwards.
+ * @returns The program call's row, followed by its current sub-call row while it runs closed.
+ */
+const ProgramCallBranch = memo(function ProgramCallBranch({
+  toolName, block, renderSlot, cwd, home, openFile, renderFallback, inspectCall, loadImage, useDisclosure, t, children,
+}: ProgramCallBranchProps) {
+  const { expanded, toggle } = useDisclosure()
+  const state = useMemo(() => toolRowModel(toolName, block).state, [toolName, block])
+  // The sub-call under a running, closed row: the last one started that has not settled. Between
+  // two sub-calls it is the last one started, so the rows below do not shift.
+  const currentSubCall = state === 'running' && !expanded
+    ? block.subCalls.findLast(child => !('kind' in child)) ?? block.subCalls.at(-1)
+    : undefined
+  return (
+    <>
+      <ProgramCallRow toolName={toolName} block={block} expanded={expanded} onToggle={toggle} t={t}>
+        {children}
+      </ProgramCallRow>
+      {currentSubCall !== undefined && (
+        <CurrentSubCall
+          renderSlot={renderSlot}
+          block={currentSubCall}
+          openFile={openFile}
+          renderFallback={renderFallback}
+          cwd={cwd}
+          home={home}
+          inspectCall={inspectCall}
+          useDisclosure={useDisclosure}
+          loadImage={loadImage}
+        />
+      )}
+    </>
+  )
+})
+
 /** One call's rows: its dispatched view and its sub-calls, under a header row when the call runs a program. */
 const ToolCallBranch = memo(function ToolCallBranch({
   renderSlot, block, cwd, home, openFile, renderFallback, inspectCall, loadImage, useDisclosure, t,
@@ -158,12 +224,24 @@ const ToolCallBranch = memo(function ToolCallBranch({
       data-chat-call-id={callId}
     >
       {classifyTool(toolName) === 'code' ? (
-        <ProgramCallRow toolName={toolName} block={block} useDisclosure={useDisclosure} t={t}>
+        <ProgramCallBranch
+          toolName={toolName}
+          block={block}
+          useDisclosure={useDisclosure}
+          t={t}
+          renderSlot={renderSlot}
+          openFile={openFile}
+          renderFallback={renderFallback}
+          cwd={cwd}
+          home={home}
+          inspectCall={inspectCall}
+          loadImage={loadImage}
+        >
           <div className={clsx(css.nested, css.rows)}>
             {view}
             {subCallRows}
           </div>
-        </ProgramCallRow>
+        </ProgramCallBranch>
       ) : (
         <>
           {view}
