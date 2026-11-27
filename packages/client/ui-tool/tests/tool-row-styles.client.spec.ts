@@ -80,3 +80,17 @@ describe('ToolRow.module.css summary line', () => {
     }
   })
 })
+
+describe('ProgramCallRow.module.css header line', () => {
+  const sheet = readFileSync(fileURLToPath(new URL('../src/client/tool/components/ProgramCallRow.module.css', import.meta.url)), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+
+  it('truncates the description and never the sub-call count or the settled state', () => {
+    // The description and its detail share one line. A detail that could shrink would
+    // lose width in proportion to its text, which clips a short state beside a long description.
+    expect(declarations('.root .description', sheet)).toEqual(expect.arrayContaining([
+      'flex: 0 1 auto', 'min-width: 0', 'overflow: hidden', 'text-overflow: ellipsis', 'white-space: nowrap',
+    ]))
+    expect(declarations('.detail', sheet)).toEqual(expect.arrayContaining(['flex: none', 'white-space: nowrap']))
+  })
+})

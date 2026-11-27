@@ -16,7 +16,8 @@
 - button "Called tools, ran code, ran commands" [expanded]
 - text: Failed
 - button "Tool call Rejected by Auto review"
-- button "Code Catch an Auto-denied inner call"
+- button "Catch an Auto-denied inner call 1 tool call" [expanded]
+- button "Source code"
 - text: Failed
 - button "Bash Rejected by Auto review"
 - textbox "Message or run a task, / commands, @ files or sessions"
@@ -46,7 +47,8 @@
 - button "Tool call Rejected by Auto review" [expanded]
 - text: "OUT Tool was not executed. Reason: raw reason"
 - button "Inspect"
-- button "Code Catch an Auto-denied inner call"
+- button "Catch an Auto-denied inner call 1 tool call" [expanded]
+- button "Source code"
 - text: Failed
 - button "Bash Rejected by Auto review" [expanded]
 - text: "OUT Tool was not executed. Reason: ptc raw reason"

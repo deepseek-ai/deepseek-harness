@@ -48,11 +48,11 @@ const MAX_DECL_CHARS = 1200
  * share that hands down a subsystem instead of a share, and prose that grew
  * into a manual. Every report also lists one line per standard prop seat of its
  * scope, so the widest Session-scope slot (`tool.call.toolview`, with the
- * global, document, theme, and Session access seats and one occupant line per keyed tool view) sets the current 135. Three of
+ * global, document, theme, and Session access seats and one occupant line per keyed tool view) sets the current 137. Three of
  * those occupant lines are the Office rows registered under the earlier `office_*` tool names, which keep calls
  * recorded before the rename readable.
  */
-const MAX_ENTRY_LINES = 135
+const MAX_ENTRY_LINES = 137
 
 /** One register-call option as the catalog teaches it. */
 interface OptionDoc {

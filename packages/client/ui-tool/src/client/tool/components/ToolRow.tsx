@@ -146,8 +146,13 @@ function FileTargetLink({ label, path, onOpenFile, contextMenuProps, onLinkKeyDo
   )
 }
 
-/** Visually hidden run-state label for color-only running and settlement cues. */
-function stateStatus(state: ToolRowState, t: TranslateNS<'conversation'>): string | null {
+/**
+ * Name a row state for the visually hidden label beside color-only running and settlement cues.
+ * @param state - row lifecycle state.
+ * @param t - conversation-namespace translator.
+ * @returns the localized state, or null for a successful call.
+ */
+export function stateStatus(state: ToolRowState, t: TranslateNS<'conversation'>): string | null {
   switch (state) {
     case 'preparing': return t('row.preparing')
     case 'running': return t('row.running')

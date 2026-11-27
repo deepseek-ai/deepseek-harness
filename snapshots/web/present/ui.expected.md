@@ -17,8 +17,9 @@
 - button "Context injection skill-catalog"
 - button "Context injection time-context"
 - button "Think The user wants one run_code program that:"
+- button "Present files then deliberately throw AFTER_PRESENT Failed" [expanded]
 - text: Failed
-- 'button "Code Error: code run failed (exception): AFTER_PRESENT"'
+- 'button "Source code Error: code run failed (exception): AFTER_PRESENT"'
 - button "Present files Delivery failed missing.txt"
 - button "Bash Write DELIVERED_REPORT and DELIVERED_NOTE to files"
 - button "Present files Delivered report.txt, 说明.txt"

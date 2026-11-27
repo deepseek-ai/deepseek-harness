@@ -157,7 +157,155 @@ function mountApp(runtime: SlotTestRuntime) {
   return runtime.renderRoot()
 }
 
+/** Open the first program call's header row, which mounts the source row and the sub-call rows. */
+function openProgramCall(container: HTMLElement): void {
+  fireEvent.click(container.querySelector('[data-program-call] [data-disclosure-row]')!)
+}
+
 describe('program sub-calls through the real chat machinery', () => {
+  it('heads a program call with its description and sub-call count over the source row and the sub-calls', async () => {
+    const parent = 'call-64'
+    const subCalls = [
+      subCall(11, parent, 1, 'bash', { command: 'ls notes', description: 'List notes' }, 'demo.txt'),
+      subCall(12, parent, 2, 'mystery', { n: 1 }, 'ok'),
+    ]
+    const b = await bench(snapshotWith([codeResult(10, parent)], subCalls))
+    const view = mountApp(b.runtime)
+    const call = view.container.querySelector(`[data-chat-call-id="${parent}"]`)!
+    const header = call.querySelector('[data-program-call="run_code"] [data-disclosure-row]')!
+    expect(header.textContent).toBe('List the notes directory2 tool calls')
+    expect(header.getAttribute('aria-expanded')).toBe('false')
+    expect(call.querySelector('[data-variant="code"]')).toBeNull()
+    expect(call.querySelector('[data-subcalls]')).toBeNull()
+
+    fireEvent.keyDown(header, { key: 'Enter' })
+    expect(header.getAttribute('aria-expanded')).toBe('true')
+    expect(header.textContent).toBe('List the notes directory2 tool calls')
+    const source = call.querySelector('[data-variant="code"] [data-disclosure-row]')!
+    expect(source.textContent).toBe('Source code')
+    expect(source.getAttribute('aria-expanded')).toBe('false')
+    expect(call.querySelectorAll('[data-subcalls] [data-chat-call-id]')).toHaveLength(2)
+    expect(view.container.querySelector('pre.shiki')).toBeNull()
+
+    fireEvent.click(header)
+    expect(call.querySelector('[data-variant="code"]')).toBeNull()
+    expect(call.querySelector('[data-subcalls]')).toBeNull()
+  })
+
+  it('heads a program call without sub-calls with its description alone', async () => {
+    const b = await bench(snapshotWith([codeResult(10, 'call-64')], []))
+    const view = mountApp(b.runtime)
+    expect(view.container.querySelector('[data-program-call] [data-disclosure-row]')?.textContent).toBe('List the notes directory')
+    openProgramCall(view.container)
+    expect(view.container.querySelector('[data-variant="code"]')).not.toBeNull()
+    expect(view.container.querySelector('[data-subcalls]')).toBeNull()
+  })
+
+  it('labels a single sub-call in the singular', async () => {
+    const parent = 'call-64'
+    const b = await bench(snapshotWith([codeResult(10, parent)], [subCall(11, parent, 1, 'mystery', { n: 1 }, 'ok')]))
+    const view = mountApp(b.runtime)
+    expect(view.container.querySelector('[data-program-call] [data-disclosure-row]')?.textContent)
+      .toBe('List the notes directory1 tool call')
+  })
+
+  it('shows a failed program call as its description and the failed state, with the first error line on the source row', async () => {
+    const parent = 'call-64'
+    const failed: ToolResultNode = {
+      ...codeResult(10, parent), isError: true,
+      content: [{ type: 'text', text: 'Error: code run failed\n    at program' }],
+    }
+    const b = await bench(snapshotWith([failed], [subCall(11, parent, 1, 'mystery', { n: 1 }, 'ok')]))
+    const view = mountApp(b.runtime)
+    const header = view.container.querySelector('[data-program-call][data-state="error"] [data-disclosure-row]')!
+    expect(header.textContent).toBe('List the notes directoryFailed')
+    expect(view.getAllByText('Failed')).toHaveLength(1)
+    fireEvent.click(header)
+    expect(view.container.querySelector('[data-variant="code"][data-state="error"] [data-disclosure-row]')?.textContent)
+      .toBe('Source codeError: code run failed')
+  })
+
+  it('shows the stopped state of an interrupted program call after its description', async () => {
+    const parent = 'call-64'
+    const stopped: ToolResultNode = {
+      ...codeResult(10, parent), isError: true, content: [],
+      error: { name: 'ToolInterruptedError', code: 'interrupted' },
+    }
+    const b = await bench(snapshotWith([stopped], [subCall(11, parent, 1, 'mystery', { n: 1 }, 'ok')]))
+    const view = mountApp(b.runtime)
+    const header = view.container.querySelector('[data-program-call][data-state="stopped"] [data-disclosure-row]')!
+    expect(header.textContent).toBe('List the notes directoryStopped')
+    expect(view.getAllByText('Stopped')).toHaveLength(1)
+    fireEvent.click(header)
+    expect(view.container.querySelector('[data-variant="code"][data-state="stopped"] [data-disclosure-row]')?.textContent)
+      .toBe('Source code')
+  })
+
+  it('heads an Auto-denied program call with the denial and no program description', async () => {
+    const parent = 'call-64'
+    const denied: ToolResultNode = {
+      ...codeResult(10, parent), isError: true, content: [],
+      error: { name: 'AutoReviewDeniedError', code: 'AUTO_REVIEW_DENIED', reason: 'not authorized' },
+    }
+    const b = await bench(snapshotWith([denied], []))
+    const view = mountApp(b.runtime)
+    const header = view.container.querySelector('[data-program-call] [data-disclosure-row]')!
+    expect(header.textContent).toBe('Tool callRejected by Auto review')
+    fireEvent.click(header)
+    expect(view.container.querySelector('[data-variant="code"] [data-disclosure-row]')?.textContent)
+      .toBe('Source codeRejected by Auto review')
+    expect(view.queryByText('List the notes directory')).toBeNull()
+  })
+
+  it('lists the first sub-calls of a long program above an omission row', async () => {
+    const parent = 'call-64'
+    const subCalls = Array.from({ length: 33 }, (_, index) => subCall(11 + index, parent, index + 1, 'mystery', { n: index }, 'ok'))
+    const b = await bench(snapshotWith([codeResult(10, parent)], subCalls))
+    const view = mountApp(b.runtime)
+    expect(view.container.querySelector('[data-program-call] [data-disclosure-row]')?.textContent)
+      .toBe('List the notes directory33 tool calls')
+    openProgramCall(view.container)
+    const rows = [...view.container.querySelectorAll('[data-subcalls] > *')]
+    expect(rows).toHaveLength(21)
+    expect(rows.slice(0, 20).map(row => row.getAttribute('data-chat-call-id'))).toEqual(subCalls.slice(0, 20).map(call => call.callId))
+    expect(rows[20]?.getAttribute('data-subcalls-omitted')).toBe('13')
+    expect(rows[20]?.textContent).toBe('Show more (13 hidden)')
+    expect(rows[20]?.getAttribute('role')).toBe('button')
+  })
+
+  it('doubles the listed sub-calls per omission-row activation and returns to the first 20 when reopened', async () => {
+    const parent = 'call-64'
+    const subCalls = Array.from({ length: 150 }, (_, index) => subCall(11 + index, parent, index + 1, 'mystery', { n: index }, 'ok'))
+    const b = await bench(snapshotWith([codeResult(10, parent)], subCalls))
+    const view = mountApp(b.runtime)
+    const listedIds = () => [...view.container.querySelectorAll('[data-subcalls] > [data-chat-call-id]')]
+      .map(row => row.getAttribute('data-chat-call-id'))
+    const firstIds = (count: number) => subCalls.slice(0, count).map(call => call.callId)
+    const omission = () => view.container.querySelector<HTMLElement>('[data-subcalls-omitted]')
+    openProgramCall(view.container)
+    expect(listedIds()).toEqual(firstIds(20))
+    expect(omission()?.textContent).toBe('Show more (130 hidden)')
+
+    fireEvent.click(omission()!)
+    expect(listedIds()).toEqual(firstIds(40))
+    expect(omission()?.textContent).toBe('Show more (110 hidden)')
+
+    fireEvent.keyDown(omission()!, { key: 'Tab' })
+    expect(listedIds()).toEqual(firstIds(40))
+    fireEvent.keyDown(omission()!, { key: 'Enter' })
+    expect(listedIds()).toEqual(firstIds(80))
+    expect(omission()?.textContent).toBe('Show more (70 hidden)')
+
+    fireEvent.keyDown(omission()!, { key: ' ' })
+    expect(listedIds()).toEqual(firstIds(150))
+    expect(omission()).toBeNull()
+
+    openProgramCall(view.container)
+    openProgramCall(view.container)
+    expect(listedIds()).toEqual(firstIds(20))
+    expect(omission()?.textContent).toBe('Show more (130 hidden)')
+  })
+
   it.each([false, true])('renders the CUA program and its nested calls while running=%s', async (running) => {
     const parent = 'cua-program'
     const program = "var app = await cua.getApp('Calculator')\nconsole.log(app)"
@@ -168,14 +316,14 @@ describe('program sub-calls through the real chat machinery', () => {
       running ? [runningCode(parent, 'cua_run_code', argsRaw)] : [],
     ))
     const view = mountApp(b.runtime)
-    expect(view.getByText('Code')).toBeTruthy()
-    expect(view.getByText('Select Calculator')).toBeTruthy()
+    expect(view.container.querySelector('[data-program-call="cua_run_code"]')?.textContent).toContain('Select Calculator')
+    openProgramCall(view.container)
     expect(view.container.querySelector('[data-subcalls] [data-tool="cua"]')).not.toBeNull()
-    fireEvent.click(view.getByText('Select Calculator'))
+    fireEvent.click(view.getByText('Source code'))
     expect(view.container.querySelector('pre.shiki')?.textContent).toBe(program)
   })
 
-  it('renders the code-variant parent row with the description summary and nested sub-rows', async () => {
+  it('renders the code-variant source row and the sub-call rows under the header row', async () => {
     const parent = 'call-64'
     const subCalls = [
       subCall(11, parent, 1, 'bash', { command: 'ls notes', description: 'List notes' }, 'demo.txt'),
@@ -183,12 +331,12 @@ describe('program sub-calls through the real chat machinery', () => {
     ]
     const b = await bench(snapshotWith([codeResult(10, parent)], subCalls))
     const view = mountApp(b.runtime)
+    openProgramCall(view.container)
 
-    // Parent row: the code variant with the model-authored description.
-    const codeRoot = view.container.querySelector('[data-variant="code"]')
-    expect(codeRoot).not.toBeNull()
-    expect(view.getByText('Code')).toBeTruthy()
+    // The header row carries the model-authored description; the source row is the code variant.
     expect(view.getByText('List the notes directory')).toBeTruthy()
+    expect(view.container.querySelector('[data-program-call] [data-variant="code"]')).not.toBeNull()
+    expect(view.getByText('Source code')).toBeTruthy()
 
     const nest = view.container.querySelector('[data-subcalls]')
     expect(nest).not.toBeNull()
@@ -214,6 +362,7 @@ describe('program sub-calls through the real chat machinery', () => {
     ]
     const b = await bench(snapshotWith([codeResult(10, parent)], subCalls))
     const view = mountApp(b.runtime)
+    openProgramCall(view.container)
     const nest = view.container.querySelector('[data-subcalls]')!
 
     // Each run-control verb names its act and shows the package id; without the
@@ -230,6 +379,7 @@ describe('program sub-calls through the real chat machinery', () => {
     const parent = 'call-64'
     const b = await bench(snapshotWith([codeResult(10, parent)], []))
     const view = mountApp(b.runtime)
+    openProgramCall(view.container)
     // The code row is expandable via the whole summary row (body = the program).
     const toggle = view.container.querySelector('[data-variant="code"] [data-expandable]')
     expect(toggle).not.toBeNull()
@@ -249,6 +399,7 @@ describe('program sub-calls through the real chat machinery', () => {
     ]
     const b = await bench(snapshotWith([codeResult(10, parent)], subCalls))
     const view = mountApp(b.runtime)
+    openProgramCall(view.container)
     const nested = view.container.querySelector('[data-subcalls] [data-variant][data-state="error"]')
     expect(nested).not.toBeNull()
   })
@@ -261,6 +412,7 @@ describe('program sub-calls through the real chat machinery', () => {
     ]
     const b = await bench(snapshotWith([codeResult(10, parent)], subCalls))
     const view = mountApp(b.runtime)
+    openProgramCall(view.container)
     view.getByText('notes/demo.txt').click()
     await vi.waitFor(() => {
       expect(b.sidebarRight.openResource).toHaveBeenCalledWith('dsh-resource://file/session/s1//w/notes/demo.txt')
@@ -270,13 +422,16 @@ describe('program sub-calls through the real chat machinery', () => {
     expect(b.sidebarRight.openResource).toHaveBeenCalledTimes(1)
   })
 
-  it('a RUNNING run_code call nests its so-far dispatches under the spinner row', async () => {
+  it('a RUNNING run_code call nests its so-far dispatches under running header and source rows', async () => {
     const parent = 'call-live'
     const subCalls = [
       subCall(21, parent, 1, 'bash', { command: 'ls notes', description: 'List notes' }, 'demo.txt'),
     ]
     const b = await bench(snapshotWith([], subCalls, [runningCode(parent)]))
     const view = mountApp(b.runtime)
+    expect(view.container.querySelector('[data-program-call][data-state="running"]')).not.toBeNull()
+    expect(view.getByText('Running')).toBeTruthy()
+    openProgramCall(view.container)
     const running = view.container.querySelector('[data-variant="code"][data-state="running"]')
     expect(running).not.toBeNull()
     const nest = view.container.querySelector('[data-subcalls]')
@@ -293,6 +448,7 @@ describe('program sub-calls through the real chat machinery', () => {
     }
     const b = await bench(snapshotWith([], [runningSub], [runningCode(parent)]))
     const view = mountApp(b.runtime)
+    openProgramCall(view.container)
     // The nested row derives 'running' from the StartedToolCall shape — the
     // same data-state chrome (row sweep) a native in-flight row wears.
     const nested = view.container.querySelector('[data-subcalls] [data-variant][data-state="running"]')

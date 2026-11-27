@@ -11,7 +11,7 @@ import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
   launchWebScaffold, seedSession, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { expandOwningTurnProcess, newEnglishPage, saveFailureShot, WEB_FIXTURE_TIME } from './support.ts'
+import { expandOwningTurnProcess, expandProgramCalls, newEnglishPage, saveFailureShot, WEB_FIXTURE_TIME } from './support.ts'
 
 import { AUTO_REVIEW_FIXTURE, captureAutoReviewState } from './auto-review-fixture.ts'
 
@@ -85,6 +85,7 @@ describe.skipIf(MODE === 'record')('web e2e: cold Auto-review denial', () => {
     expect(await call.getByText('Tool execution rejected by user', { exact: true }).count()).toBe(0)
     expect(await call.getByText('hidden-input', { exact: false }).count()).toBe(0)
 
+    await expandProgramCalls(page)
     const inner = page.locator('[data-tool="bash"]')
     const innerRow = inner.locator('[data-expandable]')
     await expect.poll(() => innerRow.getAttribute('aria-expanded')).toBe('false')

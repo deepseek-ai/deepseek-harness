@@ -1,0 +1,19 @@
+/* Program call header: [16 leading] gap6 [description] gap8 [2x2 dot] gap8 [detail].
+   The detail is the sub-call count or the settled state. A narrow row truncates the
+   description and keeps the detail whole. */
+
+/* Scoped under the root so the shrink overrides the DisclosureRow title's `flex: none`. */
+.root .description {
+  overflow: hidden;
+  flex: 0 1 auto;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail {
+  flex: none;
+  white-space: nowrap;
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: calc(24px + var(--dsh-content-font-delta, 0px));
+}

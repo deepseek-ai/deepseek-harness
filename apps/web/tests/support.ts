@@ -300,6 +300,15 @@ export async function expandOwningTurnProcess(page: Page, target: Locator): Prom
   if (await header.isVisible() && await header.getAttribute('aria-expanded') === 'false') await header.click()
 }
 
+/**
+ * Open every visible collapsed program call, including those nested in an opened one.
+ * @param page - page containing the Chat view.
+ */
+export async function expandProgramCalls(page: Page): Promise<void> {
+  const collapsed = page.locator('[data-program-call] > div > [data-disclosure-header] > [aria-expanded="false"]').locator('visible=true')
+  while (await collapsed.count() > 0) await collapsed.first().click()
+}
+
 /** Fail loud on a stale checkout instead of testing yesterday's bundle. */
 export function requireDist(): void {
   if (!existsSync(DIST_INDEX)) {

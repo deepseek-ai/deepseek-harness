@@ -12,7 +12,7 @@ import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden, fixtureUserPrompts,
   launchWebScaffold, selectedSessionFixture, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './support.ts'
+import { connectFreshWorkspace, expandProgramCalls, newEnglishPage, saveFailureShot } from './support.ts'
 
 const fixture = fileURLToPath(new URL('../../../snapshots/session/cua-run-code/session.v4.jsonl', import.meta.url))
 const snapshotDirectory = fileURLToPath(new URL('../../../snapshots/web/cua-run-code', import.meta.url))
@@ -62,7 +62,7 @@ it.skipIf(mode === 'record')('shows standard CUA programs and their recorded sou
   expect(results.every(event => !event.data.message.isError)).toBe(true)
   const subcalls = events.filter(event => event.type === 'tool/ptc-dispatch')
   expect(subcalls).toHaveLength(13)
-  const calls = page.locator('[data-tool="cua_run_code"]')
+  const calls = page.locator('[data-program-call="cua_run_code"]')
   const description = 'Select and capture the fixture window'
   const turnControl = page.locator('[data-turn-process="1"]')
   await turnControl.waitFor({ state: 'visible' })
@@ -75,10 +75,12 @@ it.skipIf(mode === 'record')('shows standard CUA programs and their recorded sou
   if (await groupControl.getAttribute('aria-expanded') === 'false') await groupControl.click()
   await expect.poll(() => groupControl.getAttribute('aria-expanded')).toBe('true')
   await expect.poll(() => calls.count()).toBe(2)
-  await calls.first().getByRole('button', { name: `Code ${description}`, exact: true }).click()
+  await calls.first().getByRole('button', { name: `${description} 6 tool calls`, exact: true }).click()
+  await calls.first().getByRole('button', { name: 'Source code', exact: true }).click()
   const source = calls.first().locator('pre.shiki')
   await source.waitFor()
   expect(await source.textContent()).toContain('var app = await cua.getApp("test.fixture")')
+  await expandProgramCalls(page)
   expect(await page.locator('[data-subcalls] [data-tool="cua"]').count()).toBe(subcalls.length)
   expect(events.filter(event => event.type === 'tool/ptc-dispatch' && event.data.content.some(block => block.type === 'image'))).toHaveLength(1)
   expect(events.filter(event => event.type === 'tool/result'

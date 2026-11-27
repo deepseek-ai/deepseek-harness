@@ -6,7 +6,8 @@
 - button "Context injection runtime-context"
 - button "Context injection skill-catalog"
 - button "Context injection time-context"
-- button "Code Create a file with the optional editor"
+- button "Create a file with the optional editor 1 tool call" [expanded]
+- button "Source code"
 - button "Tool call str_replace_editor · create"
 - paragraph: DONE
 - button "View changes to edited.txt": Edited edited.txt +1 -0

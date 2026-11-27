@@ -2,10 +2,19 @@
   border-radius: var(--dsw-radius-sm);
 }
 
-.subCalls {
+.rows {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.omission {
+  cursor: pointer;
+  border-radius: var(--dsw-radius-sm);
+}
+
+/* Rows under a call's first row: indented past its icon, with a guide on its title edge. */
+.nested {
   margin: 4px 0 2px 22px;
   padding-left: 8px;
   border-left: 0.5px solid var(--dsw-alias-border-l2);

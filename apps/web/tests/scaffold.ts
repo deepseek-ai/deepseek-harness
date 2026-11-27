@@ -85,7 +85,7 @@ import type {} from '@deepseek-ai/dsh-web-app'
 import type {} from '@deepseek-ai/dsh-agent'
 import { provideCmdline } from '@deepseek-ai/dsh-cmdline'
 import { startPrefixProxy, type PrefixProxy } from './prefix-proxy.ts'
-import { REPO_ROOT, requireBuilt, requireDist } from './support.ts'
+import { expandProgramCalls, REPO_ROOT, requireBuilt, requireDist } from './support.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
 
 type AppBoot = typeof import('@deepseek-ai/dsh-app-boot')
@@ -1707,6 +1707,7 @@ export async function captureExpandedTurnProcessAria(
     await control.click()
     opened.push(index)
   }
+  await expandProgramCalls(page)
   try {
     if (options.scrollToBottom === true) {
       const backToBottom = page.getByRole('button', { name: 'Back to bottom', exact: true })

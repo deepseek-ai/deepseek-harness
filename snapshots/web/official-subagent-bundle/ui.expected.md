@@ -6,7 +6,8 @@
 - button "Context injection runtime-context"
 - button "Context injection skill-catalog"
 - button "Context injection time-context"
-- button "Code Delegate through the official Claude bundle"
+- button "Delegate through the official Claude bundle 1 tool call" [expanded]
+- button "Source code"
 - button "Tool call subagent_claude_code · Read the fixture response"
 - paragraph: Waiting for the child result.
 - button "Copy"

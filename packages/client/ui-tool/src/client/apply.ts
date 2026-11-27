@@ -16,6 +16,7 @@ import { readToolview } from './tool/toolviews/read-row.tsx'
 import { readImageToolview } from './tool/toolviews/read-image-row.tsx'
 import { officeToolview } from './tool/toolviews/office-row.tsx'
 import { searchToolview } from './tool/toolviews/search-row.tsx'
+import { sourceCodeToolview } from './tool/toolviews/source-code-row.tsx'
 import { detailsToolview } from './tool/toolviews/details-row.tsx'
 import { todoToolview } from './tool/toolviews/todo-row.tsx'
 import { webToolview } from './tool/toolviews/web-row.tsx'
@@ -50,6 +51,7 @@ export function apply(ctx: ClientContext): void {
   ctx.plugin(officeToolview)
   ctx.plugin(fileMutationToolview)
   ctx.plugin(searchToolview)
+  ctx.plugin(sourceCodeToolview)
   ctx.plugin(webToolview)
   ctx.plugin(todoToolview)
   ctx.plugin(detailsToolview)

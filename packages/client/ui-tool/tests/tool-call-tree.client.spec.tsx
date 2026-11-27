@@ -62,6 +62,15 @@ function props(
   return fixture as ToolTreeProps
 }
 
+/** Open every collapsed program call, outermost first. */
+function openProgramCalls(container: HTMLElement): void {
+  for (;;) {
+    const collapsed = container.querySelector('[data-program-call] > div > [data-disclosure-header] > [aria-expanded="false"]')
+    if (collapsed === null) return
+    fireEvent.click(collapsed)
+  }
+}
+
 describe('ToolCallTree', () => {
   it('binds root and nested fallback files without a Markdown provider', () => {
     const block = { ...root('parent', { name: 'read', argsRaw: '{"file_path":"parent.ts"}' }),
@@ -82,18 +91,54 @@ describe('ToolCallTree', () => {
     expect(view.container.querySelector('[aria-expanded="true"]')).toBeNull()
   })
 
-  it('dispatches only the parent and changed child among 100 sibling calls', () => {
-    const children = Array.from({ length: 100 }, (_, index) => root(`child-${index}`, { name: 'custom_child', argsRaw: '{}' }))
+  it('dispatches no toolview for a collapsed program call', () => {
+    const owners: ToolCallOwnerProps[] = []
+    const block = {
+      ...root('parent', { name: 'run_code', argsRaw: '{"code":"return 1"}' }),
+      subCalls: [root('child', { name: 'custom_child', argsRaw: '{}' })],
+    }
+    const view = render(<ToolCallTree {...props(block, undefined, owners)} />)
+    expect(owners).toEqual([])
+    expect(view.container.querySelector('[data-chat-call-id="child"]')).toBeNull()
+    openProgramCalls(view.container)
+    expect(owners.map(owner => owner.callId)).toEqual(['parent', 'child'])
+  })
+
+  it('dispatches only the parent and changed child among 24 sibling calls', () => {
+    const children = Array.from({ length: 24 }, (_, index) => root(`child-${index}`, { name: 'custom_child', argsRaw: '{}' }))
     const block = { ...root('parent', { name: 'custom_parent', argsRaw: '{}' }), subCalls: children }
     const owners: ToolCallOwnerProps[] = []
     const initial = props(block, undefined, owners)
     const view = render(<ToolCallTree {...initial} />)
-    expect(owners).toHaveLength(101)
+    expect(owners).toHaveLength(25)
+    expect(view.container.querySelector('[data-subcalls-omitted]')).toBeNull()
     owners.length = 0
-    const changed = { ...children[42]!, isError: true }
-    const next = { ...block, subCalls: children.map((child, index) => index === 42 ? changed : child) }
+    const changed = { ...children[21]!, isError: true }
+    const next = { ...block, subCalls: children.map((child, index) => index === 21 ? changed : child) }
     view.rerender(<ToolCallTree {...initial} node={{ ...initial.node, data: { root: next } }} />)
-    expect(owners.map(owner => owner.callId)).toEqual(['parent', 'child-42'])
+    expect(owners.map(owner => owner.callId)).toEqual(['parent', 'child-21'])
+  })
+
+  it('dispatches the first 20 of more than 24 sub-calls and keeps listed rows mounted as the list grows', () => {
+    const children = Array.from({ length: 27 }, (_, index) => ({
+      ...root(`child-${index}`, { name: 'custom_child', argsRaw: '{}' }),
+      content: [{ type: 'text' as const, text: `Output ${index}` }],
+    }))
+    const block = { ...root('parent', { name: 'custom_parent', argsRaw: '{}' }), subCalls: children.slice(0, 25) }
+    const owners: ToolCallOwnerProps[] = []
+    const initial = props(block, undefined, owners)
+    const view = render(<ToolCallTree {...initial} />)
+    expect(owners.map(owner => owner.callId)).toEqual(['parent', ...children.slice(0, 20).map(child => child.callId)])
+    fireEvent.click(view.container.querySelector('[data-chat-call-id="child-19"] [data-expandable]')!)
+    expect(view.getByText('Output 19')).toBeTruthy()
+
+    owners.length = 0
+    view.rerender(<ToolCallTree {...initial} node={{ ...initial.node, data: { root: { ...block, subCalls: children } } }} />)
+    expect(owners.map(owner => owner.callId)).toEqual(['parent'])
+    const listed = [...view.container.querySelectorAll('[data-subcalls] > [data-chat-call-id]')].map(row => row.getAttribute('data-chat-call-id'))
+    expect(listed).toEqual(children.slice(0, 20).map(child => child.callId))
+    expect(view.container.querySelector('[data-subcalls] > :last-child')?.textContent).toBe('显示更多（已折叠 7 项）')
+    expect(view.getByText('Output 19')).toBeTruthy()
   })
 
   it('dispatches preparation through the existing keyed toolview with no argument fields', () => {
@@ -105,6 +150,18 @@ describe('ToolCallTree', () => {
     expect(owners[0]?.block).not.toHaveProperty('argsRaw')
     expect(view.container.querySelector('[data-chat-call-id="preparing"] [data-state="preparing"]')).not.toBeNull()
     expect(view.queryByRole('button')).toBeNull()
+  })
+
+  it('shows a preparing program call as a header row without a disclosure or toolview', () => {
+    const owners: ToolCallOwnerProps[] = []
+    const view = render(<ToolCallTree {...props({
+      phase: 'preparing', args: PartialArguments.fromText('{"description":"List the no'), callId: 'preparing', name: 'run_code',
+      turn: 1, step: 1, time: 1, subCalls: [],
+    }, undefined, owners)} />)
+    const header = view.container.querySelector('[data-program-call="run_code"][data-state="preparing"] [data-disclosure-row]')
+    expect(header?.textContent).toBe('List the no')
+    expect(view.queryByRole('button')).toBeNull()
+    expect(owners).toEqual([])
   })
 
   it('forwards one stable disclosure Hook to nested calls and resets only their open state', () => {
@@ -139,6 +196,21 @@ describe('ToolCallTree', () => {
     expect(view.queryByText('Parent output')).toBeNull()
   })
 
+  it('closes an open program call when its Turn resets', () => {
+    const reset = createSnapshotStore(0)
+    const block = {
+      ...root('parent', { name: 'run_code', argsRaw: '{"code":"return 1","description":"Count"}' }),
+      subCalls: [root('child', { name: 'custom_child', argsRaw: '{}' })],
+    }
+    const view = render(<ToolCallTree {...props(block)} useDisclosure={bindDisclosure(reset)} />)
+    openProgramCalls(view.container)
+    expect(view.container.querySelector('[data-chat-call-id="child"]')).not.toBeNull()
+
+    act(() => { reset.set(1) })
+    expect(view.container.querySelector('[data-chat-call-id="child"]')).toBeNull()
+    expect(view.container.querySelector('[data-program-call] [data-disclosure-row]')?.getAttribute('aria-expanded')).toBe('false')
+  })
+
   it('owns the root marker and the generic fallback for a window-truncated call', () => {
     const block = root('w1', null)
     const view = render(<ToolCallTree {...props(block)} />)
@@ -164,9 +236,10 @@ describe('ToolCallTree', () => {
       subCalls: [child],
     }
     const view = render(<ToolCallTree {...props(block, undefined, owners)} />)
+    openProgramCalls(view.container)
     const nests = view.container.querySelectorAll('[data-subcalls]')
-    expect(nests[0]?.parentElement).toBe(view.container.querySelector('[data-chat-call-id="parent"]'))
-    expect(nests[1]?.parentElement).toBe(view.container.querySelector('[data-chat-call-id="parent:code:1"]'))
+    expect(nests[0]?.closest('[data-chat-call-id]')).toBe(view.container.querySelector('[data-chat-call-id="parent"]'))
+    expect(nests[1]?.closest('[data-chat-call-id]')).toBe(view.container.querySelector('[data-chat-call-id="parent:code:1"]'))
     expect(view.container.querySelector('[data-chat-call-id="unrelated:ptc:7"]')).not.toBeNull()
     expect(nests).toHaveLength(2)
     expect(owners.map(owner => [owner.callId, owner.block.parentCallId ?? null])).toEqual([

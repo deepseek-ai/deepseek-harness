@@ -12,7 +12,7 @@ import {
   acknowledgeReloadConnectionLoss, captureExpandedTurnProcessAria, captureStableAria, compareOrRefreshGolden, fixtureUserPrompts,
   launchWebScaffold, recordFixture, selectedSessionFixture, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { connectFreshWorkspace, expandOwningTurnProcess, newEnglishPage, openSettings, saveFailureShot } from './support.ts'
+import { connectFreshWorkspace, expandOwningTurnProcess, expandProgramCalls, newEnglishPage, openSettings, saveFailureShot } from './support.ts'
 
 const MODE = webSnapshotMode()
 
@@ -106,8 +106,8 @@ describe.each(VARIANTS)('web e2e: PTC mode round renders nested sub-calls ($exec
         await row.waitFor({ state: 'attached', timeout: 30_000 })
         await expandOwningTurnProcess(page, row)
         await row.waitFor({ state: 'visible' })
-        await row.getByText('Code', { exact: true }).waitFor()
-        expect(await row.getAttribute('data-tool')).toBe('run_code')
+        await row.getByText('Run bash echo and catch missing file read', { exact: true }).waitFor()
+        expect(await row.getAttribute('data-program-call')).toBe('run_code')
         expect(sessionEvents.some(event => event.type === 'tool/call')).toBe(false)
         expect(await row.getByRole('button').count()).toBe(0)
         expect(await row.locator('pre').count()).toBe(0)
@@ -184,15 +184,17 @@ describe.each(VARIANTS)('web e2e: PTC mode round renders nested sub-calls ($exec
     expect(bashContent.filter(block => block.type === 'text').map(block => block.text).join('')).toContain('CODE_ROUND_OK')
   })
 
-  it.skipIf(MODE === 'record')('renders the code parent row with always-visible nested sub-rows', async () => {
+  it.skipIf(MODE === 'record')('renders the program header row over the source row and the sub-call rows', async () => {
     onTestFailed(() => saveFailureShot(page, `web-e2e-ptc-rows-${executionMode}`))
     await expect.poll(() => page.getByText('DONE', { exact: true }).count(), { timeout: 15_000 }).toBeGreaterThanOrEqual(1)
-    // The parent run_code row wears the code variant with the model-authored
-    // description as its summary (the presentCall contract).
-    const codeRow = page.locator('[data-variant="code"]').first()
-    await expandOwningTurnProcess(page, codeRow)
-    await codeRow.waitFor({ timeout: 10_000 })
-    const nest = page.locator('[data-subcalls]').first()
+    // The header row carries the model-authored description (the presentCall contract) and the
+    // sub-call count, and mounts the source row and the sub-call rows only while open.
+    const program = page.locator('[data-program-call="run_code"]').first()
+    await expandOwningTurnProcess(page, program)
+    const nest = program.locator('[data-subcalls]')
+    expect(await nest.count()).toBe(0)
+    await program.getByRole('button', { name: 'Run bash echo and catch missing file read 2 tool calls', exact: true }).click()
+    await program.locator('[data-variant="code"]').getByRole('button', { name: 'Source code', exact: true }).waitFor()
     await nest.waitFor({ timeout: 10_000 })
     expect(await nest.locator('[data-sample="bash"]').count()).toBeGreaterThanOrEqual(1)
     expect(await nest.locator('[data-state="error"]').count()).toBeGreaterThanOrEqual(1)
@@ -212,7 +214,8 @@ describe.each(VARIANTS)('web e2e: PTC mode round renders nested sub-calls ($exec
       const nest = page.locator('[data-subcalls]').first()
       const frame = page.locator('[style*="grid-template-columns"]').first()
       expect(await frame.getAttribute('data-rightbar-collapsed')).toBe('true')
-      await expandOwningTurnProcess(page, nest)
+      await expandOwningTurnProcess(page, page.locator('[data-program-call]').first())
+      await expandProgramCalls(page)
       const row = nest.locator('[data-sample="bash"]').first()
       await expect.poll(() => row.getAttribute('data-state')).toBe('ok')
       await expect.poll(() => row.getAttribute('aria-expanded')).toBe('false')
@@ -232,8 +235,9 @@ describe.each(VARIANTS)('web e2e: PTC mode round renders nested sub-calls ($exec
 
   it.skipIf(MODE === 'record')('matches the expanded conversation aria golden with stable anchors', async () => {
     onTestFailed(() => saveFailureShot(page, `web-e2e-ptc-aria-${executionMode}`))
+    await expandOwningTurnProcess(page, page.locator('[data-program-call]').first())
+    await expandProgramCalls(page)
     const row = page.locator('[data-subcalls] [data-sample="bash"]').first()
-    await expandOwningTurnProcess(page, row)
     if (await row.getAttribute('aria-expanded') !== 'true') await row.click()
     const snapshot = await captureExpandedTurnProcessAria(
       page,
@@ -295,8 +299,9 @@ describe.each(VARIANTS)('web e2e: PTC mode round renders nested sub-calls ($exec
     await page.getByRole('tab', { name: 'チャット', exact: true }).click()
     await page.getByText('DONE', { exact: true }).waitFor()
     expect(await page.evaluate(() => document.documentElement.lang)).toBe('ja')
+    await expandOwningTurnProcess(page, page.locator('[data-program-call]').first())
+    await expandProgramCalls(page)
     const row = page.locator('[data-subcalls] [data-sample="bash"]').first()
-    await expandOwningTurnProcess(page, row)
     if (await row.getAttribute('aria-expanded') !== 'true') await row.click()
     await row.locator('xpath=..').getByText('echo CODE_ROUND_OK', { exact: true }).waitFor()
     const snapshot = await captureExpandedTurnProcessAria(page, '[class*="centerCol"]', scaffold.workspaceCwd)

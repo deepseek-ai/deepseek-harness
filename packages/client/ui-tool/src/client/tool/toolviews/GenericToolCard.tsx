@@ -10,7 +10,7 @@ import { diffCardModel } from '../models/diff-card-model.ts'
 import { searchCardModel } from '../models/search-card-model.ts'
 import { terminalCardModel, terminalFailed } from '../models/terminal-card-model.ts'
 import { webCardModel } from '../models/web-card-model.ts'
-import { toolRowModel, type ToolRowVariant } from '../models/tool-call-model.ts'
+import { formatResultImage, toolRowModel, type ToolRowVariant } from '../models/tool-call-model.ts'
 import { localizeAutoReviewDenial } from '../models/auto-review-denial.ts'
 import { ToolRow } from '../components/ToolRow.tsx'
 
@@ -36,14 +36,7 @@ export type GenericToolCardProps = ToolCallOwnerProps & {
 export function GenericToolCard({
   toolName, block, cwd, home, openFile, getFileTriggerProps, inspect, useDisclosure, t,
 }: GenericToolCardProps) {
-  const model = toolRowModel(toolName, block, cwd, home, (image) => {
-    if (typeof image !== 'object' || image === null || Array.isArray(image)) return undefined
-    const { attachmentId, name, width, height, bytes } = image as Record<string, unknown>
-    if (typeof attachmentId !== 'string' || attachmentId === ''
-      || name !== undefined && typeof name !== 'string'
-      || ![width, height, bytes].every(value => typeof value === 'number' && Number.isInteger(value) && value > 0)) return undefined
-    return `${name ?? attachmentId} (${t('row.imageSize', { width, height, bytes })})`
-  })
+  const model = toolRowModel(toolName, block, cwd, home, image => formatResultImage(image, t))
   const autoReview = model.autoReviewDenial === null
     ? null
     : localizeAutoReviewDenial(model.autoReviewDenial, t)

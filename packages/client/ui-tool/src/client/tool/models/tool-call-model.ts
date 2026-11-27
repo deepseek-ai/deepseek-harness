@@ -6,7 +6,7 @@
  * call gets its expanded body from `terminalCardModel` instead.
  */
 import type { ToolArgs, ToolCallBlock, ToolResultNode } from '@deepseek-ai/dsh-client-ui-chat/client'
-import type { LocaleKeysOf } from '@deepseek-ai/dsh-client-ui-slots'
+import type { LocaleKeysOf, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { parsePatch, PatchParseError, type PatchOperation } from '@deepseek-ai/dsh-fs-patch'
 import { abbreviateHomePath, isAbsoluteWorkspacePath, relativizeToCwd } from '@deepseek-ai/dsh-util-workspace-path'
 import { recordedAbsolutePath } from './recorded-path.ts'
@@ -225,6 +225,21 @@ export function resultText(node: ToolResultNode, formatImage?: (image: unknown) 
     parts.push(`${node.error.name}: ${node.error.code}`)
   }
   return parts.reduce((text, part, index) => text + (index === 0 || text.endsWith('\n') ? '' : '\n') + part, '')
+}
+
+/**
+ * Label one image attachment of a result's flattened text as its name, or its id, and size.
+ * @param image - Unvalidated attachment of a recorded image block.
+ * @param t - Conversation locale.
+ * @returns The label; undefined for a malformed attachment, whose block {@link resultText} keeps as JSON.
+ */
+export function formatResultImage(image: unknown, t: TranslateNS<'conversation'>): string | undefined {
+  if (typeof image !== 'object' || image === null || Array.isArray(image)) return undefined
+  const { attachmentId, name, width, height, bytes } = image as Record<string, unknown>
+  if (typeof attachmentId !== 'string' || attachmentId === ''
+    || name !== undefined && typeof name !== 'string'
+    || ![width, height, bytes].every(value => typeof value === 'number' && Number.isInteger(value) && value > 0)) return undefined
+  return `${name ?? attachmentId} (${t('row.imageSize', { width, height, bytes })})`
 }
 
 function parseArgs(argsRaw: string): unknown {

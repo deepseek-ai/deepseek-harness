@@ -222,6 +222,12 @@ export const IconAgentPresetOutlineRegular = productIcon('agent-preset-outline',
 /** Medium IconAgentPresetOutline artwork with a 1.3px stroke. */
 export const IconAgentPresetOutlineMedium = productIcon('agent-preset-outline', 'medium')
 
+/** Regular one-pixel IconHubOutline artwork: a central node wired to three satellite nodes. */
+export const IconHubOutlineRegular = productIcon('hub-outline', 'regular')
+
+/** Medium IconHubOutline artwork with a 1.3px stroke. */
+export const IconHubOutlineMedium = productIcon('hub-outline', 'medium')
+
 /** Regular one-pixel IconBrowseOutline artwork. */
 export const IconBrowseOutlineRegular = productIcon('browse-outline', 'regular')
 

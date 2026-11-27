@@ -16,7 +16,8 @@
 - button "Context injection runtime-context"
 - button "Context injection skill-catalog"
 - button "Context injection time-context"
-- button "Code Select and capture the fixture window" [expanded]
+- button "Select and capture the fixture window 6 tool calls" [expanded]
+- button "Source code" [expanded]
 - text: typescript
 - button "Wrap lines" [pressed]
 - button "Copy"
@@ -30,7 +31,8 @@
 - button "Tool call cua · click"
 - button "Tool call cua · screenshot"
 - button "Context injection cua-held-inputs CUA inputs remain held"
-- button "Code Reuse the retained application and window"
+- button "Reuse the retained application and window 7 tool calls" [expanded]
+- button "Source code"
 - button "Tool call cua · sendKeyEvent"
 - button "Tool call cua · getState"
 - button "Tool call cua · click"

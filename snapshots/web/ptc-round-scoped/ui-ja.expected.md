@@ -17,7 +17,8 @@
 - button "コンテキスト注入 skill-catalog"
 - button "コンテキスト注入 time-context"
 - 'button "思考 The user wants me to write a single `run_code` program that:"'
-- button "コード Run bash echo and catch missing file read"
+- button "Run bash echo and catch missing file read ツール呼び出し 2 件" [expanded]
+- button "ソースコード"
 - button "Bash Echo CODE_ROUND_OK" [expanded]
 - text: 完了 workspace echo CODE_ROUND_OK
 - button "コピー"
