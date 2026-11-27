@@ -1,6 +1,6 @@
 /** Native permission status and revocable application consent on the existing plugin page. */
-import { useEffect } from 'react'
-import { Button, IconLayersOutlineRegular, IconSettingsOutlineRegular, Modal, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
+import { useEffect, type ReactNode } from 'react'
+import { Button, IconLayersOutlineRegular, IconSettingsOutlineRegular, IconWarningOutlineRegular, Modal, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
@@ -85,21 +85,49 @@ function UnknownStatus({ loading, t }: Pick<PermissionProps, 't'> & { loading: b
   })
 }
 
-function WindowsStatus({ system, uncertain, t }: Pick<PermissionProps, 't'> & {
-  system: Extract<CuaSystemPermissionState, { platform: 'windows' }>
-  uncertain: boolean
+function NoticeBox({ tone, role, title, body, action }: {
+  tone: 'warn' | 'danger'
+  role: 'note' | 'alert'
+  title: string
+  body: string
+  action?: ReactNode
 }) {
-  const unlocked = system.sessionLocked === false
-  return <>
-    <div className={css.permission} role="group" aria-label={t('windowsDesktop')}>
-      <div><strong>{t('windowsDesktop')}</strong><p>{t('windowsDesktopUse')}</p></div>
-      <span>{uncertain || system.sessionLocked === null ? t('unknown') : t(unlocked ? 'available' : 'locked')}</span>
+  const danger = tone === 'danger'
+  return <div className={danger ? css.dangerNotice : css.caution} role={role}>
+    <div className={css.noticeMain}>
+      <span className={danger ? css.dangerIcon : css.cautionIcon} aria-hidden="true"><IconWarningOutlineRegular size={14} /></span>
+      <div className={css.cautionBody}>
+        <p className={css.cautionTitle}>{title}</p>
+        <p>{body}</p>
+      </div>
     </div>
-    <div className={css.permission} role="group" aria-label={t('windowsCapture')}>
-      <div><strong>{t('windowsCapture')}</strong><p>{t('screenRecordingUse')}</p></div>
-      <span>{uncertain || system.sessionLocked === null ? t('unknown') : t(unlocked && system.captureAvailable ? 'available' : 'unavailable')}</span>
-    </div>
-  </>
+    {action}
+  </div>
+}
+
+function WindowsGuidance({ system, error, busy, refresh, t }: Pick<PermissionProps, 'refresh' | 't'> & {
+  system: Extract<CuaSystemPermissionState, { platform: 'windows' }> | null
+  error: string | null
+  busy: boolean
+}) {
+  return <div className={css.guidance} data-cua-guidance>
+    {error !== null && <NoticeBox tone="danger" role="alert"
+      title={t('windowsHelperFailed', { message: error })} body={t('queryFailedHint')}
+      action={<Button size="sm" variant="outline" disabled={busy} onClick={refresh}>{t('retry')}</Button>} />}
+    {/* Standing desktop conditions are notes so that opening the page does not interrupt assistive technology. */}
+    {error === null && system !== null && <>
+      {system.sessionLocked === true && <NoticeBox tone="danger" role="note"
+        title={t('windowsLockedTitle')} body={t('windowsLockedBody')} />}
+      {system.sessionLocked === null && <NoticeBox tone="danger" role="note"
+        title={t('windowsSessionUnknownTitle')} body={t('windowsSessionUnknown')} />}
+      {system.sessionLocked === false && !system.captureAvailable && <NoticeBox tone="warn" role="note"
+        title={t('windowsCaptureUnavailableTitle')} body={t('windowsCaptureUnavailableNotice')} />}
+    </>}
+    <NoticeBox tone="warn" role="note" title={t('previewNoticeTitle')} body={t('previewNotice')} />
+    <p>{t('windowsInstructions')}</p>
+    {error === null && system !== null && !system.elevated && <p>{t('standardPrivileges')}</p>}
+    <p>{t('ptcRecommendation')}</p>
+  </div>
 }
 
 function systemReady(system: CuaSystemPermissionState): boolean {
@@ -121,39 +149,42 @@ export function PermissionPanel(props: PermissionProps) {
   const transitioning = state.changing
   const busy = transitioning || state.system.busy
   const appsBusy = transitioning || state.applications.busy
-  const loading = observed === null && state.system.error === null
+  // A failed native query leaves the platform unknown until the Host inventory says whether a Windows provider is enabled.
+  const platformPending = observed === null && state.system.error !== null
+    && state.windowsProvider.value === null && state.windowsProvider.error === null
+  const loading = observed === null && (state.system.error === null || platformPending)
   const mac = observed?.platform === 'darwin' ? observed : null
+  const win = observed?.platform === 'windows' ? observed : null
   const application = state.system.error !== null ? undefined : mac?.launchApplication
+  // An unidentified platform outranks the native query failure because the page cannot tell which guidance applies.
+  const providerError = observed === null ? state.windowsProvider.error : null
   useEffect(() => {
     refresh()
     window.addEventListener('focus', refresh)
     return () => { window.removeEventListener('focus', refresh) }
   }, [refresh])
   return <div className={css.panels} data-cua-settings aria-busy={transitioning || state.busy || loading}>
-    <section className={css.panel} aria-label={t('title')}>
-      <div className={css.guidance} data-cua-guidance>
-        <p>{t('previewNotice')}</p>
-        {windows && <>
-          <p>{t('windowsHelperBuild', {
-            directory: 'packages/experimental/cua-windows',
-            x64: 'pnpm run build:native:x64', arm64: 'pnpm run build:native:arm64',
-          })}</p>
-          <p>{t('windowsHelperPath', {
-            patch: 'cordis.patch.yml', entry: 'cua-windows', config: 'config', path: 'helperPath', exe: 'dsh-cua-windows.exe',
-          })}</p>
-        </>}
-      </div>
-      <h3>{t('title')}</h3>
-      <div className={css.card}>
-        {observed === null && state.windowsProvider.error !== null && <p role="alert" className={css.error}>
-          {t('providerLookupFailed', { message: state.windowsProvider.error })}
+    {windows ? <WindowsGuidance system={win} error={state.system.error} busy={busy} refresh={refresh} t={t} />
+      : <section className={css.panel} aria-label={t('title')}>
+        <div className={`${css.guidance} ${css.panelGuidance}`} data-cua-guidance>
+          <NoticeBox tone="warn" role="note" title={t('previewNoticeTitle')} body={t('previewNotice')} />
+          <p>{t('ptcRecommendation')}</p>
+        </div>
+        <h3>{t('title')}</h3>
+        {state.system.error !== null && !platformPending && <NoticeBox tone="danger" role="alert"
+          title={providerError === null
+            ? t('queryFailed', { message: state.system.error })
+            : t('providerLookupFailed', { message: providerError })}
+          body={t('queryFailedHint')}
+          action={<Button size="sm" variant="outline" disabled={busy} onClick={refresh}>{t('retry')}</Button>} />}
+        {(observed !== null || loading) && <p
+          className={observed === null ? css.pendingHint : undefined}
+          aria-hidden={observed === null || undefined}
+        >
+          {t('permissionsIntro')}
         </p>}
-        {state.system.error !== null && <div className={css.notice} role="alert">
-          <span className={css.error}>{t('queryFailed', { message: state.system.error })}</span>
-          <Button size="sm" variant="outline" disabled={busy} onClick={refresh}>{t('retry')}</Button>
-        </div>}
-        {observed === null ? <UnknownStatus loading={loading} t={t} />
-          : observed.platform === 'windows' ? <WindowsStatus system={observed} uncertain={state.system.error !== null} t={t} />
+        <div className={css.card}>
+          {mac === null ? <UnknownStatus loading={loading} t={t} />
             : (['accessibility', 'screenRecording'] as const).map(permission => <div className={css.permission} key={permission}
               role="group" aria-label={t(permission)}>
               <div>
@@ -161,14 +192,11 @@ export function PermissionPanel(props: PermissionProps) {
                 <PermissionDescription application={application} permission={permission} t={t} />
               </div>
               <PermissionAction permission={permission}
-                granted={mac === null || state.system.error !== null ? null : mac[permission]}
+                granted={state.system.error !== null ? null : mac[permission]}
                 busy={busy} request={props.request} openSettings={props.openSettings} t={t} />
             </div>)}
-      </div>
-      <p className={observed === null ? css.pendingHint : undefined} aria-hidden={observed === null || undefined}>{observed?.platform === 'windows'
-        ? <>{t('windowsInstructions')} {t(observed.elevated ? 'elevated' : 'standardPrivileges')}</>
-        : t('permissionHint')}</p>
-    </section>
+        </div>
+      </section>}
     <section className={css.panel} aria-label={t('applicationsTitle')}>
       <h3>{t('applicationsTitle')}</h3>
       <div className={css.card}>

@@ -159,13 +159,13 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   const panel = page.locator('[data-cua-settings]')
   const accessibility = panel.getByRole('group', { name: 'Accessibility', exact: true })
   await accessibility.getByRole('button', { name: 'Request permission', exact: true }).waitFor()
-  expect(await panel.getByRole('region', { name: 'Authorize computer use', exact: true }).getByRole('group').count()).toBe(2)
+  expect(await panel.getByRole('region', { name: 'System permissions', exact: true }).getByRole('group').count()).toBe(2)
   expect(await panel.getByRole('region', { name: 'Manage applications computer use can access', exact: true }).count()).toBe(1)
   await expect.poll(() => panel.locator('li img').evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(1)
   expect(await panel.getByText('/fixture/app', { exact: true }).count()).toBe(0)
   expect(await accessibility.getByText('DSH Computer Use.app', { exact: true }).count()).toBe(1)
-  expect(await accessibility.textContent()).toContain('In System Settings, allow')
-  expect(await accessibility.textContent()).toContain('to read interface controls, click, and type.')
+  expect(await accessibility.textContent()).toContain('Allow')
+  expect(await accessibility.textContent()).toContain('to read interface content, click, and type.')
   expect(await panel.getByRole('group', { name: 'Screen Recording', exact: true }).getByText('DSH Computer Use.app', { exact: true }).count()).toBe(1)
   await expect.poll(() => accessibility.locator('img').evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(1)
   await expect.poll(() => panel.getAttribute('aria-busy')).toBe('false')
@@ -334,7 +334,7 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   expect(tripwire.pageErrors).toEqual([])
 })
 
-it.skipIf(process.platform !== 'darwin' && process.platform !== 'win32')('shows Windows setup when the helper is missing', async () => {
+it.skipIf(process.platform !== 'darwin' && process.platform !== 'win32')('shows guidance without manual helper build instructions when the helper is missing', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-cua-missing-helper-'))
   const resources: { scaffold?: WebScaffold; browser?: Browser } = {}
   onTestFinished(async () => {
@@ -348,12 +348,6 @@ it.skipIf(process.platform !== 'darwin' && process.platform !== 'win32')('shows 
   const scaffold = resources.scaffold = await launchWebScaffold({
     profile: { packages: [{ dir: bundle, enabled: true }] }, extraOverlayPath: patch,
   })
-  if (process.platform === 'darwin') {
-    // The Host inventory reads this Loader flag; only the platform-specific input is substituted on macOS.
-    const windows = [...scaffold.ctx.loader.entries()].find(entry => entry.options.id === 'cua-windows')
-    if (!windows) throw new Error('CUA bundle has no Windows provider row')
-    vi.spyOn(windows, 'disabled', 'get').mockReturnValue(false)
-  }
   const browser = resources.browser = await chromium.launch()
   const page = await newEnglishPage(browser)
   await page.goto(scaffold.authenticatedUrl)
@@ -361,11 +355,13 @@ it.skipIf(process.platform !== 'darwin' && process.platform !== 'win32')('shows 
   await page.getByRole('button', { name: 'View Computer use', exact: true }).click()
   const panel = page.locator('[data-cua-settings]')
   const guidance = panel.locator('[data-cua-guidance]')
-  await guidance.getByText(/pnpm run build:native:x64/).waitFor()
-  await guidance.getByText(/helperPath/).waitFor()
+  await guidance.getByRole('note').getByText('Experimental feature', { exact: true }).waitFor()
+  await guidance.getByText(/We recommend using PTC mode/).waitFor()
+  expect(await guidance.textContent()).not.toContain('pnpm run build:native')
+  expect(await guidance.textContent()).not.toContain('helperPath')
   const preview = page.locator('[data-detail-document] img')
   await preview.evaluate(async (image) => { await (image as HTMLImageElement).decode() })
-  const firstSetting = panel.getByRole('heading', { name: 'Authorize computer use', exact: true })
+  const firstSetting = panel.getByRole('heading', { name: process.platform === 'win32' ? 'Manage applications computer use can access' : 'System permissions', exact: true })
   const previewBox = await preview.boundingBox(), guidanceBox = await guidance.boundingBox(), settingBox = await firstSetting.boundingBox()
   expect(previewBox!.y + previewBox!.height).toBeLessThanOrEqual(guidanceBox!.y)
   expect(guidanceBox!.y + guidanceBox!.height).toBeLessThanOrEqual(settingBox!.y)

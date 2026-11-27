@@ -236,15 +236,21 @@ it.each([
   expect(question).toMatchObject({
     id: 'cua-app-access',
     question: 'Allow computer use to launch if needed, read, capture, and control Test application?',
-    detail: 'Manage app permissions for all sessions on the plugin page.',
+    detail: offeredAlways
+      ? 'Once allowed, the agent can view and operate this app. You can manage app permissions anytime in plugin settings.'
+      : 'Once allowed, the agent can view and operate this app for this session.',
     intent: { kind: 'approval', approve: 'Allow for this session', reject: 'Deny',
       subject: { name: 'Test application' }, display: {
         question: { en: 'Allow agent to control this application via computer use?',
           zh: '允许智能体自动操作此应用吗？',
           ja: 'エージェントが Computer Use でこのアプリを操作することを許可しますか？' },
-        detail: { en: 'Manage app permissions for all sessions on the plugin page.',
-          zh: '在插件页面管理所有会话的应用权限。',
-          ja: 'プラグインページで、すべてのセッションのアプリ権限を管理できます。' },
+        detail: offeredAlways
+          ? { en: 'Once allowed, the agent can view and operate this app. You can manage app permissions anytime in plugin settings.',
+            zh: '允许后，智能体将能够查看并操作此应用。你可随时在插件设置中管理应用权限。',
+            ja: '許可すると、エージェントはこのアプリの内容を確認して操作できます。アプリの権限はプラグイン設定からいつでも管理できます。' }
+          : { en: 'Once allowed, the agent can view and operate this app for this session.',
+            zh: '允许后，智能体将能在本会话内查看并操作此应用。',
+            ja: '許可すると、エージェントはこのセッション中にこのアプリの内容を確認して操作できます。' },
         approve: { en: 'Allow for this session', zh: '本会话允许', ja: 'このセッションで許可',
           es: 'Permitir durante esta sesión', fr: 'Autoriser pour cette session', de: 'Für diese Sitzung zulassen',
           ru: 'Разрешить для этого сеанса', pt: 'Permitir nesta sessão' },

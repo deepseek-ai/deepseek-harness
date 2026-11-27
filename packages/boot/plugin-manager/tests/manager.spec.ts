@@ -110,9 +110,12 @@ it.each(['live', 'startup'] as const)('refuses an unsupported bundle before savi
   const before = readFileSync(join(dir, 'package.json'), 'utf8')
   const patchBefore = readFileSync(join(dir, 'cordis.patch.yml'), 'utf8')
   expect((await manager.listBundles()).find(row => row.name === 'extra')).toMatchObject({
-    enabled: false, installed: true, listedByDefault: false, description: 'Platform-limited bundle', error: { code: 'unsupported-platform' },
+    enabled: false, installed: true, listedByDefault: false, description: 'Platform-limited bundle',
+    error: { code: 'unsupported-platform', platforms: [process.platform === 'darwin' ? 'win32' : 'darwin'] },
   })
-  expect(await manager.setBundleEnabled('extra', true)).toMatchObject({ changed: false, application: 'failed', error: { code: 'unsupported-platform' } })
+  expect(await manager.setBundleEnabled('extra', true)).toMatchObject({
+    changed: false, application: 'failed', error: { code: 'unsupported-platform', platforms: [process.platform === 'darwin' ? 'win32' : 'darwin'] },
+  })
   expect(readFileSync(join(dir, 'package.json'), 'utf8')).toBe(before)
   expect(ctx.get('managedProbe')).toBeUndefined()
   expect(readFileSync(join(dir, 'cordis.patch.yml'), 'utf8')).toBe(patchBefore)
@@ -1836,7 +1839,7 @@ it('lists absent Official entries offline without resolving their packages or co
       name: entry.packageName, official: true, availability: 'missing', enabled: false, installed: false, optional: false,
       removable: false, rows: [], overrides: [], meta: entry.meta,
       ...entry.platforms !== undefined && !entry.platforms.includes(process.platform)
-        ? { listedByDefault: false, error: { code: 'unsupported-platform' } } : {},
+        ? { listedByDefault: false, error: { code: 'unsupported-platform', platforms: [...entry.platforms] } } : {},
       installTarget: { spec: `${entry.packageName}@${getDshRuntimeVersion()}`, version: getDshRuntimeVersion() },
     }])
     expect(resolve.mock.calls.some(([name]) => name === entry.packageName)).toBe(false)
@@ -1860,7 +1863,7 @@ it.each([false, true])('applies offline platform admission to an uninstalled Off
   }
   expect((await manager.listBundles()).find(bundle => bundle.name === entry.packageName)).toMatchObject({
     installed: false, availability: 'missing', enabled: selected, listedByDefault: false,
-    error: { code: 'unsupported-platform' },
+    error: { code: 'unsupported-platform', platforms: [process.platform === 'darwin' ? 'linux' : 'darwin'] },
   })
   if (selected) {
     expect(await manager.setBundleEnabled(entry.packageName, false)).toMatchObject({ changed: true, enabled: false })

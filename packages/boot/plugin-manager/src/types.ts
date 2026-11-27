@@ -40,6 +40,8 @@ export interface ManagementError {
   diagnostic?: string
   /** Present with `incompatible-version`: the packages the running DSH version rejects. */
   incompatible?: IncompatiblePlugin[]
+  /** Present with `unsupported-platform`: the Host platforms the bundle supports. */
+  platforms?: string[]
 }
 
 /**

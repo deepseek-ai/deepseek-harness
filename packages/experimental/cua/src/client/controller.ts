@@ -120,7 +120,7 @@ export class PermissionController {
       const latest = () => current() && this.sequence === sequence
       const refresh = Promise.all([
         this.read('system', this.remote.systemStatus, latest).then(async () => {
-          // The Windows helper can be missing before its first permission response.
+          // Identify an enabled Windows provider when native setup fails before reporting its platform.
           if (latest() && this.state.getSnapshot().system.value === null) {
             this.state.update((state) => { state.windowsProvider.busy = true })
             await this.read('windowsProvider', this.windowsProvider, latest)

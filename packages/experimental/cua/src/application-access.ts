@@ -4,7 +4,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import { isDeepStrictEqual } from 'node:util'
 import { UserQuestionError, type AskUserQuestionAnswer } from '@deepseek-ai/dsh-user-questions'
 import { z } from 'zod'
-import { applicationAccessDisplay } from './locales.ts'
+import { applicationAccessDisplay, sessionApplicationAccessDisplay } from './locales.ts'
 import { NativeError, type NativeClient } from './native-client.ts'
 import type { CuaAppHandle } from './types.ts'
 import type { CuaApplicationGrant, CuaApplicationId } from './application-types.ts'
@@ -203,17 +203,19 @@ export class ApplicationAccess {
         const questions = this.ctx.get('userQuestions')
         if (!questions) throw new NativeError('APP_APPROVAL_UNAVAILABLE', 'No human answerer is available for application access')
         const options = [{ label: 'Allow for this session' }, { label: 'Deny' }]
-        if (identity.persistable && this.options.store.persistent) options.push({ label: 'Always allow' })
+        const persistable = identity.persistable && this.options.store.persistent
+        if (persistable) options.push({ label: 'Always allow' })
+        const display = persistable ? applicationAccessDisplay : sessionApplicationAccessDisplay
         let result: AskUserQuestionAnswer
         try {
           result = await questions.ask({ agent, signal, questions: [{ id: 'cua-app-access',
             question: `Allow computer use to launch if needed, read, capture, and control ${identity.name}?`,
-            detail: applicationAccessDisplay.detail.en,
+            detail: display.detail.en,
             options, intent: {
               kind: 'approval', approve: 'Allow for this session', reject: 'Deny',
-              ...(identity.persistable && this.options.store.persistent ? { always: 'Always allow' } : {}),
+              ...(persistable ? { always: 'Always allow' } : {}),
               subject: { name: identity.name, ...(icon === undefined ? {} : { icon }) },
-              display: applicationAccessDisplay,
+              display,
             } }] })
         } catch (error) {
           if (error instanceof UserQuestionError && error.code === 'ASK_CANCELLED') {

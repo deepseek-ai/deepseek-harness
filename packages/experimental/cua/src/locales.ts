@@ -3,56 +3,64 @@
 /** English application-access messages. */
 export const en = {
   question: 'Allow agent to control this application via computer use?',
-  detail: 'Manage app permissions for all sessions on the plugin page.',
+  detail: 'Once allowed, the agent can view and operate this app. You can manage app permissions anytime in plugin settings.',
+  sessionDetail: 'Once allowed, the agent can view and operate this app for this session.',
   approve: 'Allow for this session',
 }
 
 /** Chinese application-access messages. */
 export const zh = {
   question: '允许智能体自动操作此应用吗？',
-  detail: '在插件页面管理所有会话的应用权限。',
+  detail: '允许后，智能体将能够查看并操作此应用。你可随时在插件设置中管理应用权限。',
+  sessionDetail: '允许后，智能体将能在本会话内查看并操作此应用。',
   approve: '本会话允许',
 } satisfies Record<keyof typeof en, string>
 
 /** Japanese application-access messages. */
 export const ja = {
   question: 'エージェントが Computer Use でこのアプリを操作することを許可しますか？',
-  detail: 'プラグインページで、すべてのセッションのアプリ権限を管理できます。',
+  detail: '許可すると、エージェントはこのアプリの内容を確認して操作できます。アプリの権限はプラグイン設定からいつでも管理できます。',
+  sessionDetail: '許可すると、エージェントはこのセッション中にこのアプリの内容を確認して操作できます。',
   approve: 'このセッションで許可',
 } satisfies Record<keyof typeof en, string>
 
 /** Spanish dictionary, checked against the English keys. */
 export const es = {
   question: '¿Permitir que el agente controle esta aplicación mediante Computer Use?',
-  detail: 'Gestiona los permisos de las aplicaciones para todas las sesiones en la página del plugin.',
+  detail: 'Si lo permites, el agente podrá ver y controlar esta aplicación. Puedes gestionar los permisos de las aplicaciones en cualquier momento en la configuración del complemento.',
+  sessionDetail: 'Si lo permites, el agente podrá ver y controlar esta aplicación durante esta sesión.',
   approve: 'Permitir durante esta sesión',
 } satisfies Record<keyof typeof en, string>
 
 /** French dictionary, checked against the English keys. */
 export const fr = {
   question: 'Autoriser l’agent à contrôler cette application via Computer Use ?',
-  detail: 'Gérez les autorisations des applications pour toutes les sessions sur la page du plugin.',
+  detail: 'Une fois autorisé, l’agent peut consulter et utiliser cette application. Vous pouvez gérer les autorisations des applications à tout moment dans les paramètres du plugin.',
+  sessionDetail: 'Une fois autorisé, l’agent peut consulter et utiliser cette application pendant cette session.',
   approve: 'Autoriser pour cette session',
 } satisfies Record<keyof typeof en, string>
 
 /** German dictionary, checked against the English keys. */
 export const de = {
   question: 'Darf der Agent diese Anwendung über Computer Use steuern?',
-  detail: 'Verwalten Sie App-Berechtigungen für alle Sitzungen auf der Plugin-Seite.',
+  detail: 'Nach der Freigabe kann der Agent diese App einsehen und bedienen. Sie können App-Berechtigungen jederzeit in den Plugin-Einstellungen verwalten.',
+  sessionDetail: 'Nach der Freigabe kann der Agent diese App für diese Sitzung einsehen und bedienen.',
   approve: 'Für diese Sitzung zulassen',
 } satisfies Record<keyof typeof en, string>
 
 /** Russian dictionary, checked against the English keys. */
 export const ru = {
   question: 'Разрешить агенту управлять этим приложением через Computer Use?',
-  detail: 'Управляйте разрешениями приложений для всех сеансов на странице плагина.',
+  detail: 'После разрешения агент сможет просматривать это приложение и управлять им. Управлять разрешениями приложений можно в любое время в настройках плагина.',
+  sessionDetail: 'После разрешения агент сможет просматривать это приложение и управлять им в этом сеансе.',
   approve: 'Разрешить для этого сеанса',
 } satisfies Record<keyof typeof en, string>
 
 /** Portuguese dictionary, checked against the English keys. */
 export const pt = {
   question: 'Permitir que o agente controle este aplicativo via Computer Use?',
-  detail: 'Gerencie as permissões dos aplicativos para todas as sessões na página do plugin.',
+  detail: 'Depois de permitido, o agente poderá visualizar e operar este aplicativo. Você pode gerenciar as permissões de aplicativos a qualquer momento nas configurações do plugin.',
+  sessionDetail: 'Depois de permitido, o agente poderá visualizar e operar este aplicativo nesta sessão.',
   approve: 'Permitir nesta sessão',
 } satisfies Record<keyof typeof en, string>
 
@@ -78,6 +86,14 @@ export const applicationAccessDisplay = {
     de: de.approve,
     ru: ru.approve,
     pt: pt.approve,
+  },
+}
+/** Session-only application-access display translations when persistent grants are unavailable. */
+export const sessionApplicationAccessDisplay = {
+  ...applicationAccessDisplay,
+  detail: {
+    en: en.sessionDetail, zh: zh.sessionDetail, ja: ja.sessionDetail, es: es.sessionDetail,
+    fr: fr.sessionDetail, de: de.sessionDetail, ru: ru.sessionDetail, pt: pt.sessionDetail,
   },
 }
 

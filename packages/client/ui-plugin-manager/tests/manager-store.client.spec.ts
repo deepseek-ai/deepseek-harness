@@ -536,11 +536,12 @@ describe('PluginManagerController', () => {
         .mockResolvedValueOnce(ok(failed({ code: 'bundle-in-use' })))
         .mockResolvedValueOnce(ok(failed()))
         .mockResolvedValueOnce(ok({ ...failed(), application: 'cancelled' }))
-        .mockResolvedValueOnce(ok(failed({ code: 'incompatible-version', incompatible: [INCOMPATIBLE] }))),
+        .mockResolvedValueOnce(ok(failed({ code: 'incompatible-version', incompatible: [INCOMPATIBLE] })))
+        .mockResolvedValueOnce(ok(failed({ code: 'unsupported-platform', platforms: ['darwin', 'win32'] }))),
     })
     await controller.load()
     face.setEnabled(BUNDLE.name, true)
-    await vi.waitFor(() => { expect(state().notice).toEqual({ kind: 'failed', action: 'enable', code: 'operation-error', reason: 'the tree rejected it', packageName: BUNDLE.name, seq: 1 }) })
+    await vi.waitFor(() => { expect(state().notice).toEqual({ kind: 'failed', action: 'enable', error: { code: 'operation-error', diagnostic: 'the tree rejected it' }, reason: 'the tree rejected it', packageName: BUNDLE.name, seq: 1 }) })
     face.setEnabled(BUNDLE.name, false)
     await vi.waitFor(() => { expect(state().notice).toEqual({ kind: 'failed', action: 'disable', reason: 'offline', packageName: BUNDLE.name, seq: 2 }) })
     face.setEnabled(BUNDLE.name, true)
@@ -549,7 +550,7 @@ describe('PluginManagerController', () => {
     await vi.waitFor(() => { expect(state().notice).toEqual({ kind: 'failed', action: 'enable', reason: 'odd', packageName: BUNDLE.name, seq: 4 }) })
     // A refusal keeps its code with no words of its own; a failure without a code has neither.
     face.setEnabled(BUNDLE.name, true)
-    await vi.waitFor(() => { expect(state().notice).toEqual({ kind: 'failed', action: 'enable', code: 'bundle-in-use', reason: '', packageName: BUNDLE.name, seq: 5 }) })
+    await vi.waitFor(() => { expect(state().notice).toEqual({ kind: 'failed', action: 'enable', error: { code: 'bundle-in-use' }, reason: '', packageName: BUNDLE.name, seq: 5 }) })
     face.setEnabled(BUNDLE.name, true)
     await vi.waitFor(() => { expect(state().notice).toEqual({ kind: 'failed', action: 'enable', reason: '', packageName: BUNDLE.name, seq: 6 }) })
     // A change the Host stopped is said in passing.
@@ -559,7 +560,13 @@ describe('PluginManagerController', () => {
     face.setEnabled(BUNDLE.name, true)
     await vi.waitFor(() => {
       expect(state().notice).toEqual({
-        kind: 'failed', action: 'enable', code: 'incompatible-version', incompatible: [INCOMPATIBLE], reason: '', packageName: BUNDLE.name, seq: 8,
+        kind: 'failed', action: 'enable', error: { code: 'incompatible-version', incompatible: [INCOMPATIBLE] }, reason: '', packageName: BUNDLE.name, seq: 8,
+      })
+    })
+    face.setEnabled(BUNDLE.name, true)
+    await vi.waitFor(() => {
+      expect(state().notice).toEqual({
+        kind: 'failed', action: 'enable', error: { code: 'unsupported-platform', platforms: ['darwin', 'win32'] }, reason: '', packageName: BUNDLE.name, seq: 9,
       })
     })
     face.dismissNotice()
@@ -586,7 +593,7 @@ describe('PluginManagerController', () => {
     plugins.removeBundle.mockResolvedValueOnce(ok({ ...failed(), stage: 'remove', error: { code: 'not-removable' } }) as never)
     face.uninstall(BUNDLE.name)
     face.confirm()
-    await vi.waitFor(() => { expect(state().notice).toEqual({ kind: 'failed', action: 'uninstall', code: 'not-removable', reason: '', packageName: BUNDLE.name, seq: 1 }) })
+    await vi.waitFor(() => { expect(state().notice).toEqual({ kind: 'failed', action: 'uninstall', error: { code: 'not-removable' }, reason: '', packageName: BUNDLE.name, seq: 1 }) })
   })
 
   it('switches rows under their own busy keys and reports what the Host said', async () => {
@@ -603,7 +610,7 @@ describe('PluginManagerController', () => {
     gate.resolve(ok(APPLIED))
     await vi.waitFor(() => { expect(state().busy).toEqual([]) })
     face.setRowEnabled(ROW_ENTRY, true)
-    await vi.waitFor(() => { expect(state().notice).toEqual({ kind: 'failed', action: 'rowEnable', code: 'unaddressable', reason: '', packageName: ROW_ENTRY, seq: 1 }) })
+    await vi.waitFor(() => { expect(state().notice).toEqual({ kind: 'failed', action: 'rowEnable', error: { code: 'unaddressable' }, reason: '', packageName: ROW_ENTRY, seq: 1 }) })
   })
 
   it('installs a Discover spec through the dialog, asking its registry first, and reopens a hidden installation instead', async () => {
@@ -831,7 +838,7 @@ describe('PluginManagerController', () => {
     face.editInstallSpec('dsh-x')
     face.runInstall()
     await vi.waitFor(() => { expect(state().install.phase).toBe('failed') })
-    expect(state().install.failure).toEqual({ reason: 'ERR', code: 'operation-error', kind: 'network', stage: 'install' })
+    expect(state().install.failure).toEqual({ reason: 'ERR', error: { code: 'operation-error', diagnostic: 'ERR' }, kind: 'network', stage: 'install' })
     face.cancelInstall()
     expect(state().install).toMatchObject({ open: true, phase: 'idle', spec: 'dsh-x', failure: null, subject: null })
   })
@@ -1206,7 +1213,7 @@ describe('PluginManagerController', () => {
     face.enableInstalled()
     await vi.waitFor(() => { expect(state().install.open).toBe(false) })
     expect(plugins.setBundleEnabled).toHaveBeenCalledTimes(2)
-    expect(state().notice).toEqual({ kind: 'failed', action: 'enable', code: 'operation-error', reason: 'the tree rejected it', packageName: 'dsh-a', seq: 2 })
+    expect(state().notice).toEqual({ kind: 'failed', action: 'enable', error: { code: 'operation-error', diagnostic: 'the tree rejected it' }, reason: 'the tree rejected it', packageName: 'dsh-a', seq: 2 })
     expect(state().highlight).toBe('dsh-a')
 
     // An install that named no bundle has nothing to enable or mark: the screen just closes.
@@ -1243,7 +1250,7 @@ describe('PluginManagerController', () => {
       pendingBuilds: ['native'],
     }))
     await vi.waitFor(() => { expect(state().install.phase).toBe('failed') })
-    expect(state().install.failure).toEqual({ reason: 'ERR_PNPM_IGNORED_BUILDS', code: 'operation-error', kind: 'build-blocked', pendingBuilds: ['native'], stage: 'install' })
+    expect(state().install.failure).toEqual({ reason: 'ERR_PNPM_IGNORED_BUILDS', error: { code: 'operation-error', diagnostic: 'ERR_PNPM_IGNORED_BUILDS' }, kind: 'build-blocked', pendingBuilds: ['native'], stage: 'install' })
     // The retry keeps the subject the check produced and carries the approved names under a new request id.
     face.approveBuildsAndRetry()
     const second = await started()
@@ -1317,7 +1324,7 @@ describe('PluginManagerController', () => {
     answer(ok(failed({ code: 'operation-error', diagnostic: 'ERR_PNPM' }, { exitCode: 1, output: 'ERR_PNPM', truncated: false, logPath: '/l', kind: 'network' })))
     await vi.waitFor(() => { expect(state().install.phase).toBe('failed') })
     expect(state().install.runs).toEqual([])
-    expect(state().install.failure).toEqual({ reason: 'ERR_PNPM', code: 'operation-error', kind: 'network', stage: 'install' })
+    expect(state().install.failure).toEqual({ reason: 'ERR_PNPM', error: { code: 'operation-error', diagnostic: 'ERR_PNPM' }, kind: 'network', stage: 'install' })
     expect(state().install.subject).toEqual({ spec: 'x', ...INSPECTED })
     // A lost answer cannot establish whether the Host stopped the process.
     await installing()
@@ -1345,18 +1352,23 @@ describe('PluginManagerController', () => {
       { jobId: 'j', command: 'pnpm add x', cwd: '/p', output: 'partial', exitCode: 0 },
       { jobId: 'k', command: 'pnpm add x', cwd: '/p', output: 'open', exitCode: null },
     ])
-    expect(state().install.failure).toEqual({ reason: '', code: 'not-bundle', stage: 'install' })
+    expect(state().install.failure).toEqual({ reason: '', error: { code: 'not-bundle' }, stage: 'install' })
     // An incompatibility keeps the packages it names.
     await installing()
     answer(ok(failed({ code: 'incompatible-version', incompatible: [INCOMPATIBLE] })))
     await vi.waitFor(() => { expect(state().install.phase).toBe('failed') })
-    expect(state().install.failure).toEqual({ reason: '', code: 'incompatible-version', incompatible: [INCOMPATIBLE], stage: 'install' })
+    expect(state().install.failure).toEqual({ reason: '', error: { code: 'incompatible-version', incompatible: [INCOMPATIBLE] }, stage: 'install' })
+    // A platform refusal keeps the supported Host platforms it names.
+    await installing()
+    answer(ok(failed({ code: 'unsupported-platform', platforms: ['darwin', 'win32'] })))
+    await vi.waitFor(() => { expect(state().install.phase).toBe('failed') })
+    expect(state().install.failure).toEqual({ reason: '', error: { code: 'unsupported-platform', platforms: ['darwin', 'win32'] }, stage: 'install' })
     // A failure the Host does not explain has neither code nor words.
     await installing()
     answer(ok(failed()))
     await vi.waitFor(() => { expect(state().install.phase).toBe('failed') })
     expect(state().install.failure).toEqual({ reason: '', stage: 'install' })
-    expect(plugins.installBundle).toHaveBeenCalledTimes(6)
+    expect(plugins.installBundle).toHaveBeenCalledTimes(7)
     // Editing the spec after a failure starts over too.
     face.editInstallSpec('y')
     expect(state().install).toMatchObject({ phase: 'idle', spec: 'y', runs: [], failure: null })
@@ -1404,7 +1416,7 @@ describe('PluginManagerController', () => {
     face.runInstall()
     await vi.waitFor(() => { expect(state().install.phase).toBe('failed') })
     // The Host laid the failure at activation, and the details keep the run's complete log.
-    expect(state().install.failure).toEqual({ reason: 'activation refused', code: 'operation-error', stage: 'enable', enabled: true })
+    expect(state().install.failure).toEqual({ reason: 'activation refused', error: { code: 'operation-error', diagnostic: 'activation refused' }, stage: 'enable', enabled: true })
     expect(state().install.logPath).toBe(failedLog)
     // Retrying forgets the settled run's log until the next answer names its own.
     face.runInstall()

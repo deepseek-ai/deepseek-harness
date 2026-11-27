@@ -1,15 +1,18 @@
-- region "Authorize computer use":
-  - paragraph: Computer use is an experimental preview. The agent may click the wrong button or type in the wrong window. Use caution in production environments. We recommend native PTC mode so the agent can operate apps and call other tools in the same program.
-  - heading "Authorize computer use" [level=3]
+- region "System permissions":
+  - note:
+    - paragraph: Experimental feature
+    - paragraph: Computer use is experimental and results are not guaranteed. The agent may click the wrong button or type in the wrong window. Use caution in important or production environments.
+  - paragraph: We recommend using PTC mode so the agent can operate apps and call other tools in the same program. You can set it as the default in Settings → Agent presets.
+  - heading "System permissions" [level=3]
+  - paragraph: "Computer use requires the following system permissions to run:"
   - group "Accessibility":
     - strong: Accessibility
-    - paragraph: In System Settings, allow DSH Computer Use.app to read interface controls, click, and type.
+    - paragraph: Allow DSH Computer Use.app to read interface content, click, and type.
     - button "Request permission"
   - group "Screen Recording":
     - strong: Screen Recording
-    - paragraph: In System Settings, allow DSH Computer Use.app to capture application windows.
+    - paragraph: Allow DSH Computer Use.app to capture the selected application window.
     - button "Request permission"
-  - paragraph: Manage Accessibility and Screen Recording permissions in System Settings.
 - region "Manage applications computer use can access":
   - heading "Manage applications computer use can access" [level=3]
   - heading "Always-allowed applications" [level=4]

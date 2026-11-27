@@ -995,10 +995,7 @@ function registryOption(registry: Registry, t: Translate, resolved: string | nul
 function failureText(failure: InstallState['failure'], t: Translate, install?: Pick<InstallState, 'attempts' | 'subject' | 'registries'>): string {
   if (failure === null) return t('installFailureGeneric')
   // A compatibility refusal is the package's own answer, whatever pnpm's exit classified the run as.
-  if (failure.code === 'incompatible-version') {
-    const incompatible = failure.incompatible === undefined ? {} : { incompatible: failure.incompatible }
-    return managementText({ code: failure.code, installing: true, ...incompatible }, t)
-  }
+  if (failure.error?.code === 'incompatible-version') return managementText({ ...failure.error, installing: true }, t)
   // Blocked scripts the Host could not name leave the person to allow them in the profile's pnpm settings by hand.
   if (failure.kind === 'build-blocked' && !failure.pendingBuilds?.length) return t('installFailureBuildBlockedManual')
   const host = install?.subject?.host
@@ -1008,7 +1005,7 @@ function failureText(failure: InstallState['failure'], t: Translate, install?: P
     return t('installFailureNetworkAll', { registries: registryList(asked, t, install?.registries?.resolved ?? null) })
   }
   if (failure.kind !== undefined) return t(FAILURE_KIND_KEYS[failure.kind])
-  if (failure.code !== undefined) return managementText({ code: failure.code, diagnostic: failure.reason }, t)
+  if (failure.error !== undefined) return managementText(failure.error, t)
   if (failure.reason !== '') return failure.reason
   // An enabled install that failed applying the bundle names that step, never the install command it already finished.
   return failure.stage === 'enable' && failure.enabled === true ? t('installFailedEnabling') : t('installFailureGeneric')
@@ -1450,7 +1447,7 @@ function InstallDialog({
             {phase === 'done' && subject?.bundled ? <p className={css.wizardSub}>{t('installBundledDescription')}</p> : null}
             {phase === 'failed' ? <p className={css.wizardSub}>{failureText(install.failure, t, install)}</p> : null}
             {phase === 'failed' && failure?.stage === 'enable' && failure.enabled === true
-              && (failure.code !== undefined || failure.reason !== '')
+              && (failure.error !== undefined || failure.reason !== '')
               ? <p className={css.wizardSub}>{t('installFailedEnabling')}</p>
               : null}
             {attemptLine === null ? null : <p className={css.wizardSub}>{attemptLine}</p>}

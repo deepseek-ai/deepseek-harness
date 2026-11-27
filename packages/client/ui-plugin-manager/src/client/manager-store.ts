@@ -12,7 +12,6 @@ import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type {
   BundleInfo,
   ChangeResult,
-  IncompatiblePlugin,
   ManagementError,
   PluginEntryId,
   PluginInfo,
@@ -71,11 +70,9 @@ export type ManagerNotice =
     /** What was being done when it failed. */
     readonly action: FailedAction
     /** The Host's refusal, when the Host refused; absent when the transport failed. */
-    readonly code?: ManagementError['code']
+    readonly error?: ManagementError
     /** The Host's diagnostic or the transport's words, shown verbatim; empty when the code says it all. */
     readonly reason: string
-    /** The packages an `incompatible-version` refusal names. */
-    readonly incompatible?: readonly IncompatiblePlugin[]
     readonly packageName?: string
     readonly seq: number
   }
@@ -267,8 +264,8 @@ export interface InstallState {
   /** Why it waits, when the Host says. */
   readonly restartReason?: RestartReason
   /**
-   * The run's failure, once one settled the dialog: the Host's refusal
-   * `code` with its diagnostic as `reason`, or the transport's words alone;
+   * The run's failure, once one settled the dialog: the Host's refusal as
+   * `error` with its diagnostic as `reason`, or the transport's words alone;
    * `kind` classifies a pnpm failure, and `pendingBuilds` names the packages
    * whose install scripts pnpm left undecided, offered for approval.
    * `uncertainty` distinguishes a lost installation reply, an unconfirmed
@@ -276,9 +273,8 @@ export interface InstallState {
    */
   readonly failure: {
     readonly reason: string
-    readonly code?: ManagementError['code']
-    /** The packages an `incompatible-version` refusal names. */
-    readonly incompatible?: readonly IncompatiblePlugin[]
+    /** The Host's refusal, when the Host refused. */
+    readonly error?: ManagementError
     readonly kind?: PluginInstallFailureKind
     /** The step the failed change reached; `enable` means the installation finished and applying the bundle failed. */
     readonly stage?: ChangeResult['stage']
@@ -539,11 +535,9 @@ type Answer<T> =
   | { readonly ok: true; readonly value: T }
   | { readonly ok: false; readonly error: { readonly code: string; readonly message: string; readonly details?: unknown } }
 
-/** A refused answer or a change the Host could not apply, carrying what it said and, for a refusal, its code. */
+/** A refused answer or a change the Host could not apply, carrying what it said and, for a refusal, the Host's error. */
 class RemoteAnswerError extends Error {
-  constructor(
-    readonly reason: string, readonly code?: ManagementError['code'], readonly incompatible?: readonly IncompatiblePlugin[],
-  ) {
+  constructor(readonly reason: string, readonly error?: ManagementError) {
     super(reason)
     this.name = 'RemoteAnswerError'
   }
@@ -556,8 +550,7 @@ function failureOf(
 ): NonNullable<InstallState['failure']> {
   return {
     reason: error?.diagnostic ?? '',
-    ...error === undefined ? {} : { code: error.code },
-    ...error?.incompatible === undefined ? {} : { incompatible: error.incompatible },
+    ...error === undefined ? {} : { error },
     ...kind === undefined ? {} : { kind },
     stage,
     ...enabled === undefined ? {} : { enabled },
@@ -566,14 +559,10 @@ function failureOf(
   }
 }
 
-/** The notice a thrown failure becomes: a refusal keeps its code, anything else its words. */
+/** The notice a thrown failure becomes: a refusal keeps the Host's error, anything else its words. */
 function failedNotice(error: unknown, subject: { action: FailedAction; packageName?: string }, seq: number): ManagerNotice {
-  const code = error instanceof RemoteAnswerError ? error.code : undefined
-  const incompatible = error instanceof RemoteAnswerError ? error.incompatible : undefined
-  return {
-    kind: 'failed', reason: reasonOf(error), ...code === undefined ? {} : { code },
-    ...incompatible === undefined ? {} : { incompatible }, ...subject, seq,
-  }
+  const refusal = error instanceof RemoteAnswerError ? error.error : undefined
+  return { kind: 'failed', reason: reasonOf(error), ...refusal === undefined ? {} : { error: refusal }, ...subject, seq }
 }
 
 /** The runs with every one still open settled at `exitCode`. */
@@ -1593,7 +1582,7 @@ export class PluginManagerController {
     const result = answer.value
     switch (result.application) {
       case 'failed':
-        throw new RemoteAnswerError(result.error?.diagnostic ?? '', result.error?.code, result.error?.incompatible)
+        throw new RemoteAnswerError(result.error?.diagnostic ?? '', result.error)
       case 'cancelled':
         this.patch({ notice: { kind: 'cancelled', seq: ++this.noticeSeq } })
         return

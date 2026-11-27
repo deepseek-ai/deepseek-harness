@@ -21,6 +21,8 @@ it.each(['darwin', 'win32', 'linux'])('allows undeclared platforms and an explic
 it.each(['win32', 'linux'])('rejects macOS-only bundles on %s Hosts', (platform) => {
   expect(() => { assertBundlePlatform(['darwin'], platform) }).toThrow(UnsupportedBundlePlatformError)
   expect(() => { assertBundlePlatform(['darwin'], platform) }).toThrow(`the DSH Host is running ${platform}`)
+  expect(() => { assertBundlePlatform(['darwin', 'wsl'], platform) })
+    .toThrow(expect.objectContaining({ platforms: ['darwin', 'wsl'] }))
 })
 
 it.each([null, true, 'darwin', [], [1], [''], ['Darwin'], [' darwin'], ['macos'], ['darwin', 'linxu'], ['darwin', false]].map(platforms => ({ platforms })))('rejects malformed platform metadata $platforms', ({ platforms }) => {

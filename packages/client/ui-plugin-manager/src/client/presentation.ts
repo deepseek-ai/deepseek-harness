@@ -1,7 +1,7 @@
 /** Display labels and toast sentences for global plugin management. */
 
 import { EXPERIMENTAL_BUNDLES } from '@deepseek-ai/dsh-official-bundles'
-import type { IncompatiblePlugin, ManagementError, Registry, RestartReason } from '@deepseek-ai/dsh-api-remotes/client'
+import type { ManagementError, Registry, RestartReason } from '@deepseek-ai/dsh-api-remotes/client'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { PluginManagerLocaleKey } from './locales.ts'
 import type { FailedAction, ManagerNotice, PackageRow, PackageView, PluginManagerFace } from './manager-store.ts'
@@ -45,6 +45,23 @@ function registryHost(registry: string): string {
   }
 }
 
+/** Display names for the Node platform ids and `wsl` that bundle metadata declares; other ids render verbatim. */
+const PLATFORM_KEYS = new Map<string, PluginManagerLocaleKey>([
+  ['darwin', 'platformDarwin'],
+  ['win32', 'platformWin32'],
+  ['linux', 'platformLinux'],
+  ['wsl', 'platformWsl'],
+])
+
+function platformList(platforms: readonly string[], t: Translate): string {
+  const labels = platforms.map((name) => {
+    const key = PLATFORM_KEYS.get(name)
+    return key === undefined ? name : t(key)
+  })
+  if (labels.length === 1) return labels.join('')
+  return `${labels.slice(0, -1).join(t('platformListSeparator'))}${t('platformListLastSeparator')}${labels.at(-1)}`
+}
+
 /** The sentence each of the Host's refusal codes reads as. */
 const CODE_KEYS = {
   'management-required': 'reasonManagementRequired',
@@ -75,15 +92,13 @@ const FAILED_KEYS = {
 
 /**
  * What a management error reads as: the code's sentence; for an incompatibility, one sentence per
- * package it names, then the remedy for an install or for an installed plugin; or, for an operation error, the Host's diagnostic as it is.
- * @param error - the Host's code, its diagnostic, and the packages an incompatibility names.
+ * package it names, then the remedy for an install or for an installed plugin; for a platform refusal, the supported
+ * platforms it names; or, for an operation error, the Host's diagnostic as it is.
+ * @param error - the Host's error.
  * @param t - the manager's translate seat.
  * @returns the sentence.
  */
-export function managementText(error: {
-  readonly code: ManagementError['code']
-  readonly diagnostic?: string
-  readonly incompatible?: readonly IncompatiblePlugin[]
+export function managementText(error: ManagementError & {
   /** Set when the refused package is being installed rather than already installed; selects the incompatibility remedy. */
   readonly installing?: true
 }, t: Translate): string {
@@ -96,6 +111,12 @@ export function managementText(error: {
         requirements: Object.entries(plugin.requirements).map(([name, range]) => `${name} ${range}`).join(', '),
       }))
     return [...sentences, t(error.installing ? 'reasonIncompatibleInstall' : 'reasonIncompatibleInstalled')].join(t('sentenceSeparator'))
+  }
+  if (error.code === 'unsupported-platform') {
+    const platforms = error.platforms ?? []
+    return platforms.length === 0
+      ? t('reasonUnsupportedPlatform')
+      : t('reasonUnsupportedPlatformList', { platforms: platformList(platforms, t) })
   }
   if (error.code !== 'operation-error') return t(CODE_KEYS[error.code])
   return error.diagnostic === undefined || error.diagnostic === '' ? t('reasonOperationError') : error.diagnostic
@@ -180,9 +201,7 @@ export function noticeText(notice: ManagerNotice, t: Translate): string {
       unconfirmed: 'installBackgroundUnconfirmed', applying: 'installBackgroundApplying', unknown: 'installBackgroundUnknown',
     } as const)[notice.outcome])
     case 'failed': {
-      const reason = notice.code === undefined ? notice.reason : managementText({
-        code: notice.code, diagnostic: notice.reason, ...notice.incompatible === undefined ? {} : { incompatible: notice.incompatible },
-      }, t)
+      const reason = notice.error === undefined ? notice.reason : managementText(notice.error, t)
       return t(FAILED_KEYS[notice.action], { reason: reason === '' ? t('reasonOperationError') : reason })
     }
   }
