@@ -84,6 +84,107 @@ export const CLIENT_NOTES: readonly string[] = [
 // detection is told to skip the data rather than the file.
 export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
   {
+    key: 'connectors.actions',
+    kind: 'list',
+    scope: 'root',
+    summary: 'The Connectors tab\'s actions at the end of its first heading\'s row, shown while the tab shows its lists; this plugin registers the button that opens a new custom MCP server\'s form there once the manager\'s Remote exists.',
+    doc: 'The Connectors tab\'s actions at the end of its first heading\'s row, shown while the tab shows its lists; this\nplugin registers the button that opens a new custom MCP server\'s form there once the manager\'s Remote exists.\nThe tab passes the change of its view.',
+    registerOptions: [
+      {
+        name: 'id',
+        requirement: 'required',
+        type: 'string',
+        doc: 'Your cell key. Use an id of your own: a fresh id is added beside the shipped entries, while reusing a shipped id puts you in THAT cell and replaces it. Owners that filter by id address you by it.',
+      },
+      {
+        name: 'order',
+        requirement: 'optional',
+        type: 'number',
+        doc: 'Position among the entries, ascending (default 0).',
+      },
+      {
+        name: 'label',
+        requirement: 'optional',
+        type: 'string | (() => string)',
+        doc: 'Display text where the owner projects one (nav rows, tabs). A thunk is re-read on every projection, so localized text follows the active locale without re-registering.',
+      },
+    ],
+    ownerProps: [
+      '/** What the Connectors tab passes to each of its actions: the change of the view it shows. */\nexport interface ConnectorsActionOwnerProps {\n  readonly setView: (view: CustomServersView) => void\n}',
+    ],
+    ownerPropsReferences: [
+      'CustomServersView',
+    ],
+    standardProps: [
+      'useRemoteAccess: (action: RemoteEndpoint) => boolean',
+      'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
+      'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
+      'usePanelInfo: UsePanelInfo',
+      'useDocumentPortal: () => FC<DocumentPortalProps>',
+      'useDocumentViewport: () => DocumentViewport',
+      'useMediaQuery: (query: string) => boolean',
+      'useMobile: () => boolean',
+      'useSessionStatus: UseSessionStatus',
+      'useSessions: UseSessions',
+      'useSessionRetainInfo: UseSessionRetainInfo',
+      'useSessionAccess: (sessionId: SessionId, action: RemoteEndpoint) => boolean',
+      'useTheme: SnapshotSelectorHook<ThemeSnapshot>',
+      'useWorkspaceAccess: (workspaceId: WorkspaceId, action: RemoteEndpoint) => boolean',
+    ],
+    keyDomain: '',
+    hookContext: '',
+    slotInject: '',
+    declaredBy: 'an entry in \'plugins.tab\' (client-ui-connectors), so it exists while that entry is mounted',
+    occupants: [
+      'client-ui-connectors AddServerAction',
+    ],
+    replaceRisk: 'none',
+    example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'connectors.actions\', () => ctx.slots.register(\n      { name: \'connectors.actions\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
+    source: 'packages/experimental/client-ui-connectors/src/client/index.ts:26',
+  },
+  {
+    key: 'connectors.custom',
+    kind: 'single',
+    scope: 'root',
+    summary: 'The Connectors tab\'s section below the official connectors; this plugin registers the custom MCP servers section there once the manager\'s Remote exists.',
+    doc: 'The Connectors tab\'s section below the official connectors; this plugin registers the custom MCP servers\nsection there once the manager\'s Remote exists. The tab passes the section\'s view and shows only the section,\nunder the Plugins page\'s crumb, while the view is a server\'s page; without an entry the tab shows only the\nofficial connectors.',
+    registerOptions: [],
+    ownerProps: [
+      '/** What the Connectors tab passes: the view it shows, and the change the section asks for. */\nexport interface CustomServersOwnerProps {\n  readonly view: CustomServersView\n  readonly setView: (view: CustomServersView) => void\n}',
+    ],
+    ownerPropsReferences: [
+      'CustomServersView',
+    ],
+    standardProps: [
+      'useRemoteAccess: (action: RemoteEndpoint) => boolean',
+      'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
+      'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
+      'usePanelInfo: UsePanelInfo',
+      'useDocumentPortal: () => FC<DocumentPortalProps>',
+      'useDocumentViewport: () => DocumentViewport',
+      'useMediaQuery: (query: string) => boolean',
+      'useMobile: () => boolean',
+      'useSessionStatus: UseSessionStatus',
+      'useSessions: UseSessions',
+      'useSessionRetainInfo: UseSessionRetainInfo',
+      'useSessionAccess: (sessionId: SessionId, action: RemoteEndpoint) => boolean',
+      'useTheme: SnapshotSelectorHook<ThemeSnapshot>',
+      'useWorkspaceAccess: (workspaceId: WorkspaceId, action: RemoteEndpoint) => boolean',
+    ],
+    keyDomain: '',
+    hookContext: '',
+    slotInject: '',
+    declaredBy: 'an entry in \'plugins.tab\' (client-ui-connectors), so it exists while that entry is mounted',
+    occupants: [
+      'client-ui-connectors CustomServersSection',
+    ],
+    replaceRisk: 'shadows-shipped-ui',
+    example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'connectors.custom\', () => ctx.slots.register(\n      { name: \'connectors.custom\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
+    source: 'packages/experimental/client-ui-connectors/src/client/index.ts:33',
+  },
+  {
     key: 'contextMenu.content',
     kind: 'keyed',
     scope: 'root',
@@ -3808,7 +3909,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'plugins.add.actions\', () => ctx.slots.register(\n      { name: \'plugins.add.actions\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-plugin-manager/src/client/slot-contract.ts:135',
+    source: 'packages/client/ui-plugin-manager/src/client/slot-contract.ts:147',
   },
   {
     key: 'plugins.bundle.activation',
@@ -3856,7 +3957,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'plugins.bundle.activation\', () => ctx.slots.register(\n      { name: \'plugins.bundle.activation\', key: \'<one key the owner dispatches>\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-plugin-manager/src/client/slot-contract.ts:143',
+    source: 'packages/client/ui-plugin-manager/src/client/slot-contract.ts:156',
   },
   {
     key: 'plugins.bundle.config',
@@ -3909,7 +4010,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'plugins.bundle.config\', () => ctx.slots.register(\n      { name: \'plugins.bundle.config\', key: \'<one key the owner dispatches>\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-plugin-manager/src/client/slot-contract.ts:159',
+    source: 'packages/client/ui-plugin-manager/src/client/slot-contract.ts:172',
   },
   {
     key: 'plugins.detail.actions',
@@ -3967,7 +4068,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     occupants: [],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'plugins.detail.actions\', () => ctx.slots.register(\n      { name: \'plugins.detail.actions\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-plugin-manager/src/client/slot-contract.ts:173',
+    source: 'packages/client/ui-plugin-manager/src/client/slot-contract.ts:186',
   },
   {
     key: 'plugins.detail.badge',
@@ -4027,7 +4128,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'plugins.detail.badge\', () => ctx.slots.register(\n      { name: \'plugins.detail.badge\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-plugin-manager/src/client/slot-contract.ts:178',
+    source: 'packages/client/ui-plugin-manager/src/client/slot-contract.ts:191',
   },
   {
     key: 'plugins.detail.section',
@@ -4085,7 +4186,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     occupants: [],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'plugins.detail.section\', () => ctx.slots.register(\n      { name: \'plugins.detail.section\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-plugin-manager/src/client/slot-contract.ts:185',
+    source: 'packages/client/ui-plugin-manager/src/client/slot-contract.ts:198',
   },
   {
     key: 'plugins.item',
@@ -4148,7 +4249,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'plugins.item\', () => ctx.slots.register(\n      { name: \'plugins.item\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-plugin-manager/src/client/slot-contract.ts:153',
+    source: 'packages/client/ui-plugin-manager/src/client/slot-contract.ts:166',
   },
   {
     key: 'plugins.row.config',
@@ -4197,14 +4298,14 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'plugins.row.config\', () => ctx.slots.register(\n      { name: \'plugins.row.config\', key: \'<one key the owner dispatches>\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-plugin-manager/src/client/slot-contract.ts:167',
+    source: 'packages/client/ui-plugin-manager/src/client/slot-contract.ts:180',
   },
   {
     key: 'plugins.tab',
     kind: 'list',
     scope: 'root',
     summary: 'Tabs after the page\'s own Installed tab, such as Discover: `label` names the tab and `order` places it.',
-    doc: 'Tabs after the page\'s own Installed tab, such as Discover: `label` names the tab and `order` places it. The\npage renders the selected entry under its header and tabs; the entry draws its own content and installs and\nupdates through the owner\'s `install` and `update`.',
+    doc: 'Tabs after the page\'s own Installed tab, such as Discover: `label` names the tab and `order` places it. The\npage renders the selected entry under its header and tabs; the entry draws its own content and installs and\nupdates through the owner\'s `install` and `update`. While the entry has a page of its own open through the\nowner\'s `openPage`, the page renders the entry under a crumb named by `label` instead.',
     registerOptions: [
       {
         name: 'id',
@@ -4226,7 +4327,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       },
     ],
     ownerProps: [
-      '/** Owner props of a page tab another plugin contributes, such as Discover. */\nexport interface PluginTabProps {\n  /**\n   * Install an exact version the person already confirmed: the page\'s install dialog opens at its check and progress\n   * screens, without the spec form, and names the plugin and version above the spec.\n   * @param target - the spec, optional registry, and display text.\n   */\n  readonly install: (target: PluginTabInstall) => void\n  /**\n   * Open the page\'s update dialog at its confirmation for a bundle the Host lists with `update: \'git\'`, from the\n   * version the page lists; nothing opens before the page has listed the bundle or while another update runs. The\n   * update removes the installed version, installs the target, and installs the removed version again when that fails.\n   * @param target - the package, the target version, and its Git spec.\n   */\n  readonly update: (target: PluginTabUpdate) => void\n  /**\n   * Switch to the Installed tab and open a bundle\'s page, whose back button returns to the calling tab.\n   * @param packageName - npm package name of the bundle.\n   */\n  readonly openPackage: (packageName: string) => void\n}',
+      '/** Owner props of a page tab another plugin contributes, such as Discover. */\nexport interface PluginTabProps {\n  /**\n   * Install an exact version the person already confirmed: the page\'s install dialog opens at its check and progress\n   * screens, without the spec form, and names the plugin and version above the spec.\n   * @param target - the spec, optional registry, and display text.\n   */\n  readonly install: (target: PluginTabInstall) => void\n  /**\n   * Open the page\'s update dialog at its confirmation for a bundle the Host lists with `update: \'git\'`, from the\n   * version the page lists; nothing opens before the page has listed the bundle or while another update runs. The\n   * update removes the installed version, installs the target, and installs the removed version again when that fails.\n   * @param target - the package, the target version, and its Git spec.\n   */\n  readonly update: (target: PluginTabUpdate) => void\n  /**\n   * Switch to the Installed tab and open a bundle\'s page, whose back button returns to the calling tab.\n   * @param packageName - npm package name of the bundle.\n   */\n  readonly openPackage: (packageName: string) => void\n  /** The key of the tab\'s own pa /* …truncated — full shape in source */',
     ],
     ownerPropsReferences: [
       'Git',
@@ -4256,11 +4357,11 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     declaredBy: 'an entry in \'main\' (client-ui-plugin-manager), so it exists while that entry is mounted',
     occupants: [
       'client-ui-plugin-market DiscoverSection id \'discover\'',
-      'client-ui-connectors ConnectorsTab id \'connectors\'',
+      'client-ui-connectors ConnectorsTab',
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'plugins.tab\', () => ctx.slots.register(\n      { name: \'plugins.tab\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-plugin-manager/src/client/slot-contract.ts:141',
+    source: 'packages/client/ui-plugin-manager/src/client/slot-contract.ts:154',
   },
   {
     key: 'rightbar',

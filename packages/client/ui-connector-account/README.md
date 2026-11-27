@@ -48,7 +48,7 @@ export function apply(ctx: Context): void {
 ```
 
 - `key` identifies the account in the Remote; the page passes it back to start and cancel operations. A second registration with the same key throws.
-- `packageName` is the npm package whose bundle page carries the section and tag; a package carries at most one account. An account without one, such as a server configured in Settings, appears on no bundle page.
+- `packageName` is the npm package whose bundle page carries the section and tag; a package carries at most one account. An account without one, such as the account of an MCP server row, appears on no bundle page.
 - `source` is the account: its current view, change observation, a check, and starting and cancelling operations.
 - `operations` lists the kinds a page button may start, each with the optional text its success reports in the browser that started it; the registry rejects any other kind.
 - `copy` holds the section title, the hint under it, and the activation prompt's title, body, and Connect label.
@@ -65,6 +65,8 @@ The registrant imports the registry's types with `import type` from the package 
 | Title tag | The display's `badge`, shown only on the enabled bundle's page or one of its row pages, and only while the display has one |
 | Activation prompt | Open while the phase is `disconnected` after the bundle is switched on; Connect opens the bundle page and starts the display's `connect` operation, if it names one, and is disabled while the Host stream is down. It waits while the account is checking or connecting and dismisses itself once the account is connected or unavailable |
 | Notice | The latest outcome in this browser, outside the Plugins panel's lifetime: the operation's success text, or the shared failure copy with a warning icon |
+
+An account without a package, or a surface outside the bundle page, renders the `connector.account` Factory with `{ account, presentation }`: `section` shows the account's whole section, and `status` only its state dot and status line, as in a list row. It renders nothing until the Host lists the account. The [Connectors tab](../../experimental/client-ui-connectors/README.md) uses it for MCP server rows that use OAuth.
 
 ### Following operations
 
@@ -84,7 +86,7 @@ The `connectorAccount` dictionary holds the copy every account shares: Close, Ca
 
 The Host half, `ConnectorAccounts`, is a Remote service. `register()` observes the account's source, and each `watch` stream reads every account's entry after each change, coalescing changes that arrive before the next read: the key and package, the copy, `present(view)`, the operation in progress, and the latest result with its success text. `start` and `cancel` route by key to the account's source.
 
-[`dsh-api-remotes`](../../api/remotes/README.md) mounts the generated `connectorAccounts` Remote. The browser half opens one `watch` stream through `BrowserAccounts`, whose one store holds the Host's accounts by key, whether the stream is delivering, and the latest notice; it also remembers the operations this browser started. It registers one `plugins.detail.badge` entry and one `shell.overlay` notice for the page, and for each account with a package, `plugins.bundle.config` and `plugins.bundle.activation` keyed by the package name, all under the `connectorAccount` namespace. The surfaces receive `start` and `cancel` callbacks that call the Remote and return its result; the buttons report the operation of a successful start to `BrowserAccounts`, and a failed result or a rejected call as the failure notice. An account the Host drops loses its bundle entries, and unloading withdraws every entry and the stream.
+[`dsh-api-remotes`](../../api/remotes/README.md) mounts the generated `connectorAccounts` Remote. The browser half opens one `watch` stream through `BrowserAccounts`, whose one store holds the Host's accounts by key, whether the stream is delivering, and the latest notice; it also remembers the operations this browser started. It registers one `plugins.detail.badge` entry and one `shell.overlay` notice for the page, and for each account with a package, `plugins.bundle.config` and `plugins.bundle.activation` keyed by the package name, all under the `connectorAccount` namespace, and the `connector.account` Factory with the same face. The surfaces receive `start` and `cancel` callbacks that call the Remote and return its result; the buttons report the operation of a successful start to `BrowserAccounts`, and a failed result or a rejected call as the failure notice. An account the Host drops loses its bundle entries, and unloading withdraws every entry and the stream.
 
 | File | Role |
 |---|---|

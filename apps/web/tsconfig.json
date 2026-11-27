@@ -122,6 +122,7 @@
     "tests/entry-customization.e2e.ts",
     "tests/cua-optin.e2e.ts",
     "tests/bundle-platform.e2e.ts",
+    "tests/connectors-custom-servers.e2e.ts",
     "tests/connectors-tab.e2e.ts",
     "tests/cua-permissions.e2e.ts",
     "tests/cua-run-code.e2e.ts",

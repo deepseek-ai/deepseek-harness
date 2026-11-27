@@ -21,6 +21,8 @@
   color: var(--dsw-alias-label-secondary);
   font-size: 14px;
   line-height: 22px;
+  /* A description may quote a path or command, which has no break opportunity. */
+  overflow-wrap: anywhere;
 }
 
 .confirmation .acknowledgement {

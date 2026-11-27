@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-04-connectors-custom-mcp-servers.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-11-04-connectors-custom-mcp-servers.md
+/agent-note-custom-mcp-servers-in-the-connectors-tab:
+  en: 1ce2aef229415496
+  zh: 8ea85dedd737bf98
+/agent-note-custom-mcp-servers-in-the-connectors-tab/problem:
+  en: 1e1069d4d8b0b6b7
+  zh: 875d38db3e164f02
+/agent-note-custom-mcp-servers-in-the-connectors-tab/decision:
+  en: e3ffc8418c8c256e
+  zh: caf30321fc16a26e
+/agent-note-custom-mcp-servers-in-the-connectors-tab/alternatives-considered:
+  en: 2873cf058c7c8f1b
+  zh: 3bb20d00c0ca42df
+/agent-note-custom-mcp-servers-in-the-connectors-tab/consequences:
+  en: 814650f6673c1ae4
+  zh: b855d1cdf17c0b3f

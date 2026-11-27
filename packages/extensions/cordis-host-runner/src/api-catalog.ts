@@ -760,8 +760,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'configEditor',
-    summary: 'Persist complete raw configs and apply them through the normal Loader path.',
-    description: 'Persist complete raw configs and apply them through the normal Loader path.',
+    summary: 'Persist complete raw configs and profile rows, and apply them through the normal Loader path.',
+    description: 'Persist complete raw configs and profile rows, and apply them through the normal Loader path.',
     methods: [
       {
         signature: 'entries(): Entry[]',
@@ -770,16 +770,37 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'Active entries with unique profile patch ids.',
       },
       {
-        signature: 'configuration(): Array<{ entry: Entry; inherited: Record<string, unknown>; override: Record<string, unknown> }>',
+        signature: 'configuration(): Array<{ entry: Entry; inherited: Record<string, unknown>; override: Record<string, unknown>; inserted: boolean }>',
         description: 'Read inherited and explicit profile values for the active entries.',
         parameters: [],
-        returns: 'Detached layer values alongside their Loader entries.',
+        returns: 'Detached layer values alongside their Loader entries. `inserted` marks a row that an `insert` item of the profile patch lists directly; `remove()` accepts only such a row.',
       },
       {
         signature: 'async edit( entry: Entry, change: (current: Record<string, unknown>, inherited: Record<string, unknown>) => Record<string, unknown>, ): Promise<void>',
         description: 'Validate, persist, and reconcile a plugin\'s next config; ordinary fields keep normal lifecycle rules.',
         parameters: [{ name: 'entry', description: 'Current Loader entry, also used to detect replacement during the write.' }, { name: 'change', description: 'Derive a raw config from the current entry and its inherited layer.' }],
         returns: 'Fulfillment after Loader reconciliation completes.',
+      },
+      {
+        signature: 'async editRow( entry: Entry, change: (current: Record<string, unknown>, inherited: Record<string, unknown>) => Record<string, unknown>, ): Promise<void>',
+        description: 'Persist and reconcile a row\'s next config whether or not its plugin runs. An active plugin validates the config as edit requires. A row that is switched off or failed stores the config as given, and its plugin validates it when the row next starts. A row that is switched on must be active after the reconciliation, so a row that fails again, or that waits for a service, rejects the write.',
+        parameters: [{ name: 'entry', description: 'Current Loader entry, also used to detect replacement during the write.' }, { name: 'change', description: 'Derive a raw config from the current entry and its inherited layer.' }],
+        returns: 'Fulfillment after Loader reconciliation completes.',
+        throws: ['When the entry is gone, an active plugin rejects the config, a higher layer overrides the stored config, or a row that is switched on does not start. In the last case the file gets its prior content back, and the Loader is reconciled with the prior patches.'],
+      },
+      {
+        signature: 'async insert(row: { id: string; name: string; config: Record<string, unknown> }): Promise<void>',
+        description: 'Add a row at the end of the profile patch, where no existing profile patch item applies to it, and start it.',
+        parameters: [{ name: 'row', description: 'Row id, module name of the row\'s plugin, and the row\'s complete raw config.' }],
+        returns: 'Fulfillment after Loader reconciliation completes with the row active, or switched off by a higher layer.',
+        throws: ['When a row of the composed profile uses the id, a higher layer overrides the stored config, or the row does not start. In the last case the file gets its prior content back, and the Loader is reconciled with the prior patches.'],
+      },
+      {
+        signature: 'async remove(entry: Entry): Promise<void>',
+        description: 'Remove a row that an `insert` item of the profile patch lists directly, together with the profile patch\'s override items for that row.',
+        parameters: [{ name: 'entry', description: 'Current Loader entry of the row.' }],
+        returns: 'Fulfillment after Loader reconciliation completes.',
+        throws: ['When the entry is gone, or no `insert` item of the profile patch lists the row: a bundle or a higher layer adds it. After a rejected reconciliation the file gets its prior content back, and the Loader is reconciled with the prior patches.'],
       },
     ],
   },
@@ -883,6 +904,37 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'key', description: 'the account key.' }, { name: 'id', description: 'the operation to cancel; a finished one or a phase that is not cancellable is ignored.' }],
         returns: 'after the operation settles, or at once when nothing is cancelled.',
         throws: ['for an unknown account.'],
+      },
+    ],
+  },
+  {
+    key: 'connectors',
+    summary: 'Streams and changes the MCP server rows of the profile\'s composition for the Connectors tab, and shows the account of each OAuth server row that is on.',
+    description: 'Streams and changes the MCP server rows of the profile\'s composition for the Connectors tab, and shows the account of each OAuth server row that is on.',
+    methods: [
+      {
+        signature: '@Remote({ mode: \'stream\' }) async* watchServers(signal: AbortSignal): AsyncIterable<CustomServersList>',
+        description: 'Stream the MCP server rows: the rows of the profile\'s composition that load the MCP manager\'s server row plugin, including rows that are switched off and rows that did not start. A list follows every successful reload of the composition, every change the plugin manager reports, and every change made through this service.',
+        parameters: [{ name: 'signal', description: 'ends the stream.' }],
+        returns: 'each list with the revision a change names, or that the profile has no configuration editor, plugin manager, credentials, or MCP manager to keep custom servers with.',
+      },
+      {
+        signature: '@Remote saveServer(draft: ServerDraft, revision: string, id?: string): Promise<void>',
+        description: 'Save one server from the form. A new server becomes the row `mcp-server-<name>` of the profile patch, switched on; an edit replaces the config of the row `id` names. The save writes the row, stores the secret values entered in the form, then deletes the secrets the row stopped using; an edit that drops OAuth removes the grant first. The first refused step stops the save, so a refused write stores nothing. A row that is switched on must run after the write: when it does not start, the configuration editor restores the profile patch and the save is refused with the row\'s failure, while a row that is switched off is only written. The manager starts a written row at once and connects it again when a secret it references is stored after that. A save is refused when a reference under the server\'s own prefix is used by another row, and it never deletes a reference another row still uses, whether that row is on or off.',
+        parameters: [{ name: 'draft', description: 'the form\'s values, including newly entered secret values.' }, { name: 'revision', description: 'the revision of the list the save was made on.' }, { name: 'id', description: 'the row to edit; omitted for a new server.' }],
+        throws: ['RemoteError `connectors/conflict` when the server rows changed after that revision, or `connectors/refused` for a draft the form would not save, a config the row plugin\'s schema rejects, or the first refused step.'],
+      },
+      {
+        signature: '@Remote removeServer(id: string, revision: string): Promise<void>',
+        description: 'Remove one server row the profile patch adds: remove an OAuth server\'s grant, delete the row with its overrides, then delete the secrets it owned that no other row uses. The first refused step stops the removal. A row the form cannot read is removed without its grant and secrets.',
+        parameters: [{ name: 'id', description: 'the row.' }, { name: 'revision', description: 'the revision of the list the removal was made on.' }],
+        throws: ['RemoteError `connectors/conflict` when the server rows changed after that revision, or `connectors/refused` for a row the profile patch does not add, or the first refused step.'],
+      },
+      {
+        signature: '@Remote setServerEnabled(id: string, enabled: boolean, revision: string): Promise<void>',
+        description: 'Switch one server row on or off through the plugin manager, which writes the switch to the profile patch and reloads the composition. A row that does not start after it is switched on stays switched on and is listed as failed.',
+        parameters: [{ name: 'id', description: 'the row.' }, { name: 'enabled', description: 'whether the row runs.' }, { name: 'revision', description: 'the revision of the list the switch was made on.' }],
+        throws: ['RemoteError `connectors/conflict` when the server rows changed after that revision, or `connectors/refused` when the switch did not take effect: the row did not start, another patch decides the switch, or the composition applies it only after a restart.'],
       },
     ],
   },
@@ -7121,6 +7173,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface AuthenticationProvider {\n    authenticate(request: ConnectionTrustRequest): PeerScope | undefined;\n}',
   },
   {
+    name: 'AuthKind',
+    declaration: 'export type AuthKind = \'none\' | \'token\' | \'oauth\';',
+  },
+  {
     name: 'AuthorizationEntry',
     declaration: 'export interface AuthorizationEntry {\n    key: CredentialKey;\n    label: string;\n    methods: readonly AuthorizationMethod[];\n    inFlight: boolean;\n}',
   },
@@ -7809,6 +7865,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type CuaSystemPermissionState = {\n    platform: \'darwin\';\n    accessibility: boolean;\n    screenRecording: boolean;\n    helper: CuaPermissionProcess;\n    parent: CuaPermissionProcess;\n    launchApplication?: {\n        name: string;\n        path: string;\n        icon?: string | undefined;\n    } | undefined;\n} | {\n    platform: \'windows\';\n    sessionLocked: boolean | null;\n    captureAvailable: boolean;\n    elevated: boolean;\n    helper: Omit<CuaPermissionProcess, \'pid\'>;\n};',
   },
   {
+    name: 'CustomServersList',
+    declaration: 'export type CustomServersList = {\n    readonly available: false;\n} | {\n    readonly available: true;\n    readonly revision: string;\n    readonly servers: readonly CustomServerView[];\n};',
+  },
+  {
+    name: 'CustomServerStatus',
+    declaration: 'export type CustomServerStatus = {\n    readonly state: \'on\' | \'off\';\n} | {\n    readonly state: \'failed\';\n    readonly error: string;\n};',
+  },
+  {
+    name: 'CustomServerView',
+    declaration: 'export type CustomServerView = CustomServerStatus & {\n    readonly id: string;\n    readonly name: string;\n    readonly raw?: Readonly<Record<string, JsonValue>> | undefined;\n    readonly inherited: boolean;\n};',
+  },
+  {
     name: 'DailyInput',
     declaration: 'export interface DailyInput {\n    readonly time: string;\n    readonly time_zone: string;\n}',
   },
@@ -7971,6 +8039,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'DomainTableSpec',
     declaration: 'export interface DomainTableSpec<K extends string = string, V = unknown> {\n    readonly valueSchema: ZodType<V>;\n    readonly __key?: K;\n}',
+  },
+  {
+    name: 'DraftRow',
+    declaration: 'export interface DraftRow {\n    readonly key: string;\n    readonly value: string;\n    readonly secret: boolean;\n    readonly ref?: string | undefined;\n}',
   },
   {
     name: 'DshEnvironment',
@@ -9378,7 +9450,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'McpAccountRegistration',
-    declaration: 'export interface McpAccountRegistration {\n    readonly server: string;\n    readonly packageName: string;\n    readonly copy: McpAccountCopy;\n}',
+    declaration: 'export interface McpAccountRegistration {\n    readonly server: string;\n    readonly packageName?: string | undefined;\n    readonly copy: McpAccountCopy;\n}',
   },
   {
     name: 'McpAuthorizationReason',
@@ -10679,6 +10751,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SerializedNode',
     declaration: 'export type SerializedNode = SerializedElement | string;',
+  },
+  {
+    name: 'ServerDraft',
+    declaration: 'export interface ServerDraft {\n    readonly name: string;\n    readonly transport: Transport;\n    readonly url: string;\n    readonly headers: readonly DraftRow[];\n    readonly command: string;\n    readonly args: readonly string[];\n    readonly env: readonly DraftRow[];\n    readonly cwd: string;\n    readonly auth: AuthKind;\n    readonly token: string;\n    readonly tokenRef?: string | undefined;\n    readonly clientId: string;\n    readonly scope: string;\n}',
   },
   {
     name: 'ServerResponse',
@@ -12355,6 +12431,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'TranslationSpec',
     declaration: 'export type TranslationSpec = AnonymousTranslationSpec | PaidTranslationSpec;',
+  },
+  {
+    name: 'Transport',
+    declaration: 'export type Transport = \'streamable-http\' | \'stdio\';',
   },
   {
     name: 'TurnBoundaryProjection',

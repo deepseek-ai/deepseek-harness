@@ -38,7 +38,7 @@ export function apply(ctx: Context): void {
 ```
 
 - `server` 是连接器向管理器注册的名称；账号在注册表中的键为 `mcp:<server>`。同一服务器或同一插件包的第二个账号会抛出异常。
-- `packageName` 是其插件包页面承载区块和标签的 npm 包。
+- `packageName` 是其插件包页面承载区块和标签的 npm 包。不带它时，账号只出现在按账号键渲染它的界面中，例如[“连接器”标签](../../experimental/client-ui-connectors/README.zh.md)为使用 OAuth 的 MCP 服务器行显示的账号。
 - `copy` 是点出服务名称的 `McpAccountCopy`：区块标题、“连接”按钮文案、开启引导、各状态的说明、退出登录确认，以及连接成功和退出登录的提示。
 
 返回的销毁函数会把账号从所有页面撤下。

@@ -221,7 +221,7 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 
 | Package | Config | Description |
 |---|---|---|
-| `@deepseek-ai/dsh-client-ui-connectors` | no | Plugins page tab that lists, installs, and opens the official connectors |
+| `@deepseek-ai/dsh-client-ui-connectors` | no | Plugins page tab that lists, installs, and opens the official connectors and manages custom MCP servers |
 | `@deepseek-ai/dsh-client-ui-read-aloud` | no | Read assistant replies aloud from the message action row |
 | `@deepseek-ai/dsh-client-ui-sidechat` | no | Branch the conversation at its current point into a side conversation that opens in the right Sidebar |
 | `@deepseek-ai/dsh-cua` | no | Shared Computer Use application objects, authorization, and logged tool execution |

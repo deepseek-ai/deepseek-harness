@@ -15,7 +15,7 @@ Status: implemented
 | 部分 | 约定 |
 |---|---|
 | 注册 | `register({ key, packageName?, source, operations, copy, present })` 返回撤下账号的销毁函数 |
-| 键 | 在已注册账号中唯一，且与包无关，因此没有插件包承载的账号（如在 Settings 中配置的服务器）也能注册 |
+| 键 | 在已注册账号中唯一，且与包无关，因此没有插件包承载的账号（如 MCP 服务器行的账号）也能注册 |
 | 包 | 决定由哪个插件包页面承载区块和标签；一个包最多承载一个账号 |
 | 来源 | 注册方的账号：`snapshot`、`observe`、`refresh`、`start` 和 `cancel` |
 | 展示 | Host 上的 `present(view)` 给出阶段、状态文字、标题旁标签、按钮及其命令、确认、失败信息，以及开启引导启动的操作 |

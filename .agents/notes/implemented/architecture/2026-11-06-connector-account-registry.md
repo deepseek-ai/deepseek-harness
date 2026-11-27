@@ -15,7 +15,7 @@ Connector plugins show an account section on the Plugins page. CLI app plugins k
 | Part | Contract |
 |---|---|
 | Registration | `register({ key, packageName?, source, operations, copy, present })` returns the disposer that withdraws the account |
-| Key | Unique among registered accounts and independent of the package, so an account that no bundle owns, such as a server configured in Settings, registers too |
+| Key | Unique among registered accounts and independent of the package, so an account that no bundle owns, such as the account of an MCP server row, registers too |
 | Package | Decides which bundle page carries the section and tag; a package carries at most one account |
 | Source | The registrant's account: `snapshot`, `observe`, `refresh`, `start`, and `cancel` |
 | Display | `present(view)` on the Host gives the phase, status text, title tag, buttons and their commands, confirmations, failure, and the operation the activation prompt starts |

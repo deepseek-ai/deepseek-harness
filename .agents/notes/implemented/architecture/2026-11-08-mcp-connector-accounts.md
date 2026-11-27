@@ -17,7 +17,7 @@ Connector plugins such as Linear, Notion, and Tencent Docs register an OAuth MCP
 | Source | Reads the manager's `list()` entry for the server and observes `mcp-manager/status`; `refresh` does nothing, because the manager publishes every change |
 | Operation | A running authorization attempt is the operation and its identity is the operation's, so the browser that started it follows the manager's own attempt; a finished attempt is the result |
 | Page operations | `connect` starts authorization, also while connected, so the user changes the account or workspace without deleting the grant first; `sign-out` and `retry` sign out and restart through the manager and report their own result once they finish |
-| Phases | Waiting for the browser and authorizing are connecting; a server that needs authorization again is disconnected, with the reason in its detail; a closed, waiting, disabled, or failed server is unavailable, with Retry only where a restart recovers it |
+| Phases | Waiting for the browser and authorizing are connecting; a server that needs authorization again is disconnected, with the reason in its detail; a closed, waiting, or failed server is unavailable, with Retry only where a restart recovers it |
 | Copy | The 23 strings every connector shares are Host dictionaries in eight languages; each connector supplies only the strings that name its service |
 
 The manager's `startAuthorization`, `cancelAuthorization`, and `signOut` are Host methods without a Remote, so no browser names a server to authorize.
@@ -28,7 +28,7 @@ The manager's `startAuthorization`, `cancelAuthorization`, and `signOut` are Hos
 
 **Track an adapter-owned operation for each authorization.** Rejected: the manager already tracks the attempt's identity, phases, and authorization page, so a second tracker would restate it. The registry lets a source answer `start` once the manager has created the attempt.
 
-**Key each connector's account by its package.** Rejected: the server name is unique among MCP accounts, so the key also refuses a second account for one server, and a server configured in Settings, which no bundle owns, uses the same form.
+**Key each connector's account by its package.** Rejected: the server name is unique among MCP accounts, so the key also refuses a second account for one server, and the account of an MCP server row, which is registered without a bundle package, uses the same form.
 
 ## Consequences
 

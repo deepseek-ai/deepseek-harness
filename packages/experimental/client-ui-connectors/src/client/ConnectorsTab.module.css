@@ -4,12 +4,29 @@
   gap: 12px;
 }
 
+/* The heading wraps its text beside the actions; they move below it once its longest word no longer fits beside them. */
+.headingRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
 .heading {
+  flex: 1;
   margin: 0;
   font-size: 14px;
   font-weight: 500;
   line-height: 20px;
   color: var(--dsw-alias-label-secondary);
+}
+
+.actions {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  margin-inline-start: auto;
 }
 
 .notice {

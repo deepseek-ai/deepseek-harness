@@ -43,6 +43,14 @@ it('registers each server under its key and bundle package and routes the page o
   expect((await first(ctx)).accounts).toEqual([])
 })
 
+it('registers a server without a bundle package for a surface that renders it by key', async () => {
+  const { ctx } = await registry()
+  ctx.mcpAccounts.register({ server: 'acme', copy: COPY })
+  const [entry] = (await first(ctx)).accounts
+  expect(entry).toMatchObject({ key: 'mcp:acme', display: { phase: 'disconnected' } })
+  expect(entry).not.toHaveProperty('packageName')
+})
+
 it('reports the connector notices for the connection and sign-out it registered', async () => {
   const { ctx, manager } = await registry()
   ctx.mcpAccounts.register({ server: 'acme', packageName: '@acme/connector', copy: COPY })

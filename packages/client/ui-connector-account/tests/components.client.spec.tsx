@@ -7,7 +7,8 @@ import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
 import { RemoteError, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import {
-  ConnectorAccountActivationEntry, ConnectorAccountBadgeEntry, ConnectorAccountSectionEntry, ConnectorAccountToastEntry,
+  ConnectorAccountActivationEntry, ConnectorAccountBadgeEntry, ConnectorAccountFactory, ConnectorAccountSectionEntry,
+  ConnectorAccountToastEntry,
 } from '../src/client/components.tsx'
 import { zh } from '../src/client/locales.ts'
 import type { ConnectorAccountFace, ConnectorAccountsState } from '../src/client/types.ts'
@@ -243,4 +244,15 @@ it('shows the latest notice with the registrant text or the shared failure copy'
   expect(screen.getByText('演示已连接')).toBeTruthy()
   rerender(toast({ seq: 2, kind: 'action-failed' }))
   expect(screen.getByText(zh['notice.action-failed'])).toBeTruthy()
+})
+
+it('shows an account by key as its section or only its status line, and nothing before the Host lists it', () => {
+  const props = face()
+  const { container, rerender } = render(<ConnectorAccountFactory {...props} presentation="section" />)
+  expect(screen.getByText('演示账号')).toBeTruthy()
+  rerender(<ConnectorAccountFactory {...props} presentation="status" />)
+  expect(screen.queryByText('演示账号')).toBeNull()
+  expect(container.querySelector('[data-connector-account="disconnected"][data-connector-account-key="@acme/fixture"]')?.textContent).toBe('未连接')
+  rerender(<ConnectorAccountFactory {...face({}, [])} presentation="status" />)
+  expect(document.body.textContent).toBe('')
 })

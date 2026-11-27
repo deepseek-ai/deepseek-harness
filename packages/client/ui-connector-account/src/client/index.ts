@@ -11,7 +11,8 @@ import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import {
-  ConnectorAccountActivationEntry, ConnectorAccountBadgeEntry, ConnectorAccountSectionEntry, ConnectorAccountToastEntry,
+  ConnectorAccountActivationEntry, ConnectorAccountBadgeEntry, ConnectorAccountFactory, ConnectorAccountSectionEntry,
+  ConnectorAccountToastEntry,
 } from './components.tsx'
 import { de, en, es, fr, ja, NS, pt, ru, zh } from './locales.ts'
 import { BrowserAccounts } from './state.ts'
@@ -19,7 +20,7 @@ import type { ConnectorAccountFace } from './types.ts'
 
 export type { ConnectorAccountKey } from './locales.ts'
 export type {
-  ConnectorAccountFace, ConnectorAccountNotice, ConnectorAccountsState, ConnectorBundleAccountFace,
+  ConnectorAccountFace, ConnectorAccountFactoryInput, ConnectorAccountNotice, ConnectorAccountsState, ConnectorBundleAccountFace,
 } from './types.ts'
 
 /** The `connectorAccounts` Remote that `dsh-api-remotes` mounts, and the services the slot registrations need. */
@@ -39,8 +40,8 @@ function registerBundle(ctx: Context, face: ConnectorAccountFace, packageName: s
 }
 
 /**
- * Show the registered connector accounts for one plugin lifetime: one tag and one notice entry for the page, and a
- * section and activation prompt for each bundle that owns an account.
+ * Show the registered connector accounts for one plugin lifetime: one tag and one notice entry for the page, a section
+ * and activation prompt for each bundle that owns an account, and the `connector.account` Factory for other surfaces.
  * @param ctx - the browser plugin context.
  */
 export function apply(ctx: Context): void {
@@ -65,6 +66,9 @@ export function apply(ctx: Context): void {
       name: 'shell.overlay', id: 'connector-account.notice', locale: NS, inject: () => face,
     }, ConnectorAccountToastEntry))
   }, 'connector-account: page surfaces')
+  ctx.effect(() => ctx.slots.registerFactory({
+    name: 'connector.account', scope: 'root', locale: NS, inject: () => face,
+  }, ConnectorAccountFactory), 'connector-account: account factory')
   ctx.effect(() => {
     const shown = new Map<string, { readonly account: string; readonly withdraw: () => void }>()
     const sync = (): void => {

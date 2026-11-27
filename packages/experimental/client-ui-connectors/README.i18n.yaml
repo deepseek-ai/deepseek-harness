@@ -3,35 +3,35 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/client-ui-connectors/README.md
 /:
-  en: 336813b7bbd85af2
-  zh: ca919218bc011e27
+  en: 53fcef4106f14e35
+  zh: 0018d05f662cdb2d
 /deepseek-ai-dsh-client-ui-connectors:
   en: 37b6ad3cf4366d1e
   zh: a979b08feb6b25ba
 /deepseek-ai-dsh-client-ui-connectors/summary:
-  en: 30b67222d7567a11
-  zh: 3704ffac108b73a1
+  en: e29486da12c1c31e
+  zh: 0365cb4dfdb3bc63
 /deepseek-ai-dsh-client-ui-connectors/table-of-contents:
   en: d152484eb41ac6b4
   zh: b00dddf4c88f0a45
 /deepseek-ai-dsh-client-ui-connectors/use-this-package:
-  en: 842e6a1a86bd810e
-  zh: b6801d0a2826c5e5
+  en: 3300390e0cd50556
+  zh: 466f6e6e185df1cc
 /deepseek-ai-dsh-client-ui-connectors/understand-the-implementation:
-  en: 685a4af5f88802e3
-  zh: 8b5bd24c441c1c46
+  en: b7643d62da28a2bc
+  zh: 537f04447e96df42
 /deepseek-ai-dsh-client-ui-connectors/further-exploration:
-  en: 11158da35a516f70
-  zh: 3433cd5b89c5a3fd
+  en: 1f3f4e418f936c67
+  zh: e91e9fda9ca13e9f
 /deepseek-ai-dsh-client-ui-connectors/model-experience:
-  en: ac686e3a158d0e9a
-  zh: af41bf5fd8723e27
+  en: 2c82681f5770a65e
+  zh: 1d607646f8015514
 /deepseek-ai-dsh-client-ui-connectors/model-experience/kv-cache-effect:
-  en: 7e4605bb3e4ead3c
-  zh: b139f94815d12688
+  en: f1a8f4f10de41f38
+  zh: 548902beba6075c6
 /deepseek-ai-dsh-client-ui-connectors/known-limitations-and-deferred-work:
-  en: 0238dce25b894498
-  zh: 0b4641a153e56e6c
+  en: 6c5db381873ef902
+  zh: 5046d3b42849fbae
 /deepseek-ai-dsh-client-ui-connectors/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 8ec3e73528ddb1a6

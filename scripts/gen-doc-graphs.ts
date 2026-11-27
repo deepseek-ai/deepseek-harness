@@ -207,6 +207,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Holds what each CLI app plugin registers: adds the CLI\'s absolute path to required runtime context, runs the plugin\'s account operations one at a time through bounded commands, and registers the account with `ctx.connectorAccounts` while that registry is loaded.',
   },
   {
+    key: 'connectors',
+    pkg: 'client-ui-connectors',
+    title: 'Custom MCP servers on the Connectors tab',
+    mode: 'service',
+    note: 'Streams the MCP server rows of the profile\'s composition to the Connectors tab and runs each save, removal, and switch as one Host operation over the configuration editor, the plugin manager, credentials, and the MCP manager; registers the account of each OAuth server row that is on with `ctx.mcpAccounts` while that service is loaded.',
+  },
+  {
     key: 'pluginMarket',
     pkg: 'plugin-market',
     title: 'Plugin market index reader',

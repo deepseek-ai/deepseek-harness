@@ -38,7 +38,7 @@ export function apply(ctx: Context): void {
 ```
 
 - `server` is the name the connector registers with the manager; the account's key in the registry is `mcp:<server>`. A second account for the same server or the same package throws.
-- `packageName` is the npm package whose bundle page carries the section and tag.
+- `packageName` is the npm package whose bundle page carries the section and tag. Without it, the account shows only where a surface renders it by key, such as the [Connectors tab](../../experimental/client-ui-connectors/README.md) for MCP server rows that use OAuth.
 - `copy` is the `McpAccountCopy` that names the service: the section title, the Connect label, the activation prompt, the detail line of each state, the sign-out confirmation, and the connected and signed-out notices.
 
 The returned disposer withdraws the account from every page.

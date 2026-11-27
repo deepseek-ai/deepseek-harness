@@ -98,6 +98,8 @@ const PEER_REQUIRED_HOST_EXPORTS = {
   '@deepseek-ai/dsh-experimental-worktree': ['generatedWorktreeName', 'CREATED_RECORD', 'createdWorktreeSchema'],
   // Stateless; the injected WebServer remains a peer.
   '@deepseek-ai/dsh-host-webserver': ['normalizeBindAddress'],
+  // A server saved from the Connectors form must match the installed MCP manager's server row schema.
+  '@deepseek-ai/dsh-mcp-manager/server': ['Config'],
   // The forge panel matches ctx.fs failures with `instanceof FsError`.
   '@deepseek-ai/dsh-fs': ['FsError'],
   '@deepseek-ai/dsh-scope': ['carrierKeyOf', 'createScope', 'scopeChainOf', 'scopeOf', 'scopeTarget'],
