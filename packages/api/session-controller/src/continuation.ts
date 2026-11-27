@@ -7,7 +7,7 @@ import { z } from 'zod'
 
 // Explicit manual requests use a fixed product policy, independent of automatic retry configuration.
 const CONTINUABLE_FAILURES: ReadonlySet<string> = new Set([
-  'RATE_LIMIT', 'SERVER', 'TIMEOUT', 'TRANSPORT', 'EMPTY_RESPONSE', 'STREAM_CLOSED',
+  'RATE_LIMIT', 'SERVER', 'TIMEOUT', 'TRANSPORT', 'EMPTY_RESPONSE', 'STREAM_CLOSED', 'INVALID_TOOL_ARGUMENTS',
 ])
 
 const endingSchema = z.number().int().nonnegative().transform(brandNumber<SessionSeq>).nullable()

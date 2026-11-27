@@ -36,6 +36,7 @@ const MODE_HINTS: ReadonlyMap<string, ModelsKey> = new Map([['always', 'retryAlw
 /** Labels of known failure codes; a code without one shows verbatim. */
 const CODE_LABELS: ReadonlyMap<string, ModelsKey> = new Map([
   ['EMPTY_RESPONSE', 'retryCodeEmptyResponse'],
+  ['INVALID_TOOL_ARGUMENTS', 'retryCodeInvalidToolArguments'],
   ['RATE_LIMIT', 'retryCodeRateLimit'],
   ['SERVER', 'retryCodeServer'],
   ['TIMEOUT', 'retryCodeTimeout'],

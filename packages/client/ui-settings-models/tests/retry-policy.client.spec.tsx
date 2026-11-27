@@ -23,10 +23,10 @@ const RetryPolicy = Schema.union([
     mode: Schema.const('normal').required(),
     maxRetries: Schema.number().step(1).min(0).max(Number.MAX_SAFE_INTEGER).default(5),
     retryableCodes: Schema.array(Schema.union([
-      ...['EMPTY_RESPONSE', 'RATE_LIMIT', 'SERVER', 'TIMEOUT', 'TRANSPORT', 'STREAM_CLOSED', 'MALFORMED_RESPONSE', 'QUOTA']
+      ...['EMPTY_RESPONSE', 'INVALID_TOOL_ARGUMENTS', 'RATE_LIMIT', 'SERVER', 'TIMEOUT', 'TRANSPORT', 'STREAM_CLOSED', 'MALFORMED_RESPONSE', 'QUOTA']
         .map(code => Schema.const(code)),
       Schema.string().min(1),
-    ])).min(1).default(['EMPTY_RESPONSE', 'RATE_LIMIT', 'SERVER', 'TIMEOUT', 'TRANSPORT']),
+    ])).min(1).default(['EMPTY_RESPONSE', 'INVALID_TOOL_ARGUMENTS', 'RATE_LIMIT', 'SERVER', 'TIMEOUT', 'TRANSPORT']),
     backoff,
   }),
   Schema.object({ mode: Schema.const('always').required(), backoff }),
@@ -85,6 +85,7 @@ const mode = () => screen.getByRole<HTMLSelectElement>('combobox', { name: en.re
 const input = (label: string) => screen.getByLabelText<HTMLInputElement>(label)
 const CODE_LABELS: Record<string, string> = {
   EMPTY_RESPONSE: en.retryCodeEmptyResponse,
+  INVALID_TOOL_ARGUMENTS: en.retryCodeInvalidToolArguments,
   RATE_LIMIT: en.retryCodeRateLimit,
   SERVER: en.retryCodeServer,
   TIMEOUT: en.retryCodeTimeout,
@@ -113,7 +114,7 @@ describe('retry policy fields', () => {
 
     fireEvent.change(mode(), { target: { value: 'normal' } })
     expect(input(en.retryMaxRetries).placeholder).toBe('5')
-    expect(['EMPTY_RESPONSE', 'RATE_LIMIT', 'SERVER', 'TIMEOUT', 'TRANSPORT'].every(code => code_(code).checked)).toBe(true)
+    expect(['EMPTY_RESPONSE', 'INVALID_TOOL_ARGUMENTS', 'RATE_LIMIT', 'SERVER', 'TIMEOUT', 'TRANSPORT'].every(code => code_(code).checked)).toBe(true)
     expect(code_('STREAM_CLOSED').checked).toBe(false)
     expect(input(en.retryInitialDelay).placeholder).toBe('500')
     expect(input(en.retryMaxDelay).placeholder).toBe('10000')
@@ -130,7 +131,7 @@ describe('retry policy fields', () => {
     expect(writeSettings).toHaveBeenCalledWith('llm-deepseek', [
       { op: 'set', path: ['retryPolicy', 'mode'], value: 'normal' },
       { op: 'set', path: ['retryPolicy', 'maxRetries'], value: 3 },
-      { op: 'set', path: ['retryPolicy', 'retryableCodes'], value: ['RATE_LIMIT', 'SERVER'] },
+      { op: 'set', path: ['retryPolicy', 'retryableCodes'], value: ['INVALID_TOOL_ARGUMENTS', 'RATE_LIMIT', 'SERVER'] },
       { op: 'set', path: ['retryPolicy', 'backoff', 'jitterRatio'], value: 0.25 },
     ], 3)
   })
@@ -390,7 +391,7 @@ describe('retry policy fields', () => {
     fireEvent.change(customCode(), { target: { value: '   ' } })
     expect(addCode().disabled).toBe(true)
     fireEvent.keyDown(customCode(), { key: 'Enter' })
-    expect(screen.getAllByRole('checkbox')).toHaveLength(8)
+    expect(screen.getAllByRole('checkbox')).toHaveLength(9)
     fireEvent.change(customCode(), { target: { value: '  Overloaded_529 ' } })
     fireEvent.click(addCode())
     expect(customCode().value).toBe('')
@@ -415,7 +416,7 @@ describe('retry policy fields', () => {
     await waitFor(() => { expect(onClose).toHaveBeenCalledWith(true) })
     expect(writeSettings.mock.calls[0]?.[1]).toEqual([
       { op: 'set', path: ['retryPolicy', 'mode'], value: 'normal' },
-      { op: 'set', path: ['retryPolicy', 'retryableCodes'], value: ['EMPTY_RESPONSE', 'RATE_LIMIT', 'SERVER', 'TIMEOUT', 'TRANSPORT', 'Overloaded_529'] },
+      { op: 'set', path: ['retryPolicy', 'retryableCodes'], value: ['EMPTY_RESPONSE', 'INVALID_TOOL_ARGUMENTS', 'RATE_LIMIT', 'SERVER', 'TIMEOUT', 'TRANSPORT', 'Overloaded_529'] },
     ])
   })
 

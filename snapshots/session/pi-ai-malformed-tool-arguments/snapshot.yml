@@ -1,9 +1,9 @@
 version: 1
 scenario: pi-ai-malformed-tool-arguments
 profile: headless
-composition: default
+composition: retry
 recording: authored
 header:
-  class: default
+  class: retry
 workspace:
   final: true

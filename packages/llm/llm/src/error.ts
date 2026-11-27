@@ -45,6 +45,7 @@ export const LLM_FAILURE_CODES = {
   INVALID_REPLAY_STATE: {},
   INVALID_REQUEST: {},
   INVALID_RESPONSE: {},
+  INVALID_TOOL_ARGUMENTS: { retryChoice: true },
   MALFORMED_RESPONSE: { retryChoice: true },
   MISSING_CREDENTIAL: {},
   MODEL_SWITCH_COMPACTION_FAILED: {},
@@ -107,6 +108,15 @@ export const EMPTY_RESPONSE_CODE = 'EMPTY_RESPONSE' satisfies BuiltinLlmFailureC
  * a malformed credential fails identically on every attempt.
  */
 export const INVALID_CREDENTIAL_CODE = 'INVALID_CREDENTIAL' satisfies BuiltinLlmFailureCode
+
+/**
+ * Canonical provider-neutral code for a response whose protocol was intact but
+ * whose completed tool-call arguments the model produced as invalid JSON or as
+ * a non-object value. The attempt fails before any of its tools run and adds
+ * nothing to model history; a new request samples fresh output, so retry
+ * policy repeats it by default. Protocol violations keep `MALFORMED_RESPONSE`.
+ */
+export const INVALID_TOOL_ARGUMENTS_CODE = 'INVALID_TOOL_ARGUMENTS' satisfies BuiltinLlmFailureCode
 
 /** Structured codes and plain phrases that explicitly name a context bound being exceeded. */
 const STRUCTURED_CONTEXT_OVERFLOW = new RegExp(

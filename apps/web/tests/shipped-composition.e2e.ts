@@ -546,6 +546,7 @@ it('assembles the shipped Web transport, catalog, guidance, and defaults', async
       "mode": "normal",
       "retryableCodes": [
         "EMPTY_RESPONSE",
+        "INVALID_TOOL_ARGUMENTS",
         "RATE_LIMIT",
         "SERVER",
         "TIMEOUT",
@@ -579,6 +580,7 @@ it('assembles the shipped Web transport, catalog, guidance, and defaults', async
       "mode": "normal",
       "retryableCodes": [
         "EMPTY_RESPONSE",
+        "INVALID_TOOL_ARGUMENTS",
         "RATE_LIMIT",
         "SERVER",
         "TIMEOUT",
