@@ -390,6 +390,70 @@ describe('PluginManagerPage', () => {
     expect(document.querySelector('[data-plugin-group="bundles"]')).not.toBeNull()
   })
 
+  it('shows a contributed tab\'s own page under a crumb that names the tab, in place of the header and tabs', () => {
+    const { navigation, setTabs } = renderTab({ packages: [pkg()] }, {}, {
+      'plugins.tab:connectors': (_view, owner) => {
+        const tab = owner as PluginTabProps
+        return tab.page === undefined
+          ? <button type="button" onClick={() => { tab.openPage('new') }}>Add server</button>
+          : <button type="button" onClick={() => { tab.closePage() }}>Save {tab.page}</button>
+      },
+      'plugins.tab:discover': () => 'Discover list',
+    }, {}, [{ id: 'connectors', label: 'Connectors' }, { id: 'discover', label: 'Discover' }])
+    fireEvent.click(screen.getByRole('tab', { name: 'Connectors' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add server' }))
+    expect(navigation.getSnapshot()).toEqual({ tab: 'connectors', view: { kind: 'tabPage', tab: 'connectors', page: 'new' } })
+    // The entry stays and receives its key; the page's title, toolbar, and tabs give way to the crumb.
+    expect(screen.getByRole('button', { name: 'Save new' })).toBeTruthy()
+    expect(document.querySelector('[data-plugin-bar]')).toBeNull()
+    expect(screen.queryByRole('heading', { level: 1 })).toBeNull()
+    expect(screen.queryByRole('tablist')).toBeNull()
+    expect(screen.queryByRole('tabpanel')).toBeNull()
+    const crumb = screen.getByRole('button', { name: en.backToPackage.replace('{name}', 'Connectors') })
+    expect(crumb.textContent).toBe('Connectors')
+    expect(crumb.parentElement?.hasAttribute('data-window-drag')).toBe(true)
+    expect(crumb.parentElement?.children).toHaveLength(1)
+    fireEvent.click(crumb)
+    expect(navigation.getSnapshot()).toEqual({ tab: 'connectors', view: { kind: 'list' } })
+    expect(screen.getByRole('heading', { name: en.title, level: 1 })).toBeTruthy()
+    expect(screen.getByRole('tab', { name: 'Connectors' }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByRole('tabpanel', { name: 'Connectors' })).toBeTruthy()
+    // The entry closes its page itself, as after a save.
+    fireEvent.click(screen.getByRole('button', { name: 'Add server' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save new' }))
+    expect(navigation.getSnapshot()).toEqual({ tab: 'connectors', view: { kind: 'list' } })
+    expect(screen.getByRole('tabpanel', { name: 'Connectors' })).toBeTruthy()
+    // A page shows only on the tab that opened it.
+    act(() => { navigation.actions.setView({ kind: 'tabPage', tab: 'connectors', page: 'new' }); navigation.actions.setTab('discover') })
+    expect(screen.getByRole('tabpanel', { name: 'Discover' }).textContent).toBe('Discover list')
+    expect(screen.getByRole('heading', { name: en.title, level: 1 })).toBeTruthy()
+    // A tab that leaves the ledger while its page is open falls back to Installed and its list.
+    act(() => { navigation.actions.setTab('connectors') })
+    expect(screen.getByRole('button', { name: 'Save new' })).toBeTruthy()
+    setTabs([{ id: 'discover', label: 'Discover' }])
+    expect(navigation.getSnapshot().tab).toBe('installed')
+    expect(screen.getByRole('tabpanel', { name: en.installedTab })).toBeTruthy()
+    expect(document.querySelector('[data-plugin-group="bundles"]')).not.toBeNull()
+  })
+
+  it('closes a contributed tab\'s own page when the tab opens a bundle\'s page, whose back button returns to the tab\'s main content', () => {
+    const { navigation } = renderTab({ packages: [pkg()] }, {}, {
+      'plugins.tab:connectors': (_view, owner) => {
+        const tab = owner as PluginTabProps
+        return tab.page === undefined
+          ? <button type="button" onClick={() => { tab.openPage('new') }}>Add server</button>
+          : <button type="button" onClick={() => { tab.openPackage('dsh-better-sidebar') }}>Open bundle</button>
+      },
+    }, {}, [{ id: 'connectors', label: 'Connectors' }])
+    fireEvent.click(screen.getByRole('tab', { name: 'Connectors' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add server' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open bundle' }))
+    expect(document.querySelector('[data-plugin-detail="dsh-better-sidebar"]')).not.toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: en.backToList }))
+    expect(navigation.getSnapshot()).toEqual({ tab: 'connectors', view: { kind: 'list' } })
+    expect(screen.getByRole('button', { name: 'Add server' })).toBeTruthy()
+  })
+
   it('shows a confirmed version by name above its spec, as a check and a refusal with retry, without the spec form or another registry', () => {
     const confirmed: InstallState = { ...IDLE_INSTALL, open: true, spec: 'dsh-a@1.0.0', confirmed: { title: 'Alpha', version: '1.0.0' }, registries: REGISTRIES }
     const { actions, set } = renderTab({ install: { ...confirmed, phase: 'checking' } })

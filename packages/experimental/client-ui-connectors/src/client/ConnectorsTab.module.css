@@ -4,36 +4,6 @@
   gap: 12px;
 }
 
-.back {
-  display: inline-flex;
-  align-self: flex-start;
-  align-items: center;
-  gap: 4px;
-  border: 0;
-  padding: 0;
-  background: none;
-  color: var(--dsw-alias-label-tertiary);
-  font: inherit;
-  font-size: 12.5px;
-  cursor: pointer;
-}
-
-@media (hover: hover) {
-  .back:hover {
-    color: var(--dsw-alias-label-secondary);
-  }
-}
-
-.back:focus-visible {
-  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
-  outline-offset: 2px;
-}
-
-.backIcon {
-  width: 16px;
-  height: 16px;
-}
-
 /* The heading wraps its text beside the actions; they move below it once its longest word no longer fits beside them. */
 .headingRow {
   display: flex;

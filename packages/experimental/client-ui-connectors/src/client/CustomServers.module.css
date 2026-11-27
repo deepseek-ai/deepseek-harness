@@ -1,7 +1,12 @@
-.section {
+.section,
+.page {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+/* The list keeps its distance from the official connectors above it; a server's page starts under the Plugins page's crumb. */
+.section {
   margin-top: 24px;
 }
 

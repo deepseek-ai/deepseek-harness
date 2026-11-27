@@ -4,6 +4,8 @@ import { defineStore, type EngineStoreHandle } from '@deepseek-ai/dsh-client-sto
 /**
  * The main or additional plugin list, or one bundle, official item, or bundle row of the Installed tab. A bundle or row
  * opened from a contributed tab names it in `returnTab`, and the bundle page's back returns to that tab's list.
+ * `tabPage` is a page a contributed tab draws itself: `tab` is the tab that opened it and `page` the key that tab chose,
+ * and the page shows only while that tab is selected.
  */
 type View =
   | { readonly kind: 'list' }
@@ -11,6 +13,7 @@ type View =
   | { readonly kind: 'package'; readonly name: string; readonly from?: 'more'; readonly returnTab?: string }
   | { readonly kind: 'item'; readonly id: string }
   | { readonly kind: 'row'; readonly name: string; readonly rowId: string; readonly from?: 'more'; readonly returnTab?: string }
+  | { readonly kind: 'tabPage'; readonly tab: string; readonly page: string }
 
 /** `installed` is the page's own tab; any other value is the id of a `plugins.tab` entry. */
 type NavigationState = { view: View; tab: string }

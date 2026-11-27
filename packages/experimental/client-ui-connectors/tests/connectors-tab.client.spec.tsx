@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { useState, type ReactNode } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { PluginTabProps } from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import { ConnectorsTab, type ConnectorsActionOwnerProps, type ConnectorsTabProps } from '../src/client/ConnectorsTab.tsx'
 import type { ConnectorsState } from '../src/client/connectors-store.ts'
 import type { CustomServersOwnerProps } from '../src/client/CustomServersSection.tsx'
@@ -20,16 +22,30 @@ type TabState = Pick<ConnectorsState, 'status' | 'connectors'> & Partial<Connect
 function renderTab(state: TabState, version: string | undefined) {
   const full = (next: TabState): ConnectorsState => ({ busy: [], failed: null, ...next })
   const store = createSnapshotStore<ConnectorsState>(full(state))
-  // The custom servers section, reduced to a button that asks the tab for one server's page, and the tab's actions,
-  // reduced to a button that asks for the form of a new server.
-  const renderSlot = vi.fn((_name: string, owner: ConnectorsActionOwnerProps | CustomServersOwnerProps) => 'view' in owner
-    ? <button type="button" data-custom-servers-slot={owner.view.kind} onClick={() => { owner.setView({ kind: 'server', id: 'mcp-server-docs' }) }}>docs</button>
-    : <button type="button" data-actions-slot="" onClick={() => { owner.setView({ kind: 'new' }) }}>add</button>)
-  const actions = { ensure: vi.fn(), retry: vi.fn(), install: vi.fn(), openPackage: vi.fn(), setEnabled: vi.fn(), renderSlot }
+  // The custom servers section, reduced to a button that asks the tab for one server's page from its list and for the
+  // list from a page, and the tab's actions, reduced to a button that asks for the form of a new server.
+  const renderSlot = vi.fn((_name: string, owner: ConnectorsActionOwnerProps | CustomServersOwnerProps) => {
+    if (!('view' in owner)) return <button type="button" data-actions-slot="" onClick={() => { owner.setView({ kind: 'new' }) }}>add</button>
+    return owner.view.kind === 'list'
+      ? <button type="button" data-custom-servers-slot="list" onClick={() => { owner.setView({ kind: 'server', id: 'mcp-server-docs' }) }}>docs</button>
+      : <button type="button" data-custom-servers-slot={owner.view.kind} onClick={() => { owner.setView({ kind: 'list' }) }}>done</button>
+  })
+  const actions = {
+    ensure: vi.fn(), retry: vi.fn(), install: vi.fn(), openPackage: vi.fn(), setEnabled: vi.fn(), renderSlot,
+    openPage: vi.fn<PluginTabProps['openPage']>(), closePage: vi.fn<PluginTabProps['closePage']>(),
+  }
   const props = {
     t: translator(en), version, ...actions, useConnectors: bindSnapshotSelector(store),
   } as ConnectorsTabProps
-  render(<ConnectorsTab {...props} />)
+  // The Plugins page, reduced to the key of the tab's own page: it passes back the key the tab opened until the tab closes it.
+  function PluginsPage(): ReactNode {
+    const [page, setPage] = useState<string>()
+    return (
+      <ConnectorsTab {...props} page={page} openPage={(key) => { actions.openPage(key); setPage(key) }}
+        closePage={() => { actions.closePage(); setPage(undefined) }} />
+    )
+  }
+  render(<PluginsPage />)
   const set = (next: TabState): void => { act(() => { store.set(full(next)) }) }
   return { actions, set }
 }
@@ -109,28 +125,33 @@ it('reports a failed read with a retry and clears it once the state arrives', ()
   expect(screen.queryByRole('alert')).toBeNull()
 })
 
-it('shows only a custom server’s page below its Back button while the section asks for one', () => {
+it('opens a custom server’s page as a page of its own on the Plugins page, shows only the section there, and closes it once the section asks for the list', () => {
   const { actions } = renderTab({ status: 'ready', connectors: {} }, '1.2.3')
-  expect(screen.queryByRole('button', { name: en['custom.back'] })).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: 'docs' }))
+  expect(actions.openPage).toHaveBeenCalledExactlyOnceWith('server:mcp-server-docs')
   expect(actions.renderSlot).toHaveBeenLastCalledWith('connectors.custom', { view: { kind: 'server', id: 'mcp-server-docs' }, setView })
   expect(screen.queryByRole('heading', { name: en.official })).toBeNull()
   expect(document.querySelectorAll('[data-connector]')).toHaveLength(0)
   expect(document.querySelector('[data-actions-slot]')).toBeNull()
   expect(document.querySelector('[data-connectors] [data-custom-servers-slot="server"]')).not.toBeNull()
-  fireEvent.click(screen.getByRole('button', { name: en['custom.back'] }))
+  // The Plugins page draws the way back; the tab adds no button of its own.
+  expect(screen.getAllByRole('button')).toHaveLength(1)
+  fireEvent.click(screen.getByRole('button', { name: 'done' }))
+  expect(actions.closePage).toHaveBeenCalledOnce()
   expect(screen.getByRole('heading', { name: en.official })).toBeTruthy()
   expect(document.querySelector('[data-custom-servers-slot="list"]')).not.toBeNull()
 })
 
-it('shows only the form of a new server below its Back button once an action asks for it, and its actions again after Back', () => {
+it('opens the form of a new server as a page of its own once an action asks for it, and shows its actions again after the page closes', () => {
   const { actions } = renderTab({ status: 'ready', connectors: {} }, '1.2.3')
   fireEvent.click(screen.getByRole('button', { name: 'add' }))
+  expect(actions.openPage).toHaveBeenCalledExactlyOnceWith('new')
   expect(actions.renderSlot).toHaveBeenLastCalledWith('connectors.custom', { view: { kind: 'new' }, setView })
   expect(screen.queryByRole('heading', { name: en.official })).toBeNull()
   expect(document.querySelector('[data-actions-slot]')).toBeNull()
   expect(document.querySelector('[data-connectors] [data-custom-servers-slot="new"]')).not.toBeNull()
-  fireEvent.click(screen.getByRole('button', { name: en['custom.back'] }))
+  fireEvent.click(screen.getByRole('button', { name: 'done' }))
+  expect(actions.closePage).toHaveBeenCalledOnce()
   expect(document.querySelector('[data-actions-slot]')).not.toBeNull()
   expect(document.querySelector('[data-custom-servers-slot="list"]')).not.toBeNull()
 })

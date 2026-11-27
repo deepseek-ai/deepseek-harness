@@ -73,7 +73,7 @@ export function CustomServersSection(props: CustomServersSectionProps): ReactNod
     if (view.kind === 'server' && raw === undefined) {
       // Once a list has arrived, a missing or unreadable row means the server was removed or changed elsewhere.
       return (
-        <section className={css.section} data-custom-servers>
+        <section className={css.page} data-custom-servers>
           {notices}
           {state.status === 'ready' ? <p className={css.notice} role="alert">{t('custom.gone')}</p> : null}
         </section>
@@ -85,7 +85,7 @@ export function CustomServersSection(props: CustomServersSectionProps): ReactNod
       void save(draft, open?.id).then((saved) => { if (saved) setView({ kind: 'list' }) })
     }
     return (
-      <section className={css.section} data-custom-servers>
+      <section className={css.page} data-custom-servers>
         {notices}
         <ServerDetail key={open?.id ?? ''} initial={open === undefined || raw === undefined ? emptyDraft() : draftFromEntry(open.name, raw)}
           status={open} entry={raw} taken={state.servers.filter(server => server !== open).map(server => server.name)}

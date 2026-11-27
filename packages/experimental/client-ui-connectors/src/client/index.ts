@@ -27,7 +27,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     /**
      * The Connectors tab's section below the official connectors; this plugin registers the custom MCP servers
      * section there once the manager's Remote exists. The tab passes the section's view and shows only the section,
-     * below a Back button, while the view is a server's page; without an entry the tab shows only the official connectors.
+     * under the Plugins page's crumb, while the view is a server's page; without an entry the tab shows only the
+     * official connectors.
      */
     'connectors.custom': { kind: 'single'; scope: 'root'; owner: CustomServersOwnerProps }
   }

@@ -1921,6 +1921,13 @@ label.registryOption {
   gap: 24px;
 }
 
+/* A contributed tab's own page: the crumb row, then the tab's content at the distance `.detailHead` keeps from the crumb. */
+.tabPage {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
 /* The list toolbar's sentence about a manual refresh or the last update check; its count keeps a fixed digit width. */
 .updatesNote {
   font-size: 12px;

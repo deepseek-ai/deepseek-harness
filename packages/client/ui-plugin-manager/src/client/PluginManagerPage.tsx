@@ -521,12 +521,15 @@ function ListSkeleton({ label }: { readonly label: string }): ReactNode {
   )
 }
 
-/** The top every page shares: the crumb that leads back, then the icon with the page's actions at its right. */
+/**
+ * The top every page shares: the crumb that leads back, then the icon with the page's actions at its right. A page
+ * without an icon, as a contributed tab's own page is, has the crumb alone.
+ */
 function DetailTop({ crumbLabel, crumbText, onBack, icon, actions }: {
   readonly crumbLabel: string
   readonly crumbText: string
   readonly onBack: () => void
-  readonly icon: ReactNode
+  readonly icon?: ReactNode
   readonly actions?: ReactNode
 }): ReactNode {
   return (
@@ -535,10 +538,14 @@ function DetailTop({ crumbLabel, crumbText, onBack, icon, actions }: {
         <IconChevronDownOutlineRegular className={css.crumbIcon} aria-hidden="true" />
         <span>{crumbText}</span>
       </button>
-      <div className={css.detailHead}>
-        <span className={css.cardIcon} aria-hidden="true">{icon}</span>
-        {actions}
-      </div>
+      {icon === undefined
+        ? null
+        : (
+          <div className={css.detailHead}>
+            <span className={css.cardIcon} aria-hidden="true">{icon}</span>
+            {actions}
+          </div>
+        )}
     </div>
   )
 }
@@ -1645,7 +1652,10 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
   const detailFromMore = (view.kind === 'package' || view.kind === 'row')
     && (view.from === 'more' || (openPkg !== undefined && MORE_BUNDLES.includes(view.name) && !pinned.has(view.name)))
   const showsMoreList = onInstalled && showsCards && (view.kind === 'more' || detailFromMore)
-  const showsMainList = showsCards && !showsMoreList
+  // The selected contributed tab. Its own page shows only on the tab that opened it, under a crumb that names the tab.
+  const contributedTab = onInstalled ? undefined : tabs.find(item => item.id === tab)
+  const tabPage = view.kind === 'tabPage' && view.tab === tab ? view.page : undefined
+  const showsMainList = showsCards && !showsMoreList && tabPage === undefined
   const installedCards = onInstalled && showsCards
   const openPkgInMore = openPkg !== undefined && openPkg.official && detailFromMore
   const returnTab = view.kind === 'package' || view.kind === 'row' ? view.returnTab : undefined
@@ -1655,6 +1665,10 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
   const installedPanel = tabs.length === 0 || showsMoreList
     ? {}
     : { role: 'tabpanel', id: `${tabsId}-${INSTALLED_TAB}-panel`, 'aria-labelledby': `${tabsId}-${INSTALLED_TAB}` }
+  // A contributed tab's panel; its own page shows without the tabs, so it is not a tab panel then.
+  const tabPanel = tabPage === undefined
+    ? { role: 'tabpanel', id: `${tabsId}-${tab}-panel`, 'aria-labelledby': `${tabsId}-${tab}` }
+    : {}
   const activated = listed.find(pkg => pkg.name === activation && pkg.enabled && !state.busy.includes(pkg.name))
   const setBundleEnabled = (name: string, enabled: boolean): void => {
     setActivation(enabled ? name : null)
@@ -1779,13 +1793,25 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
           )
           : null}
         <ClientSyncNotice sync={props.useClientSync(snapshot => snapshot)} t={t} retry={props.retryClient} />
-        {!onInstalled
+        {contributedTab !== undefined
           ? (
-            <div role="tabpanel" id={`${tabsId}-${tab}-panel`} aria-labelledby={`${tabsId}-${tab}`} className={css.tabPanel}>
+            <div className={tabPage === undefined ? css.tabPanel : css.tabPage} {...tabPanel}>
+              {tabPage === undefined
+                ? null
+                : (
+                  <DetailTop
+                    crumbLabel={t('backToPackage', { name: contributedTab.label })}
+                    crumbText={contributedTab.label}
+                    onBack={() => { setView({ kind: 'list' }) }}
+                  />
+                )}
               {renderSlot('plugins.tab', {
                 install: props.installFrom,
                 update: props.openGitUpdate,
                 openPackage: (name) => { setTab(INSTALLED_TAB); setView({ kind: 'package', name, returnTab: tab }) },
+                page: tabPage,
+                openPage: (page) => { setView({ kind: 'tabPage', tab, page }) },
+                closePage: () => { setView({ kind: 'list' }) },
               }, { only: tab })}
             </div>
           )

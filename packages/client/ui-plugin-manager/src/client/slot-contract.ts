@@ -9,7 +9,8 @@
  * `import type` and registers through `ctx.slots`; it never imports this
  * package at runtime.
  *
- * A contributed tab, such as Discover, installs and updates through the page's own dialogs.
+ * A contributed tab, such as Discover, installs and updates through the page's own dialogs, and opens a page of its
+ * own under a crumb the Plugins page draws in place of its header and tabs.
  *
  * Entries accept `page` for the form with its own save control and `summary`
  * for an official card's one-liner or a row's missing-description fallback.
@@ -121,6 +122,17 @@ export interface PluginTabProps {
    * @param packageName - npm package name of the bundle.
    */
   readonly openPackage: (packageName: string) => void
+  /** The key of the tab's own page that is open, as the tab passed it to `openPage`; `undefined` on the tab's main content. */
+  readonly page: string | undefined
+  /**
+   * Open a page the tab draws itself: the Plugins page replaces its header and tabs with a crumb that names the tab,
+   * keeps rendering the entry, and passes the key back as `page`. The page closes through the crumb or `closePage`,
+   * when `openPackage` opens a bundle's page, and when the person leaves the Plugins page.
+   * @param page - a key the tab chooses for the page.
+   */
+  readonly openPage: (page: string) => void
+  /** Return to the tab's main content, as the crumb does. */
+  readonly closePage: () => void
 }
 
 /** Add-plugin menu actions, independent of any selected bundle or Session. */
@@ -136,7 +148,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     /**
      * Tabs after the page's own Installed tab, such as Discover: `label` names the tab and `order` places it. The
      * page renders the selected entry under its header and tabs; the entry draws its own content and installs and
-     * updates through the owner's `install` and `update`.
+     * updates through the owner's `install` and `update`. While the entry has a page of its own open through the
+     * owner's `openPage`, the page renders the entry under a crumb named by `label` instead.
      */
     'plugins.tab': { kind: 'list'; scope: 'root'; owner: PluginTabProps }
     /** Optional guidance after the user enables a bundle from the list, keyed by npm package name. */

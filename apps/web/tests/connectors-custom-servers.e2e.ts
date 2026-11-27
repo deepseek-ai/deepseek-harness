@@ -1,6 +1,7 @@
 /**
  * A remote server added on its Connectors tab page is an MCP server row of the profile patch whose token stays in
  * credentials: the row follows its switch, the manager probes with the stored token, and the removal deletes both.
+ * The server's page stands in place of the Plugins page's title and tabs, under the crumb back to the Connectors tab.
  */
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -20,7 +21,7 @@ interface PatchItem {
   readonly insert?: readonly { readonly id: string }[]
 }
 
-it('adds a remote server with a bearer token as a server row, switches the row off and on, tests it with the stored token, and removes the row and the token', async () => {
+it('opens a server\'s page under the Plugins page\'s crumb, adds a remote server with a bearer token as a server row, switches the row off and on, tests it with the stored token, and removes the row and the token', async () => {
   const owned: { scaffold?: WebScaffold; browser?: Browser; fixture?: HttpMcpFixture } = {}
   onTestFinished(async () => {
     try { await owned.browser?.close() } finally {
@@ -46,6 +47,23 @@ it('adds a remote server with a bearer token as a server row, switches the row o
   await panel.getByRole('button', { name: '添加 MCP 服务器', exact: true }).click()
   const serverPage = panel.locator('[data-custom-server-page]')
   await serverPage.getByRole('heading', { name: '添加 MCP 服务器' }).waitFor()
+  // The server's page stands in place of the Plugins page's title and tabs, under one crumb that names the tab.
+  const pageTitle = panel.getByRole('heading', { name: '插件', exact: true, level: 1 })
+  const installedTab = panel.getByRole('tab', { name: '已安装', exact: true })
+  const crumb = panel.getByRole('button', { name: '返回 连接器', exact: true })
+  expect(await crumb.textContent()).toBe('连接器')
+  expect(await pageTitle.count()).toBe(0)
+  expect(await installedTab.count()).toBe(0)
+  // The crumb is the way out of a started form, back to the tab's lists.
+  await serverPage.getByRole('textbox', { name: '名称', exact: true }).fill('started')
+  await crumb.click()
+  await serverPage.waitFor({ state: 'detached' })
+  await pageTitle.waitFor()
+  await installedTab.waitFor()
+  await section.getByText('还没有自定义服务器。').waitFor()
+  expect(await panel.getByRole('tab', { name: '连接器', exact: true }).getAttribute('aria-selected')).toBe('true')
+
+  await panel.getByRole('button', { name: '添加 MCP 服务器', exact: true }).click()
   await serverPage.getByRole('textbox', { name: '名称', exact: true }).fill('fixture')
   await serverPage.getByRole('textbox', { name: 'URL', exact: true }).fill(fixture.url)
   await serverPage.getByRole('tab', { name: 'Bearer 令牌', exact: true }).click()
