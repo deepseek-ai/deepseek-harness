@@ -16,6 +16,8 @@
   - [B.1：用生命周期事件驱动插件工作，而不是用轮询 Agent 状态的循环](backend.zh.md#b1)
   - [B.2：通过注册表注册独立条目，不要把它们列在单个插件的配置中](backend.zh.md#b2)
 - [D：数据交换](data-exchange.zh.md)
+- [P：提示词](prompt.zh.md)
+  - [P.1：把工具说明写进它的 schema 描述，不要写进系统提示词段落](prompt.zh.md#p1)
 
 ## 地位与范围
 

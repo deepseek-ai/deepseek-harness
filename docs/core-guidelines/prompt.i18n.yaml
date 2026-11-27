@@ -1,0 +1,25 @@
+# Bilingual-pair consistency record for prompt.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/core-guidelines/prompt.md
+/p-prompt:
+  en: d789ef7514ed64aa
+  zh: 0ac5d67750b1e11d
+/p-prompt/p-1-describe-a-tool-in-its-schema-description-not-in-a-system-prompt-section:
+  en: 3c4cdc8badf88fea
+  zh: 521751aad29b282b
+/p-prompt/p-1-describe-a-tool-in-its-schema-description-not-in-a-system-prompt-section/reason:
+  en: 174e4ebcbb68a192
+  zh: 54afc5d47c12e0bc
+/p-prompt/p-1-describe-a-tool-in-its-schema-description-not-in-a-system-prompt-section/example-bad:
+  en: fa9d124d15eb4a19
+  zh: 4619dd28746c16ce
+/p-prompt/p-1-describe-a-tool-in-its-schema-description-not-in-a-system-prompt-section/example:
+  en: b9b5449b4e5cc2bf
+  zh: fa9be57f4cf4a267
+/p-prompt/p-1-describe-a-tool-in-its-schema-description-not-in-a-system-prompt-section/exception:
+  en: e8bf65aa56b5e2e9
+  zh: 2268f76318b176fa
+/p-prompt/p-1-describe-a-tool-in-its-schema-description-not-in-a-system-prompt-section/enforcement:
+  en: 3b2035e3ac824766
+  zh: 3db9c0727a1d4cff
