@@ -18,11 +18,31 @@ declare module '../contract/chat-nodes.ts' {
 
 const MAX_DEPTH = 256
 
+/**
+ * Fold State of one root Tool call. Dispatch updates mutate it in place and return the same object, as the
+ * [Assembler update rule](../../../../../../.agents/notes/implemented/architecture/2026-08-09-client-conversation-node-assembly.md)
+ * permits.
+ */
 interface ToolState {
   /** Absent until a named delta or `tool/call` identifies the call. */
-  readonly root: ToolCallBlock | undefined
-  readonly children: ReadonlyMap<string, readonly ToolCallBlock[]>
-  readonly parents: ReadonlyMap<string, string>
+  root: ToolCallBlock | undefined
+  /** Dispatch edges accumulated by incremental updates. */
+  calls: DispatchTree
+}
+
+/**
+ * Nested dispatch edges, keyed by parent then child call id and mutated in place
+ * ([rationale](../../../../../../.agents/notes/implemented/bug-fix/2026-11-27-ptc-dispatch-fold-quadratic.md)).
+ * Published Tool call blocks carry their own arrays and never alias this tree.
+ */
+interface DispatchTree {
+  /** Children of each parent, in dispatch order. */
+  children: Map<string, Map<string, ToolCallBlock>>
+  parents: Map<string, string>
+}
+
+function emptyDispatchTree(): DispatchTree {
+  return { children: new Map(), parents: new Map() }
 }
 
 interface ProjectedBlockCache {
@@ -171,7 +191,7 @@ function locationStep(match: ConversationMatch): number {
 }
 
 function acceptsEdge(state: ToolState, parent: string, child: string): boolean {
-  if (parent === child || state.parents.has(child)) return false
+  if (parent === child || state.calls.parents.has(child)) return false
   let cursor: string | undefined = parent
   let parentDepth = 0
   const ancestors = new Set<string>()
@@ -179,7 +199,7 @@ function acceptsEdge(state: ToolState, parent: string, child: string): boolean {
     if (cursor === child || ancestors.has(cursor)) return false
     ancestors.add(cursor)
     parentDepth++
-    cursor = state.parents.get(cursor)
+    cursor = state.calls.parents.get(cursor)
   }
   const pending = [{ callId: child, depth: 1 }]
   const descendants = new Set<string>()
@@ -188,7 +208,7 @@ function acceptsEdge(state: ToolState, parent: string, child: string): boolean {
     if (descendants.has(candidate.callId)) return false
     descendants.add(candidate.callId)
     subtreeDepth = Math.max(subtreeDepth, candidate.depth)
-    for (const nested of state.children.get(candidate.callId) ?? []) {
+    for (const nested of state.calls.children.get(candidate.callId)?.values() ?? []) {
       pending.push({ callId: nested.callId, depth: candidate.depth + 1 })
     }
   }
@@ -201,26 +221,26 @@ function updateDispatch(state: ToolState, match: ConversationMatch): ToolState {
   const data = event.data
   const parentCallId = String(data.parentCallId)
   const subCallId = String(data.subCallId)
-  const siblings = state.children.get(parentCallId) ?? []
-  const index = siblings.findIndex(candidate => candidate.callId === subCallId)
+  const previous = state.calls.children.get(parentCallId)?.get(subCallId)
   if (event.type === 'tool/ptc-dispatch-start') {
-    if (index >= 0 || !acceptsEdge(state, parentCallId, subCallId)) return state
-    const children = new Map(state.children)
-    children.set(parentCallId, [...siblings, childCall(match, data)])
-    const parents = new Map(state.parents)
-    parents.set(subCallId, parentCallId)
-    return { ...state, children, parents }
+    if (previous !== undefined || !acceptsEdge(state, parentCallId, subCallId)) return state
+    attachChild(state.calls, parentCallId, childCall(match, data))
+    return state
   }
-  if (index < 0 && !acceptsEdge(state, parentCallId, subCallId)) return state
-  const previous = index < 0 ? undefined : siblings[index]
-  const settled = childResult(match, data, previous)
-  const children = new Map(state.children)
-  children.set(parentCallId, index < 0
-    ? [...siblings, settled]
-    : siblings.map((child, at) => at === index ? settled : child))
-  const parents = new Map(state.parents)
-  if (index < 0) parents.set(subCallId, parentCallId)
-  return { ...state, children, parents }
+  if (previous === undefined && !acceptsEdge(state, parentCallId, subCallId)) return state
+  attachChild(state.calls, parentCallId, childResult(match, data, previous))
+  return state
+}
+
+/** Record one child under its parent, keeping first-attachment order on replacement. */
+function attachChild(calls: DispatchTree, parentCallId: string, child: ToolCallBlock): void {
+  let siblings = calls.children.get(parentCallId)
+  if (siblings === undefined) {
+    siblings = new Map()
+    calls.children.set(parentCallId, siblings)
+  }
+  siblings.set(child.callId, child)
+  calls.parents.set(child.callId, parentCallId)
 }
 
 function projectBlock(
@@ -234,7 +254,8 @@ function projectBlock(
   if (visited.has(block.callId) || depth > MAX_DEPTH) return { ...block, subCalls: [] }
   const nextVisited = new Set(visited)
   nextVisited.add(block.callId)
-  const children = (state.children.get(block.callId) ?? block.subCalls)
+  const attached = state.calls.children.get(block.callId)
+  const children = (attached === undefined ? block.subCalls : [...attached.values()])
     .map(child => projectBlock(child, state, interruptedAt, nextVisited, depth + 1))
   const interruptionSeq = 'kind' in block ? undefined : interruptedAt?.seq
   const interruptionTime = 'kind' in block ? undefined : interruptedAt?.time
@@ -283,7 +304,7 @@ function fallbackState(context: ConversationNodeContext<ToolState>): ToolState |
   const match = context.matches.find(candidate => candidate.event.type === 'tool/result')
   const root = match === undefined ? undefined : rootResult(match)
   if (root === undefined) return undefined
-  let state: ToolState = { root, children: new Map(), parents: new Map() }
+  let state: ToolState = { root, calls: emptyDispatchTree() }
   for (const candidate of context.matches) state = updateDispatch(state, candidate)
   return state
 }
@@ -314,7 +335,7 @@ export const toolDefinition: ConversationNodeDefinition<ToolState> = {
     return null
   },
   start: (_context, match) => {
-    const state: ToolState = { root: undefined, children: new Map(), parents: new Map() }
+    const state: ToolState = { root: undefined, calls: emptyDispatchTree() }
     return match.event.type === 'tool/call' ? { ...state, root: rootCall(match) } : applyDelta(state, match)
   },
   update: (context, match) => {

@@ -11,7 +11,9 @@ import {
   PERFORMANCE_BUDGET_HEADROOM,
 } from '../support/calibration.ts'
 import { recordPeakMemory, recordTimings, type BenchmarkCase } from '../support/scaling-report.ts'
-import type { ConversationFoldWorkerReport, PreparingToolWorkerReport, StreamingAssistantWorkerReport } from './conversation-fold.worker.client.ts'
+import type {
+  ConversationFoldWorkerReport, PreparingToolWorkerReport, PtcDispatchWorkerReport, StreamingAssistantWorkerReport,
+} from './conversation-fold.worker.client.ts'
 
 /** Replies in the folded window; each carries one reasoning block and one text block. */
 const TURNS = 200
@@ -31,6 +33,27 @@ const LARGE_WINDOW_CASE: BenchmarkCase = {
 const PREPARING_AFFECTS = { write: 'Watching the model stream a large file write.', bash: 'Watching the model stream a long shell command.' } as const
 /** A stuck fold worker is reaped before the outer benchmark deadline. */
 const WORKER_TIMEOUT_MS = 60_000
+
+/** PTC root calls in the folded window; each fans out into the same number of settled subcalls. */
+const PTC_PARENTS = 2
+const PTC_CHILDREN_PER_PARENT = 10_000
+const PTC_ATTEMPTS = 3
+/** A PTC run keeps every nested dispatch under one root call, so a parent's child list grows without bound. */
+const PTC_CASE: BenchmarkCase = {
+  id: 'conversation-fold/ptc-dispatch-fan-out',
+  measures: 'Client fold of one PTC run that settles 20,000 nested subcalls under two root calls, read through the Chat and Trajectory targets.',
+  affects: 'Opening or resuming a long computer-use or PTC conversation in the Web GUI.',
+}
+/**
+ * The fold pairs and settles every dispatch under its parent in both the Chat
+ * and the default-enabled Trajectory Tool Definitions, which the Assembler
+ * updates whichever target is active. Copying a growing child list or call map
+ * per event made this window take seconds; the linear folds that only insert
+ * each dispatch measure tens of milliseconds per target.
+ */
+const EXPECTED_PTC_FOLD_MS = 100
+/** Each target folds the same window, so both endpoints share one budget. */
+const PTC_FOLD_BUDGET_MS = ciTimeBudget(EXPECTED_PTC_FOLD_MS)
 
 /**
  * The large window contains 500,000 streamed deltas compacted into 1,600
@@ -104,6 +127,27 @@ describe('cold Chat fold of a large v2 history window', () => {
     expect(report.chatNodes).toBeGreaterThan(0)
     expect(report.largeFoldMs).toBeLessThanOrEqual(LARGE_FOLD_BUDGET_MS)
     expect(report.scaling).toBeLessThanOrEqual(MAX_DELTA_SCALING)
+  })
+})
+
+describe('cold fold of a PTC dispatch fan-out', () => {
+  it(`settles ${String(PTC_PARENTS * PTC_CHILDREN_PER_PARENT)} nested subcalls within ${String(PTC_FOLD_BUDGET_MS)} ms for Chat and for Trajectory`, async () => {
+    const report = requireReport(await runBuiltBenchmarkWorker<PtcDispatchWorkerReport>({
+      worker: WORKER,
+      args: ['ptc', String(PTC_PARENTS), String(PTC_CHILDREN_PER_PARENT), String(PTC_ATTEMPTS)],
+      timeoutMs: WORKER_TIMEOUT_MS,
+    }))
+    console.log(JSON.stringify({
+      benchmark: PTC_CASE.id, ...report, budgetMs: PTC_FOLD_BUDGET_MS,
+    }))
+    recordTimings(PTC_CASE, {
+      ptcFoldMs: { ms: report.foldMs, ioShare: IO_SHARE },
+      ptcTrajectoryFoldMs: { ms: report.trajectoryFoldMs, ioShare: IO_SHARE },
+    }, { ptcFoldMs: PTC_FOLD_BUDGET_MS, ptcTrajectoryFoldMs: PTC_FOLD_BUDGET_MS })
+    expect(report.children).toBe(PTC_PARENTS * PTC_CHILDREN_PER_PARENT)
+    expect(report.trajectoryChildren).toBe(PTC_PARENTS * PTC_CHILDREN_PER_PARENT)
+    expect(report.foldMs).toBeLessThanOrEqual(PTC_FOLD_BUDGET_MS)
+    expect(report.trajectoryFoldMs).toBeLessThanOrEqual(PTC_FOLD_BUDGET_MS)
   })
 })
 

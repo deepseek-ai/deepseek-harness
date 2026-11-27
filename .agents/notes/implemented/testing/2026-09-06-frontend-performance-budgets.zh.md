@@ -10,7 +10,7 @@ Node 对话折叠很快，并不能证明浏览器能绘制长对话或在流式
 
 ## 决策
 
-现有串行基准清单包含两个前端所有者：[活跃重连](../../../../benchmarks/active-stream-reconnect/README.zh.md)和[浏览器工作流](../../../../benchmarks/long-session-browser/README.zh.md)。浏览器工作流在一个顺序场景中组合冷打开、更早分页导航、首次激活 Trajectory、返回 Chat，以及伴随真实键盘输入的有节奏回复。这些是同一工作流的测量终点，而不是相互独立的冷场景。已结算对话折叠基准保持不变。
+现有串行基准清单包含两个前端所有者：[活跃重连](../../../../benchmarks/active-stream-reconnect/README.zh.md)和[浏览器工作流](../../../../benchmarks/long-session-browser/README.zh.md)。浏览器工作流在一个顺序场景中组合冷打开、更早分页导航、首次激活 Trajectory、返回 Chat，以及伴随真实键盘输入的有节奏回复。这些是同一工作流的测量终点，而不是相互独立的冷场景。已结算对话折叠基准仍是仅 Node 的折叠所有者，其现有用例保持不变；它另外新增了 [PTC 分发扇出用例](../bug-fix/2026-11-27-ptc-dispatch-fold-quadratic.zh.md)，在两个根调用下结算 20,000 个嵌套子调用，并分别经 Chat 和 Trajectory 目标读取。
 
 `build:bench` 保留仅 Node 的 library 与 worker 构建。`test:bench` 额外构建 Web shell 后再运行所有用例；必需的基准 CI job 遵循[标准托管运行器说明](../../../../.github/workflows/ci.yml)，在该托管运行器上无条件安装 Chromium 及其 Linux 依赖，并启用现有门禁详细输出，使成功用例的原始样本可用于校准。浏览器用例复用产品组合的 Web scaffold，使用私有临时目录和原子分配的回环端口。只有不确定的模型被合成重放替代。scaffold Host 通过现有 Vitest 源码解析器运行；被测 Client 渲染在全新 Chromium 进程中执行构建后的 bundle。因此浏览器壁钟时间包含测试 Host、传输、Playwright 可交互性等待及渲染，不代表发布版 Host 进程。
 

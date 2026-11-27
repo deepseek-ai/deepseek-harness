@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-11-27-ptc-dispatch-fold-quadratic.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-11-27-ptc-dispatch-fold-quadratic.md
+/agent-note-linear-ptc-dispatch-folding:
+  en: 3038bbb7bc9dc317
+  zh: 559beea74e493e53
+/agent-note-linear-ptc-dispatch-folding/problem:
+  en: 2ddfdb7a0c49638d
+  zh: 59c1811f07c461ff
+/agent-note-linear-ptc-dispatch-folding/decision:
+  en: 6e7e06f7cfa1c918
+  zh: cc2626c4297980b5
+/agent-note-linear-ptc-dispatch-folding/calibration:
+  en: a881888b78b69fd5
+  zh: ceb075334437ec0e
+/agent-note-linear-ptc-dispatch-folding/alternatives-considered:
+  en: 06aa789e224bea8d
+  zh: 6c39704c81cfc71a
+/agent-note-linear-ptc-dispatch-folding/consequences:
+  en: 39f0379d7ea633d8
+  zh: 458f240ffa587f17

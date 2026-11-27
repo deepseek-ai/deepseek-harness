@@ -742,6 +742,83 @@ describe('Trajectory conversation Definitions', () => {
     })
   })
 
+  it('keeps first-attachment order, rejects repeated starts, cycles, and reparenting, and adopts detached subtrees', () => {
+    const dispatch = (seq: number, type: string, parentCallId: string, subCallId: string, text?: string) => at(seq, type, {
+      rootCallId: 'root', parentCallId, subCallId, name: 'read', arguments: { path: subCallId },
+      ...text === undefined ? {} : { content: [{ type: 'text', text }] },
+    })
+    const current = snapshot(assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+      at(3, 'tool/call', { turn: 1, step: 1, callId: 'root', name: 'code', arguments: '{}' }),
+      dispatch(4, 'tool/ptc-dispatch-start', 'root', 'a'),
+      dispatch(5, 'tool/ptc-dispatch-start', 'root', 'b'),
+      dispatch(6, 'tool/ptc-dispatch-start', 'root', 'a'),
+      dispatch(7, 'tool/ptc-dispatch', 'root', 'b', 'b settled'),
+      dispatch(8, 'tool/ptc-dispatch', 'root', 'a', 'a first'),
+      dispatch(9, 'tool/ptc-dispatch', 'root', 'a', 'a second'),
+      dispatch(10, 'tool/ptc-dispatch-start', 'a', 'c'),
+      dispatch(11, 'tool/ptc-dispatch-start', 'c', 'a'),
+      dispatch(12, 'tool/ptc-dispatch-start', 'b', 'c'),
+      dispatch(13, 'tool/ptc-dispatch', 'c', 'c', 'self'),
+      dispatch(14, 'tool/ptc-dispatch', 'detached', 'd', 'adopted'),
+      dispatch(15, 'tool/ptc-dispatch-start', 'root', 'a'),
+      dispatch(16, 'tool/ptc-dispatch-start', 'c', 'root'),
+      dispatch(17, 'tool/ptc-dispatch-start', 'b', 'detached'),
+      at(18, 'step/end', { turn: 1, step: 1 }),
+    ]))
+
+    const roots = current.eventNodes.filter(node => node.kind === 'tool-result')
+    expect(roots).toHaveLength(1)
+    expect(roots[0]).toMatchObject({
+      callId: 'root',
+      error: { name: 'Interrupted', code: 'interrupted' },
+      subCalls: [
+        {
+          kind: 'tool-result', callId: 'a', content: [{ type: 'text', text: 'a second' }],
+          subCalls: [{
+            kind: 'tool-result', callId: 'c', parentCallId: 'a', seq: 17.2, callTime: 1_700_000_000_010,
+            error: { name: 'Interrupted', code: 'interrupted' }, subCalls: [],
+          }],
+        },
+        {
+          kind: 'tool-result', callId: 'b', content: [{ type: 'text', text: 'b settled' }],
+          subCalls: [{
+            kind: 'tool-result', callId: 'detached', parentCallId: 'b',
+            error: { name: 'Interrupted', code: 'interrupted' },
+            subCalls: [{ kind: 'tool-result', callId: 'd', parentCallId: 'detached', content: [{ type: 'text', text: 'adopted' }] }],
+          }],
+        },
+      ],
+    })
+  })
+
+  it('rebuilds a root whose call precedes the window from its result and dispatches', () => {
+    const current = snapshot(assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+      at(3, 'tool/ptc-dispatch-start', {
+        rootCallId: 'root', parentCallId: 'root', subCallId: 'a', name: 'read', arguments: { path: 'a' },
+      }),
+      at(4, 'tool/ptc-dispatch', {
+        rootCallId: 'root', parentCallId: 'root', subCallId: 'a', name: 'read', arguments: { path: 'a' },
+        content: [{ type: 'text', text: 'done' }],
+      }),
+      at(5, 'tool/result', {
+        turn: 1, step: 1,
+        message: {
+          id: 'result-root', role: 'tool', toolCallId: 'root', source: { kind: 'tool', callId: 'root' },
+          content: [{ type: 'text', text: 'root done' }],
+        },
+      }, { surfaceOp: 'append' }),
+      at(6, 'step/end', { turn: 1, step: 1 }),
+    ], true))
+
+    expect(current.eventNodes.filter(node => node.kind === 'tool-result')).toMatchObject([{
+      seq: 5, callId: 'root', name: '', call: null, content: [{ type: 'text', text: 'root done' }],
+      subCalls: [{ kind: 'tool-result', callId: 'a', callTime: 1_700_000_000_003, content: [{ type: 'text', text: 'done' }] }],
+    }])
+  })
   it('assembles compaction lifecycle, checkpoint replacement, and orphan interruption', () => {
     const current = snapshot(assembler([
       at(1, 'compaction/start', { compactionId: 'complete', turn: null }),

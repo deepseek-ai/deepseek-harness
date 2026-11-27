@@ -8,6 +8,7 @@ import type { LlmAttemptId, ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 import type { ChatNode, ChatSnapshot } from '@deepseek-ai/dsh-client-ui-chat/client'
+import type { ConversationNode, ToolCallBlock } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { SessionEventLikeEntry } from '@deepseek-ai/dsh-api-session-controller/client'
 // These Client-only fold modules have no plain-Node package export and are compiled into this worker.
 import { ConversationNodeAssembler } from '../../packages/client/ui-conversation/src/client/conversation/assembler.ts'
@@ -29,6 +30,9 @@ import { turnErrorDefinition } from '../../packages/client/ui-chat/src/client/co
 import { turnMaxTokensDefinition } from '../../packages/client/ui-chat/src/client/conversation-nodes/turn-max-tokens.ts'
 import { registerTurnProcess } from '../../packages/client/ui-chat/src/client/conversation-nodes/turn-process.ts'
 import { registerTurnTailConversationNode } from '../../packages/client/ui-chat/src/client/conversation-nodes/turn-tail.ts'
+import type { TrajectorySnapshot } from '../../packages/client/ui-trajectory/src/client/trajectory-contract.ts'
+import { trajectoryViewDefinition } from '../../packages/client/ui-trajectory/src/client/trajectory-snapshot-builder.ts'
+import { registerTrajectoryToolDefinition } from '../../packages/client/ui-trajectory/src/client/trajectory-tool-definition.ts'
 import { assertBuiltBenchmarkRuntime } from '../support/built-worker.ts'
 
 const TIME_ZERO = 1_700_000_000_000
@@ -42,6 +46,21 @@ export interface ConversationFoldWorkerReport {
   readonly smallFoldMs: number
   readonly largeFoldMs: number
   readonly scaling: number
+}
+
+/** Client fold of one PTC run whose root calls fan out into settled subcalls, read through each target. */
+export interface PtcDispatchWorkerReport {
+  readonly parents: number
+  readonly perParent: number
+  readonly events: number
+  /** Settled subcalls published by the Chat target. */
+  readonly children: number
+  /** Replace and Chat activation, fastest sample. */
+  readonly foldMs: number
+  /** Settled subcalls published by the Trajectory target. */
+  readonly trajectoryChildren: number
+  /** Replace and Trajectory activation of the same window, fastest sample. */
+  readonly trajectoryFoldMs: number
 }
 
 /** Incremental argument folding through the Tool Definition and Chat group publication. */
@@ -88,13 +107,15 @@ function registerEventDefinitions(ctx: Context): ConversationEventRegistry {
   events.register(turnErrorDefinition)
   events.register(turnMaxTokensDefinition)
   registerTurnTailConversationNode(ctx)
+  // The Web composition enables Trajectory by default, and the Assembler folds its Definitions whether or not that target is active.
+  registerTrajectoryToolDefinition(ctx)
   events.registerFallback(unknownFallbackDefinition)
   return events
 }
 
 class BenchViewDefinitions {
   entries(): readonly ConversationViewDefinition[] {
-    return [chatViewDefinition]
+    return [chatViewDefinition, trajectoryViewDefinition]
   }
 }
 
@@ -191,6 +212,97 @@ function bestOf(
     if (next.ms < best.ms) best = next
   }
   return best
+}
+
+/** One PTC run that dispatches `perParent` settled subcalls under each root call. */
+function synthesizePtcWindow(parents: number, perParent: number): readonly SessionEventLikeEntry[] {
+  const entries: SessionEventLikeEntry[] = []
+  let seq = 0
+  const push = (type: string, data: unknown): void => {
+    entries.push(entry(seq, type, data))
+    seq += 1
+  }
+  push('turn/start', { turn: 1 })
+  for (let parent = 0; parent < parents; parent += 1) {
+    const rootCallId = `call-root-${String(parent)}`
+    push('tool/call', { callId: rootCallId, name: 'run_code', arguments: '{}' })
+    for (let child = 0; child < perParent; child += 1) {
+      const subCallId = `${rootCallId}:ptc:${String(child)}`
+      push('tool/ptc-dispatch-start', {
+        rootCallId, parentCallId: rootCallId, subCallId, name: 'read', arguments: { file_path: 'src/a.ts' },
+      })
+      push('tool/ptc-dispatch', {
+        rootCallId, parentCallId: rootCallId, subCallId, name: 'read', arguments: { file_path: 'src/a.ts' },
+        isError: false, content: [{ type: 'text', text: 'ok' }],
+      })
+    }
+  }
+  push('turn/end', { turn: 1, reason: { kind: 'completed' } })
+  return entries
+}
+
+type PtcTarget = 'chat' | 'trajectory'
+
+/** Root Tool call blocks published by one activated target. */
+function publishedPtcRoots(assembler: ConversationNodeAssembler, target: PtcTarget): readonly ToolCallBlock[] {
+  if (target === 'chat') {
+    const snapshot = assembler.snapshot('chat') as ChatSnapshot | undefined
+    return snapshot === undefined
+      ? []
+      : [...snapshot.nodes.values()]
+        .filter((candidate): candidate is ChatNode<'tool-call'> => candidate.kind === 'tool-call')
+        .map(node => node.data.root)
+  }
+  const snapshot = assembler.snapshot('trajectory') as TrajectorySnapshot | undefined
+  return (snapshot?.eventNodes ?? []).filter((node: ConversationNode): node is Extract<ConversationNode, { kind: 'tool-result' }> =>
+    node.kind === 'tool-result')
+}
+
+/** Fold a PTC run into one target and read every published nested subcall back out of its snapshot. */
+function foldPtcTarget(
+  entries: readonly SessionEventLikeEntry[],
+  target: PtcTarget,
+  expected: { readonly parents: number; readonly children: number },
+  definitions: ConversationEventRegistry,
+): { readonly ms: number; readonly children: number } {
+  const started = performance.now()
+  const assembler = new ConversationNodeAssembler(definitions, new BenchViewDefinitions())
+  assembler.replaceWindow(entries, false)
+  assembler.activateTarget(target)
+  const roots = publishedPtcRoots(assembler, target)
+  const children = roots.reduce((total, root) => total + root.subCalls.length, 0)
+  const settled = roots.every(root => root.subCalls.every(child => 'kind' in child && child.kind === 'tool-result'))
+  const ms = performance.now() - started
+  if (roots.length !== expected.parents || children !== expected.children || !settled) {
+    throw new Error(`PTC benchmark published ${String(roots.length)} ${target} roots with ${String(children)} children`)
+  }
+  return { ms, children }
+}
+
+/** Fold a PTC run through the Chat and Trajectory targets and keep each target's fastest sample. */
+function foldPtc(
+  parents: number,
+  perParent: number,
+  attempts: number,
+  definitions: ConversationEventRegistry,
+): PtcDispatchWorkerReport {
+  const entries = synthesizePtcWindow(parents, perParent)
+  const expected = { parents, children: parents * perParent }
+  const best = (target: PtcTarget): { readonly ms: number; readonly children: number } => {
+    let fastest = foldPtcTarget(entries, target, expected, definitions)
+    for (let attempt = 1; attempt < attempts; attempt += 1) {
+      const next = foldPtcTarget(entries, target, expected, definitions)
+      if (next.ms < fastest.ms) fastest = next
+    }
+    return fastest
+  }
+  const chat = best('chat')
+  const trajectory = best('trajectory')
+  return {
+    parents, perParent, events: entries.length,
+    children: chat.children, foldMs: Math.round(chat.ms * 10) / 10,
+    trajectoryChildren: trajectory.children, trajectoryFoldMs: Math.round(trajectory.ms * 10) / 10,
+  }
 }
 
 function positiveInteger(value: string | undefined, label: string): number {
@@ -364,6 +476,14 @@ try {
     const report = streamingAssistant(
       blockType, pattern, positiveInteger(process.argv[5], 'characters'),
       positiveInteger(process.argv[6], 'fragments'), definitions,
+    )
+    process.stdout.write(`${JSON.stringify(report)}\n`)
+  } else if (process.argv[2] === 'ptc') {
+    const report = foldPtc(
+      positiveInteger(process.argv[3], 'parents'),
+      positiveInteger(process.argv[4], 'per parent'),
+      positiveInteger(process.argv[5], 'attempts'),
+      definitions,
     )
     process.stdout.write(`${JSON.stringify(report)}\n`)
   } else {
