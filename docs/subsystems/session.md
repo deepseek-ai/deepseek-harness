@@ -930,7 +930,8 @@ resolveAgent(sessionId: SessionId): Promise<ApiSessionAgentResult>
 @Remote('selectModel') selectModel(request: SessionSelectModelRequest): Promise<SessionSelectModelValue>
 
 /**
- * Select the first available account model after login when no provider API key is configured.
+ * Make the default an account model after login when no provider API key is configured.
+ * A saved default naming a listed account model is retained with its reasoning effort.
  * @returns after saving the first available model or retaining the existing default.
  */
 @Remote async initializeDefaultModel(): Promise<void>

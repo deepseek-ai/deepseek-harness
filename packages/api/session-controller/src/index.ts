@@ -292,7 +292,8 @@ export class SessionController extends TypertRemoteService {
   }
 
   /**
-   * Select the first available account model after login when no provider API key is configured.
+   * Make the default an account model after login when no provider API key is configured.
+   * A saved default naming a listed account model is retained with its reasoning effort.
    * @returns after saving the first available model or retaining the existing default.
    */
   @Remote
@@ -300,9 +301,12 @@ export class SessionController extends TypertRemoteService {
     const provider = 'deepseek-account'
     if (await hasProviderApiKey(this.ctx)) return
     const catalog = await buildModelCatalog(this.ctx)
-    const model = catalog.groups.find(group => group.id === provider)?.models[0]
+    const models = catalog.groups.find(group => group.id === provider)?.models ?? []
+    const model = models[0]
     if (model === undefined) throw new RemoteError('session/provider-models-unavailable',
       `provider "${provider}" has no available models`, { provider })
+    const saved = this.ctx.agentDefaultModel.currentSelection()
+    if (saved.provider === provider && models.some(listed => listed.id === saved.model)) return
     const selection = { provider, model: model.id,
       ...model.reasoning?.defaultEffort === undefined ? {}
         : { reasoningEffort: brandString<ReasoningEffortId>(model.reasoning.defaultEffort) },
