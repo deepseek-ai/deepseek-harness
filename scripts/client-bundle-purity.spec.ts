@@ -47,6 +47,11 @@ function packageDir(packagePath: string): string {
 const REQUESTING_PACKAGE = '@deepseek-ai/dsh-client-ui-conversation'
 const REQUESTING_PACKAGE_DIR = packageDir('client/ui-conversation')
 
+/** Workspace Client packages in the build baseline that Client code requests by root and by `/client` subpath. */
+const BASELINE_CLIENT_PACKAGES = [
+  '@deepseek-ai/dsh-client-ui-slots', '@deepseek-ai/dsh-client-ui-primitives', '@deepseek-ai/dsh-client-ui-dockkit',
+]
+
 function clientConfigs(dir = REQUESTING_PACKAGE_DIR) {
   return clientBundle(dir, ['lib/types/index.js'])(
     { env: { DSH_BUILD_FACE: 'client' } },
@@ -113,20 +118,26 @@ describe('client bundle build faces', () => {
   })
 })
 
-async function clientChunkOutput(root: string, config: UserConfig, fileName: string): Promise<string> {
+/** One emitted JavaScript chunk of an in-memory client build. */
+type ClientChunk = Extract<TsdownBundle['chunks'][number], { type: 'chunk' }>
+
+async function clientChunks(root: string, config: UserConfig): Promise<ClientChunk[]> {
   let builds: TsdownBundle[] = []
   try {
     builds = await build({
       ...config, cwd: root, config: false, tsconfig: false,
       write: false, clean: false, exports: false, report: false, logLevel: 'silent',
     })
-    const chunks = builds.flatMap(bundle => bundle.chunks).filter(chunk => chunk.type === 'chunk')
-    const output = chunks.find(chunk => chunk.fileName === fileName)?.code
-    if (output === undefined) throw new Error(`client output missing: ${fileName}`)
-    return output
+    return builds.flatMap(bundle => bundle.chunks).filter((chunk): chunk is ClientChunk => chunk.type === 'chunk')
   } finally {
     for (const bundle of builds) await bundle[Symbol.asyncDispose]()
   }
+}
+
+async function clientChunkOutput(root: string, config: UserConfig, fileName: string): Promise<string> {
+  const output = (await clientChunks(root, config)).find(chunk => chunk.fileName === fileName)?.code
+  if (output === undefined) throw new Error(`client output missing: ${fileName}`)
+  return output
 }
 
 /** A built `staticLinked` index module. */
@@ -230,8 +241,7 @@ describe('static Client dependency delivery', () => {
 
   it('keeps shared Client library imports as ordinary imports and requires them from the manifest factory', async () => {
     const dependencies = [
-      '@deepseek-ai/dsh-client-store', '@deepseek-ai/dsh-client-ui-slots',
-      '@deepseek-ai/dsh-client-ui-primitives', '@deepseek-ai/dsh-client-ui-dockkit',
+      '@deepseek-ai/dsh-client-store', ...BASELINE_CLIENT_PACKAGES, ...BASELINE_CLIENT_PACKAGES.map(id => `${id}/client`),
     ]
     const root = fixture([
       ...dependencies.map((id, index) => `import * as dependency${index} from ${JSON.stringify(id)}`),
@@ -563,6 +573,64 @@ describe('client bundle purity gate', () => {
       }
       expect(bundle.neverBundle('zod/v3')).toBe(false)
     }
+  })
+
+  it('leaves the /client subpath of every requested specifier to the module table', () => {
+    for (const id of BASELINE_CLIENT_PACKAGES) expect(resolveId(`${id}/client`)).toBeNull()
+    const root = mkdtempSync(join(tmpdir(), 'dsh-client-subpath-request-'))
+    onTestFinished(() => { rmSync(root, { recursive: true, force: true }) })
+    writeFileSync(join(root, 'package.json'), JSON.stringify({
+      name: '@deepseek-ai/dsh-client-fixture',
+      dsh: { client: { platform: 'web', external: ['@deepseek-ai/dsh-api-gateway'] } },
+    }))
+    const deps = clientConfigs(root)[0]?.deps as { neverBundle: (specifier: string) => boolean }
+    for (const specifier of [...BASELINE_CLIENT_PACKAGES, '@deepseek-ai/dsh-api-gateway']) {
+      expect(deps.neverBundle(specifier)).toBe(true)
+      expect(deps.neverBundle(`${specifier}/client`)).toBe(true)
+    }
+    expect(purityResolveId(root)('@deepseek-ai/dsh-api-gateway/client')).toBeNull()
+    // Only the `/client` suffix names the same row; other subpaths stay outside the request.
+    expect(deps.neverBundle('@deepseek-ai/dsh-client-ui-slots/src/client/index.ts')).toBe(false)
+    expect(() => resolveId('@deepseek-ai/dsh-client-ui-slots/src/client/index.ts')).toThrow(/purity/)
+  })
+
+  it('compiles both spellings of a baseline Client package to module-table requires without inlining it', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-client-subpath-bundle-'))
+    onTestFinished(() => { rmSync(root, { recursive: true, force: true }) })
+    const entry = join(root, 'lib/types/client/index.js')
+    mkdirSync(dirname(entry), { recursive: true })
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ name: REQUESTING_PACKAGE, type: 'module' }))
+    writeFileSync(entry, [
+      ...BASELINE_CLIENT_PACKAGES.flatMap((id, index) => [
+        `import { marker as root${index} } from ${JSON.stringify(id)}`,
+        `import { marker as client${index} } from ${JSON.stringify(`${id}/client`)}`,
+      ]),
+      `export const pairs = [${BASELINE_CLIENT_PACKAGES.map((_id, index) => `[root${index}, client${index}]`).join(', ')}]`,
+      '',
+    ].join('\n'))
+    const config = clientConfigs(root)[0]
+    if (config === undefined) throw new Error('client config missing')
+    const chunks = await clientChunks(root, config)
+    expect(chunks.map(chunk => chunk.fileName)).toEqual(['client.js'])
+    const chunk = chunks[0]!
+    // No baseline package module enters the bundle: the entry is its only source module.
+    expect(chunk.moduleIds.filter(id => !id.startsWith('\0'))).toEqual([entry])
+    const registrations: DshClientModuleManifest[] = []
+    const load = (manifest: DshClientModuleManifest): void => { registrations.push(manifest) }
+    runInNewContext(chunk.code, { window: { __ModuleLoader__: { load } } })
+    const registration = registrations[0]
+    if (registration === undefined) throw new Error('client registration missing')
+    const rows = new Map(BASELINE_CLIENT_PACKAGES.map(id => [id, { marker: { row: id } }]))
+    const required: string[] = []
+    const exports = registration.factory(Object.assign((specifier: string) => {
+      required.push(specifier)
+      const row = rows.get(specifier.endsWith('/client') ? specifier.slice(0, -'/client'.length) : specifier)
+      if (row === undefined) throw new Error(`unexpected require: ${specifier}`)
+      return row
+    }, { async: unusedRequire.async, asset: unusedRequire.asset })) as { pairs: [unknown, unknown][] }
+    expect(required.sort()).toEqual(BASELINE_CLIENT_PACKAGES.flatMap(id => [id, `${id}/client`]).sort())
+    expect(exports.pairs).toEqual(BASELINE_CLIENT_PACKAGES.map(id => [{ row: id }, { row: id }]))
+    for (const [rootMarker, clientMarker] of exports.pairs) expect(clientMarker).toBe(rootMarker)
   })
 })
 

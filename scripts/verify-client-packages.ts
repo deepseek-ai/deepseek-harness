@@ -14,6 +14,7 @@ import {
   PACKAGE_ASSET_FILES_ENTRY,
   packageAssetMediaType,
 } from '../packages/client/modules/src/assets.ts'
+import { stripClientSuffix } from '../packages/client/modules/src/client/manifest.ts'
 import { TypeScriptProject } from './ts-project.ts'
 
 export {
@@ -253,7 +254,7 @@ export function fixClientPackageManifests(root: string, facts: ClientPackageFact
     return loaded
   }
 
-  const baseline = new Set([...facts.platformModules, ...facts.preloadedExternals])
+  const baseline = baselineRequests(facts)
   for (const declaration of facts.declarations.filter(entry => entry.dynamic)) {
     const target = document(declaration.manifest)
     const dsh = isRecord(target.manifest.dsh) ? target.manifest.dsh : undefined
@@ -263,7 +264,7 @@ export function fixClientPackageManifests(root: string, facts: ClientPackageFact
     target.changed = normalizeClientArray(
       client,
       'external',
-      value => baseline.has(value) || rowPackageOf(value, new Set([declaration.name])) === declaration.name,
+      value => baseline(value) || rowPackageOf(value, new Set([declaration.name])) === declaration.name,
     ) || target.changed
   }
 
@@ -350,7 +351,7 @@ interface ModuleEdge {
 
 function collectModuleViolations(facts: ClientPackageFacts): string[] {
   const violations: string[] = []
-  const baseline = new Set([...facts.platformModules, ...facts.preloadedExternals])
+  const baseline = baselineRequests(facts)
   const rows = rowNames(facts.declarations)
   const byName = new Map(facts.declarations.map(entry => [entry.name, entry]))
   const edges: ModuleEdge[] = []
@@ -369,7 +370,7 @@ function collectModuleViolations(facts: ClientPackageFacts): string[] {
 
     for (const specifier of new Set(pkg.external)) {
       if (specifier === '') continue
-      if (baseline.has(specifier)) {
+      if (baseline(specifier)) {
         violations.push(
           pkg.manifest + ': dsh.client.external repeats baseline module ' + JSON.stringify(specifier)
           + '; remove the explicit declaration',
@@ -391,7 +392,9 @@ function collectModuleViolations(facts: ClientPackageFacts): string[] {
           )
           continue
         }
-        if (pkg.runtimeSourceSpecifiers[specifier] === undefined) {
+        // The build leaves both `<specifier>` and `<specifier>/client` imports to the requested row.
+        if (pkg.runtimeSourceSpecifiers[specifier] === undefined
+          && pkg.runtimeSourceSpecifiers[specifier + '/client'] === undefined) {
           violations.push(
             pkg.manifest + ': dsh.client.external ' + JSON.stringify(specifier)
             + ' has no runtime import or re-export in production source; remove the stale declaration',
@@ -764,8 +767,15 @@ function packageNameOf(specifier: string): string {
   return segments.slice(0, specifier.startsWith('@') ? 2 : 1).join('/')
 }
 
-function stripClientSuffix(specifier: string): string {
-  return specifier.endsWith('/client') ? specifier.slice(0, -'/client'.length) : specifier
+/**
+ * Whether a specifier is a request every dynamic bundle already makes: a baseline module, or its `/client` subpath,
+ * which the build preset and the module table resolve to the same entry.
+ * @param facts - Platform module lists.
+ * @returns The predicate over declared `dsh.client.external` specifiers.
+ */
+function baselineRequests(facts: ClientPackageFacts): (specifier: string) => boolean {
+  const baseline = new Set([...facts.platformModules, ...facts.preloadedExternals])
+  return specifier => baseline.has(specifier) || baseline.has(stripClientSuffix(specifier))
 }
 
 function rowNames(declarations: readonly ClientDeclaration[]): Set<string> {

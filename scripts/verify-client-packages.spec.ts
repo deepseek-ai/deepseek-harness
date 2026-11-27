@@ -308,6 +308,32 @@ describe('module requests', () => {
     ])
   })
 
+  it('rejects the /client subpath of a baseline module as a repeated baseline request', () => {
+    const store = declaration('store', { dynamic: false })
+    const ui = declaration('ui', { external: [store.name + '/client'] })
+    expect(collectClientPackageViolations(facts([], {
+      declarations: [store, ui],
+      staticLinkedPackages: new Set([store.name]),
+      platformModules: [store.name],
+    }))).toEqual([
+      ui.manifest + ': dsh.client.external repeats baseline module "' + store.name
+      + '/client"; remove the explicit declaration',
+    ])
+  })
+
+  it('accepts a request for a package root that production source imports through its /client subpath', () => {
+    const gateway = {
+      ...declaration('@deepseek-ai/dsh-api-gateway'), manifest: 'packages/api/gateway/package.json',
+    }
+    const subject = { ...declaration('@deepseek-ai/dsh-api-session-controller', {
+      external: ['@deepseek-ai/dsh-api-gateway'],
+      runtimeSourceSpecifiers: {
+        '@deepseek-ai/dsh-api-gateway/client': ['packages/api/session-controller/src/client/index.ts'],
+      },
+    }), manifest: 'packages/api/session-controller/package.json' }
+    expect(collectClientPackageViolations(facts([], { declarations: [gateway, subject] }))).toEqual([])
+  })
+
   it('rejects duplicates, empty values, self-requests, and missing suppliers', () => {
     const ui = declaration('ui', {
       external: ['', '@deepseek-ai/dsh-client-ui', '@deepseek-ai/dsh-missing', '@deepseek-ai/dsh-missing'],
@@ -541,7 +567,7 @@ describe('manifest declarations', () => {
     const root = mkdtempSync(join(tmpdir(), 'client-packages-fix-'))
     roots.push(root)
     const subject = pkg('feature', {
-      external: ['', 'react', '@deepseek-ai/dsh-client-feature', '@deepseek-ai/dsh-missing'],
+      external: ['', 'react', '@deepseek-ai/dsh-client-ui-slots/client', '@deepseek-ai/dsh-client-feature', '@deepseek-ai/dsh-missing'],
       inject: ['', '@deepseek-ai/dsh-agent', '@deepseek-ai/dsh-agent'],
       sourceUses: {
         '@deepseek-ai/dsh-agent': ['packages/client/feature/src/index.ts'],

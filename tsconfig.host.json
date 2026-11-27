@@ -123,6 +123,7 @@
     "apps/web/tests/shared-inspector.e2e.ts",
     "apps/web/tests/inspector-late-enable.e2e.ts",
     "apps/web/tests/layout-bottom.e2e.ts",
+    "apps/web/tests/client-package-specifiers.e2e.ts",
     "apps/web/tests/devtools-frontend.e2e.ts",
     "apps/web/tests/inspector-panels.e2e.ts",
     "apps/web/tests/inspector-source-build.e2e.ts",

@@ -44,7 +44,7 @@ import {
   packageAssetRevisionedPath,
 } from './modules/src/assets.ts'
 import { CLIENT_CHUNK_FILE } from './modules/src/chunks.ts'
-import { optionalStringArray } from './modules/src/client/manifest.ts'
+import { optionalStringArray, stripClientSuffix } from './modules/src/client/manifest.ts'
 import { PLATFORM_MODULES, PRELOADED_CLIENT_EXTERNALS, STATIC_MODULE_MANIFEST_EXPORT } from './web/src/platform.ts'
 import { clientBuildEnvironmentDefines, clientBuildValueDefines } from '../../scripts/client-build-environment.ts'
 import { isExperimentalPackageName } from '../../scripts/experimental-package-policy.ts'
@@ -127,6 +127,9 @@ const GENERATED_REMOTE = /^@deepseek-ai\/dsh-[a-z0-9]+(?:-[a-z0-9]+)*\/remote$/
 const SKIP_WORKSPACE_BUILD: UserConfig = { entry: '' }
 
 const REPOSITORY_ROOT = fileURLToPath(new URL('../..', import.meta.url))
+
+/** The baseline module-table requests of a static library's manifest factory. */
+const PLATFORM_REQUESTS: ReadonlySet<string> = new Set(PLATFORM_MODULES)
 
 /** Rebase a physical lib-relative source onto a browser URL that mirrors the repository directories. */
 function browserSourcePath(source: string, sourcemapPath: string): string {
@@ -490,7 +493,7 @@ function staticManifestConfig(id: string, packageDir: string, entry: string): Us
       // Each module-table import also leaves a require in the factory, so Modules records the dependency.
       const required = new Set<string>()
       const table = (specifier: string): void => {
-        if ((PLATFORM_MODULES as readonly string[]).includes(specifier)) required.add(specifier)
+        if (coversRequest(PLATFORM_REQUESTS, specifier)) required.add(specifier)
       }
       let exportObject = '__dshModuleExports'
       while (code.includes(exportObject)) exportObject += '_'
@@ -614,9 +617,8 @@ function productionExternals(manifest: PackageManifest): readonly RegExp[] {
 }
 
 /**
- * Module-table specifiers one `dsh.client` declaration requests. Matching is
- * exact, never normalized: a package declares the specifier its own code
- * imports, and the loader keys static entries the same way.
+ * Module-table specifiers one `dsh.client` declaration requests, as declared.
+ * {@link coversRequest} decides which import specifiers a request covers.
  * @param subject - package name, used in diagnostics.
  * @param declaration - the package's `dsh.client` object.
  * @returns the requested specifiers, empty when the package declares none.
@@ -627,6 +629,19 @@ export function requestedExternals(
   declaration: { readonly external?: unknown },
 ): ReadonlySet<string> {
   return new Set(optionalStringArray(subject, 'dsh.client.external', declaration.external) ?? [])
+}
+
+/**
+ * Whether module-table requests cover one import specifier: the specifier itself is requested, or it ends in
+ * `/client` and the specifier without that suffix is requested. The module table resolves a `<specifier>/client` it
+ * does not hold exactly through {@link stripClientSuffix}, so a bundle that imports either spelling of a requested
+ * row leaves both to the same module-table entry and never inlines a private copy.
+ * @param requested - the baseline plus the package's explicit requests.
+ * @param specifier - import specifier as the bundled code writes it.
+ * @returns true when the specifier stays a module-table `require`.
+ */
+export function coversRequest(requested: ReadonlySet<string>, specifier: string): boolean {
+  return requested.has(specifier) || requested.has(stripClientSuffix(specifier))
 }
 
 /**
@@ -1133,7 +1148,7 @@ function clientConfig(
 ): UserConfig {
   const id = manifest.name
   let requested: ReadonlySet<string> | undefined
-  const isRequested = (specifier: string): boolean => (requested ??= clientExternals(manifest)).has(specifier)
+  const isRequested = (specifier: string): boolean => coversRequest(requested ??= clientExternals(manifest), specifier)
   const isolation = clientInputIsolation(id)
   const assets = packageAssets(manifest, packageDir)
   const styles = new Map<string, CompiledClientStyle>()
