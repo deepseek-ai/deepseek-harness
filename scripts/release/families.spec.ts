@@ -480,7 +480,9 @@ describe('vendored version baseline', () => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-release-vendor-'))
     roots.push(root)
     const git = (...args: string[]) => execFileSync('git', ['-C', root, '-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false', '-c', 'tag.gpgsign=false', ...args])
-    const manifest = (directory: string, name: string, version: string) => write(join(root, directory, 'package.json'), `${JSON.stringify({ name, version })}\n`)
+    const manifest = (directory: string, name: string, version: string) => {
+      write(join(root, directory, 'package.json'), `${JSON.stringify({ name, version })}\n`)
+    }
     git('init', '-q')
     manifest('vendor/cordis', '@deepseek-ai/cordis', '4.2.0-alpha.1')
     manifest('vendor/cosmokit', '@deepseek-ai/cosmokit', '1.10.0-alpha.1')
