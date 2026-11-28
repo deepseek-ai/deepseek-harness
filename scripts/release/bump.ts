@@ -161,7 +161,7 @@ function nextSharedVersion(current: string, request: string): string {
  * `4.0.1-rc.1` leaves `4.0.1` free, so the next stable version is `4.0.1`
  * rather than `4.0.2`, and a second prerelease keeps those numbers too.
  * @param current - the package's manifest version.
- * @param tagged - the version its newest tag names, when it has one.
+ * @param tagged - the version it carried at the last vendor release, when it had one.
  * @param prerelease - prerelease identifier to append, for a rehearsal publication.
  * @returns The target version.
  */
@@ -204,12 +204,13 @@ export function reachesPayload(member: ReleaseMember, path: string): boolean {
 /**
  * The newest version a member tagged.
  * @param family - the member's family.
+ * @param root - the repository root.
  * @param member - the member.
  * @returns The version, or undefined when the member has no release tag.
  */
-function lastTaggedVersion(family: ReleaseFamily, member: ReleaseMember): string | undefined {
+function lastTaggedVersion(family: ReleaseFamily, root: string, member: ReleaseMember): string | undefined {
   const prefix = family.tagPrefixFor(member)
-  const versions = capture('git', ['tag', '--list', `${prefix}*`])
+  const versions = capture('git', ['tag', '--list', `${prefix}*`], { cwd: root })
     .split('\n').filter(line => line !== '').map(tag => tag.slice(prefix.length))
   if (versions.length === 0) return undefined
   return versions.reduce((newest, candidate) => compareVersions(candidate, newest) > 0 ? candidate : newest)
@@ -316,22 +317,53 @@ export function planShared(
   return { planned, version }
 }
 
+/** The vendored package whose tag marks a vendor release. */
+const VENDOR_RELEASE_PACKAGE = '@deepseek-ai/cordis'
+
+/**
+ * Each member's version at the last vendor release: the commit of the newest
+ * tag of {@link VENDOR_RELEASE_PACKAGE}. Other members' own tags are not read.
+ * @param family - the vendored family.
+ * @param root - the repository root.
+ * @param members - the family's members.
+ * @returns Member directory to its version there; a member absent there has none.
+ */
+function releasedVersions(family: ReleaseFamily, root: string, members: readonly ReleaseMember[]): Map<string, string> {
+  const released = new Map<string, string>()
+  const anchor = members.find(member => member.name === VENDOR_RELEASE_PACKAGE)
+  const version = anchor === undefined ? undefined : lastTaggedVersion(family, root, anchor)
+  if (anchor === undefined || version === undefined) return released
+  const tag = family.tagFor({ ...anchor, version })
+  const manifests = members.map(member => `${member.directory}/package.json`)
+  const present = new Set(capture('git', ['ls-tree', '-r', '--name-only', tag, '--', ...manifests], { cwd: root }).split('\n'))
+  for (const member of members) {
+    const path = `${member.directory}/package.json`
+    if (!present.has(path)) continue
+    const manifest = JSON.parse(capture('git', ['show', `${tag}:${path}`], { cwd: root })) as { version?: unknown }
+    if (typeof manifest.version === 'string') released.set(member.directory, manifest.version)
+  }
+  return released
+}
+
 /**
  * Plan the vendored family's rewrite: every package advances together while
  * retaining its own version line and tag.
  * @param family - the vendored family.
+ * @param root - the repository root.
  * @param members - the family's members.
  * @param prerelease - prerelease identifier to append, for a rehearsal publication.
  * @returns The manifests to rewrite.
  */
-function planPerPackage(
+export function planPerPackage(
   family: ReleaseFamily,
+  root: string,
   members: readonly ReleaseMember[],
   prerelease: string | undefined,
 ): PlannedVersion[] {
   const planned: PlannedVersion[] = []
+  const released = releasedVersions(family, root, members)
   for (const member of members) {
-    const tagged = lastTaggedVersion(family, member)
+    const tagged = released.get(member.directory)
     const to = nextVendorVersion(member.version, tagged, prerelease)
     planned.push({
       manifestPath: `${member.directory}/package.json`,
@@ -381,7 +413,7 @@ function main(): void {
     if (values.prerelease !== undefined && !/^[0-9A-Za-z.-]+$/.test(values.prerelease)) {
       throw new Error(`--prerelease must be a semver prerelease identifier, got ${values.prerelease}`)
     }
-    planned = planPerPackage(family, members, values.prerelease)
+    planned = planPerPackage(family, root, members, values.prerelease)
   }
 
   if (planned.length === 0) {
