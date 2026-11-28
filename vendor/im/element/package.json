@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/satori-element",
   "description": "Element Manipulation",
-  "version": "4.0.0-alpha.0",
+  "version": "4.0.1-alpha.2",
   "type": "module",
   "exports": {
     ".": {

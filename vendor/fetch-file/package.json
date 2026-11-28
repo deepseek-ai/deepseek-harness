@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/cordis-fetch-file",
   "description": "Fetch for `file:` URLs",
-  "version": "1.0.3",
+  "version": "1.0.4-alpha.2",
   "sideEffects": false,
   "type": "module",
   "exports": {

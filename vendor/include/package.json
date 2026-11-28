@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/cordis-plugin-include",
   "description": "Include files in cordis configurations",
-  "version": "1.2.0-alpha.1",
+  "version": "1.2.0-alpha.2",
   "publishConfig": {
     "access": "public"
   },
