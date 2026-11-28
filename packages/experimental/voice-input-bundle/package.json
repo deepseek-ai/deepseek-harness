@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-voice-input-bundle",
   "description": "Experimental voice input with DeepSeek cloud recognition through a DeepSeek account or API key, and optional local SenseVoice",
-  "version": "0.2.3-alpha.2",
+  "version": "0.2.3-alpha.3",
   "icon": "./icon.svg",
   "publishConfig": {
     "access": "public"

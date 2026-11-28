@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-shared-texture",
   "description": "Host and Client shared-texture Cordis services (ctx.sharedTexture) and renderer bridge types",
-  "version": "0.2.3-alpha.2",
+  "version": "0.2.3-alpha.3",
   "publishConfig": {
     "access": "public"
   },

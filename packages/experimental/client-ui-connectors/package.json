@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-connectors",
   "description": "Plugins page tab that lists, installs, and opens the official connectors and manages custom MCP servers",
-  "version": "0.2.3-alpha.2",
+  "version": "0.2.3-alpha.3",
   "icon": "./icon.svg",
   "publishConfig": {
     "access": "public"

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-sandbox-policy-git",
   "description": "Grants a Session that works in a linked Git worktree write access to its repository's Git directory",
-  "version": "0.2.3-alpha.2",
+  "version": "0.2.3-alpha.3",
   "publishConfig": {
     "access": "public"
   },

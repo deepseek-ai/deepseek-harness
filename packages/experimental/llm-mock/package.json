@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-llm-mock",
   "description": "Keyless mock model route that answers every call with fixed text",
-  "version": "0.2.3-alpha.2",
+  "version": "0.2.3-alpha.3",
   "publishConfig": {
     "access": "public"
   },
