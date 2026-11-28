@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/cordis-plugin-im-core",
   "description": "Core components of Satorijs",
-  "version": "5.0.0-alpha.0",
+  "version": "5.0.1-alpha.2",
   "type": "module",
   "files": [
     "lib/*.js",
