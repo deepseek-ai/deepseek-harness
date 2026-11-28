@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-wecom",
   "description": "WeCom plugin: the official wecom-cli with its skills, and authorization from the Plugins page",
-  "version": "0.2.3-alpha.2",
+  "version": "0.2.3-alpha.3",
   "icon": "./icon.svg",
   "publishConfig": {
     "access": "public"

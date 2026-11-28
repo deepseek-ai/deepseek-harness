@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-environment-local",
   "description": "Local execution environment provider using a managed Node process",
-  "version": "0.2.3-alpha.2",
+  "version": "0.2.3-alpha.3",
   "publishConfig": {
     "access": "public"
   },

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-responsive",
   "description": "Window media-query answers and mobile-device detection for every Web Client Slot component",
-  "version": "0.2.3-alpha.2",
+  "version": "0.2.3-alpha.3",
   "publishConfig": {
     "access": "public"
   },

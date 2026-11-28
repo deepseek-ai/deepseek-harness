@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-environment",
   "description": "Runs tool-owned functions in provider-managed execution processes, with calls back to host handlers",
-  "version": "0.2.3-alpha.2",
+  "version": "0.2.3-alpha.3",
   "publishConfig": {
     "access": "public"
   },
