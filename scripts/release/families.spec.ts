@@ -1,5 +1,6 @@
 /** Release family discovery, publish order, tag naming, and the bump judgements. */
 
+import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -7,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { officialClientBuildEnvironment, writeClientBuildRecord } from '../client-build-environment.ts'
 import { ON_DEMAND_BUNDLES } from '../../packages/util/official-bundles/src/bundles.ts'
 import { releaseFamily, type ReleaseMember } from './families.ts'
-import { compareVersions, nextVendorVersion, planShared, reachesPayload } from './bump.ts'
+import { compareVersions, nextVendorVersion, planPerPackage, planShared, reachesPayload } from './bump.ts'
 
 /**
  * A release member standing in for a manifest on disk.
@@ -473,6 +474,35 @@ describe('vendored version baseline', () => {
     expect(nextVendorVersion('4.0.0-rc.7', '4.0.1-rc.1', 'rc.2')).toBe('4.0.1-rc.2')
     expect(nextVendorVersion('4.0.0-rc.7', '4.0.1-rc.1')).toBe('4.0.1')
     expect(nextVendorVersion('4.0.0-rc.7', '4.0.1')).toBe('4.0.2')
+  })
+
+  it('reads every member at the last Cordis release tag, not at its own tags', () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-release-vendor-'))
+    roots.push(root)
+    const git = (...args: string[]) => execFileSync('git', ['-C', root, '-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false', '-c', 'tag.gpgsign=false', ...args])
+    const manifest = (directory: string, name: string, version: string) => {
+      write(join(root, directory, 'package.json'), `${JSON.stringify({ name, version })}\n`)
+    }
+    git('init', '-q')
+    manifest('vendor/cordis', '@deepseek-ai/cordis', '4.2.0-alpha.1')
+    manifest('vendor/cosmokit', '@deepseek-ai/cosmokit', '1.10.0-alpha.1')
+    git('add', '-A')
+    git('commit', '-q', '-m', 'release')
+    // Only the Cordis tag marks the release; cosmokit's own newest tag is older.
+    git('tag', 'vendor-cordis-v4.2.0-alpha.1')
+    git('tag', 'vendor-cosmokit-v1.8.6-alpha.2')
+    manifest('vendor/im/core', '@deepseek-ai/cordis-plugin-im-core', '5.0.0-alpha.0')
+    git('add', '-A')
+    git('commit', '-q', '-m', 'add im')
+
+    const members = releaseFamily('vendor').members(root)
+    const planned = planPerPackage(releaseFamily('vendor'), root, members, 'alpha.2')
+
+    expect(planned.map(entry => [entry.label, entry.to])).toEqual([
+      ['vendor/cordis', '4.2.0-alpha.2'],
+      ['vendor/cosmokit', '1.10.0-alpha.2'],
+      ['vendor/im/core', '5.0.1-alpha.2'],
+    ])
   })
 })
 
